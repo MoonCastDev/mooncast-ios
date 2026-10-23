@@ -55,6 +55,8 @@ final class MCStore: NSObject, ObservableObject, DiscoveryCallback, PairCallback
     var onStream: ((StreamConfiguration) -> Void)?
     /// Set by the home's controller: starts the PS5 stream screen.
     var onPs5Stream: ((MCPs5Console) -> Void)?
+    /// The game streaming on this iPad now, for the Quick menu's Move to <TV>.
+    var playing: MCGame?
     /// Set by the home's controller: starts the Xbox stream screen.
     var onXboxStream: ((MCXbox.Console) -> Void)?
     /// Each PS5's own answer to the Remote Play probe (on, rest mode, the game it runs), by address.
@@ -116,6 +118,7 @@ final class MCStore: NSObject, ObservableObject, DiscoveryCallback, PairCallback
     /// The home is on screen: look for PCs and keep their state fresh.
     func resume() {
         start()
+        MCUsage.checkIn()
         guard !running else { return }
         running = true
         disc.resetDiscoveryState()
@@ -248,6 +251,8 @@ final class MCStore: NSObject, ObservableObject, DiscoveryCallback, PairCallback
     private func stream(_ g: MCGame) {
         guard let a = g.app else { return }
         MCRecents.touch(g.key)
+        playing = g
+        MCUsage.used("pc")
         let cfg = MCBridge.streamConfig(for: a)
         onStream?(cfg)
     }

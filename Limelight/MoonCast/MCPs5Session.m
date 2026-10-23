@@ -236,7 +236,8 @@ static void MCRegistCb(ChiakiRegistEvent* e, void* user) {
         _info.packet_loss_max = 0.05;
         _info.enable_idr_on_fec_failure = true;
         _videoLayer = [AVSampleBufferDisplayLayer layer];
-        _videoLayer.videoGravity = AVLayerVideoGravityResizeAspect;
+        _videoLayer.videoGravity = MCPictureShape.videoGravity;   // Settings → Picture → Picture shape
+        _videoLayer.masksToBounds = YES;
         _videoLayer.backgroundColor = UIColor.blackColor.CGColor;
     }
     return self;

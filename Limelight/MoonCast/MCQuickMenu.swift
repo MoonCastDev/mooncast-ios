@@ -120,14 +120,31 @@ struct MCQuickMenuView: View {
 
     private static let touchLabels = ["Off", "Mouse", "Touch"]
 
+    /// Move to <TV>: the stream here ends (the game keeps running), the TV plays it and this iPad becomes its
+    /// controller, after a moment for the PC, PS5 or Xbox to let this session go (MoveToTv.kt).
+    private func moveToTv(_ a: MCQuickActions) -> [Item] {
+        guard let tv = MCTvFinder.lastTv, let g = MCStore.shared.playing else { return [] }
+        let kind = a.mcKind?() ?? "pc"
+        if kind == "xbox" && !tv.canXbox { return [] }
+        return [Item(icon: "tv", label: "Move to \(tv.name)", detail: "This iPad becomes its controller") {
+            model.close()
+            if let keep = a.mcLeaveKeepOn { keep() } else { a.mcDisconnect() }
+            DispatchQueue.main.asyncAfter(deadline: .now() + (kind == "ps5" ? 3 : kind == "xbox" ? 1 : 0.5)) {
+                MCStore.shared.tvSession = MCTvSession(tv: tv, game: g)
+            }
+        }]
+    }
+
     private func items() -> [Item] {
         let a = model.actions
         let pads = GCController.controllers().count
+        let move = moveToTv(a)
         if a.mcKind?() == "xbox" {
             return [
                 Item(icon: "xbox.logo", label: "Xbox button", detail: "Opens the guide") { model.close(); a.mcPsButton?() },
                 Item(icon: "info.circle", label: "Streaming status", detail: a.mcStatsOn() ? "On" : "Off") { a.mcToggleStats(); model.rev += 1 },
                 Item(icon: "gamecontroller", label: "Controllers", detail: pads == 1 ? "1 connected" : "\(pads) connected") {},
+            ] + move + [
                 Item(icon: "arrow.left", label: "Disconnect", detail: "The game keeps running") { model.close(); a.mcDisconnect() },
                 Item(icon: "power", label: "Turn off the Xbox", detail: "Ends the game", danger: true) { model.close(); a.mcRestMode?() },
             ]
@@ -137,6 +154,7 @@ struct MCQuickMenuView: View {
                 Item(icon: "info.circle", label: "Streaming status", detail: a.mcStatsOn() ? "On" : "Off") { a.mcToggleStats(); model.rev += 1 },
                 Item(icon: "gamecontroller", label: "Controllers", detail: pads == 1 ? "1 connected" : "\(pads) connected") {},
                 Item(icon: "playstation.logo", label: "PS button", detail: "Pads without one: L2 + Start") { model.close(); a.mcPsButton?() },
+            ] + move + [
                 Item(icon: "arrow.left", label: "Disconnect", detail: "Ask, rest mode or keep it on (Settings → PlayStation)") { model.close(); a.mcDisconnect() },
                 Item(icon: "moon.zzz", label: "Rest mode", detail: "Puts the PS5 to sleep", danger: true) { model.close(); a.mcRestMode?() },
             ]
@@ -149,6 +167,7 @@ struct MCQuickMenuView: View {
             },
             Item(icon: "gamecontroller", label: "Controllers", detail: pads == 1 ? "1 connected" : "\(pads) connected") {},
             Item(icon: "list.bullet.rectangle", label: "Task Manager", detail: "Windows: Ctrl + Shift + Esc") { a.mcTaskManager(); model.close() },
+        ] + move + [
             Item(icon: "arrow.left", label: "Disconnect", detail: "The game keeps running") { model.close(); a.mcDisconnect() },
             Item(icon: "xmark", label: "Quit game", detail: nil, danger: true) {
                 let address = a.mcHostAddress()

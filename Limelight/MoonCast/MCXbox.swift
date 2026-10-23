@@ -188,4 +188,15 @@ enum MCXbox {
     static var maxMbps: Int { d.object(forKey: "xbox_bitrate") as? Int ?? 0 }
     static var swapAB: Bool { d.bool(forKey: "xbox_swap_ab") }
     static var coop: Bool { d.bool(forKey: "xbox_coop") }
+    /// Settings → Xbox → Stick deadzone, 0...1 (8% by default, as on the handheld)
+    static var deadzone: Float { Float(d.object(forKey: "xbox_deadzone") as? Int ?? 8) / 100 }
+
+    /// A stick inside the deadzone reads centred; outside it the travel is rescaled so the edge still reaches full.
+    static func dead(_ x: Float, _ y: Float) -> (Float, Float) {
+        let dz = deadzone, mag = (x * x + y * y).squareRoot()
+        guard dz > 0 else { return (x, y) }
+        guard mag >= dz else { return (0, 0) }
+        let k = (min(mag, 1) - dz) / (1 - dz) / mag
+        return (max(-1, min(1, x * k)), max(-1, min(1, y * k)))
+    }
 }

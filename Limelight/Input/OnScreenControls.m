@@ -247,6 +247,14 @@ static float L3_Y;
             Log(LOG_W, @"Unknown on-screen controls level: %d", (int)_level);
             break;
     }
+
+    // MoonCast: Settings → Controllers → Controller transparency (percent see-through, 0 by default)
+    float opacity = 1.0f - [[NSUserDefaults standardUserDefaults] integerForKey:@"mc_osc_transparency"] / 100.0f;
+    for (CALayer* l in @[_aButton, _bButton, _xButton, _yButton, _upButton, _downButton, _leftButton, _rightButton,
+                         _leftStickBackground, _leftStick, _rightStickBackground, _rightStick, _startButton, _selectButton,
+                         _r1Button, _r2Button, _r3Button, _l1Button, _l2Button, _l3Button]) {
+        l.opacity = opacity;
+    }
 }
 
 // For GCExtendedGamepad controls we move start, select, L3, and R3 to the button

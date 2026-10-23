@@ -49,10 +49,14 @@ final class MCHomeController: UIHostingController<MCRoot> {
         rootView = root
         MCStore.shared.onStream = { [weak self] cfg in self?.stream(cfg) }
         MCStore.shared.onXboxStream = { [weak self] c in
+            MCStore.shared.playing = MCStore.shared.allGames().first { $0.xb?.id == c.id }
+            MCUsage.used("xbox")
             MCPad.shared.detach()
             self?.navigationController?.pushViewController(MCXboxStreamController(console: c), animated: true)
         }
         MCStore.shared.onPs5Stream = { [weak self] c in
+            MCStore.shared.playing = MCStore.shared.allGames().first { $0.ps?.host == c.host }
+            MCUsage.used("ps5")
             MCPad.shared.detach()
             self?.navigationController?.pushViewController(MCPs5StreamController(console: c), animated: true)
         }
@@ -93,10 +97,12 @@ final class MCHomeController: UIHostingController<MCRoot> {
 
     private func ask(_ title: String, _ placeholder: String, _ done: @escaping (String) -> Void) {
         let a = UIAlertController(title: title, message: nil, preferredStyle: .alert)
-        let digits = placeholder.contains("digits")
+        // "digits" in the hint asks for a whole number, "Mbps" for one with a decimal point, else an address
+        let decimal = placeholder.contains("Mbps")
+        let digits = placeholder.contains("digits") || placeholder.contains("fps") || decimal
         a.addTextField { t in
             t.placeholder = placeholder
-            t.keyboardType = digits ? .numberPad : .URL
+            t.keyboardType = decimal ? .decimalPad : digits ? .numberPad : .URL
             t.autocapitalizationType = .none
             t.autocorrectionType = .no
         }

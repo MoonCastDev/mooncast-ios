@@ -39,7 +39,8 @@ final class MCXboxStreamController: UIViewController, MCXboxRtc.Listener, MCQuic
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .black
-        video.videoContentMode = .scaleAspectFit
+        video.videoContentMode = MCPictureShape.current == "fill" ? .scaleAspectFill : MCPictureShape.current == "stretch" ? .scaleToFill : .scaleAspectFit
+        video.clipsToBounds = true
         video.frame = view.bounds
         video.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         view.addSubview(video)
@@ -190,8 +191,8 @@ final class MCXboxStreamController: UIViewController, MCXboxRtc.Listener, MCQuic
             f.up = g.dpad.up.isPressed; f.down = g.dpad.down.isPressed; f.left = g.dpad.left.isPressed; f.right = g.dpad.right.isPressed
             f.lb = g.leftShoulder.isPressed; f.rb = g.rightShoulder.isPressed
             f.ls = g.leftThumbstickButton?.isPressed ?? false; f.rs = g.rightThumbstickButton?.isPressed ?? false
-            f.lx = g.leftThumbstick.xAxis.value; f.ly = g.leftThumbstick.yAxis.value
-            f.rx = g.rightThumbstick.xAxis.value; f.ry = g.rightThumbstick.yAxis.value
+            (f.lx, f.ly) = MCXbox.dead(g.leftThumbstick.xAxis.value, g.leftThumbstick.yAxis.value)
+            (f.rx, f.ry) = MCXbox.dead(g.rightThumbstick.xAxis.value, g.rightThumbstick.yAxis.value)
             f.lt = g.leftTrigger.value; f.rt = g.rightTrigger.value
             return f
         }

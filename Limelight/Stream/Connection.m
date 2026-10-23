@@ -442,6 +442,10 @@ void ClSetControllerLED(uint16_t controllerNumber, uint8_t r, uint8_t g, uint8_t
     _streamConfig.bitrate = config.bitRate;
     _streamConfig.supportedVideoFormats = config.supportedVideoFormats;
     _streamConfig.audioConfiguration = config.audioConfiguration;
+    // MoonCast: Settings → Picture → Full range colour (the decoder reads the range from the stream itself)
+    if ([[NSUserDefaults standardUserDefaults] boolForKey:@"mc_full_range"]) {
+        _streamConfig.colorRange = COLOR_RANGE_FULL;
+    }
     
     // Since we require iOS 12 or above, we're guaranteed to be running
     // on a 64-bit device with ARMv8 crypto instructions, so we don't
