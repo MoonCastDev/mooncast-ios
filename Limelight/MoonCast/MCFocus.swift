@@ -190,12 +190,7 @@ struct MCFocusable: ViewModifier {
         focus.register(id, scope: scope, action: action, menu: menu)
         return content
             .scaleEffect(on ? 1.04 : 1)
-            .overlay(
-                RoundedRectangle(cornerRadius: corner + 7)
-                    .stroke(ring, lineWidth: 5)
-                    .padding(-7)
-                    .opacity(on ? 1 : 0)
-            )
+            .overlay(MCRing(corner: corner, color: ring).opacity(on ? 1 : 0))
             .animation(.easeOut(duration: 0.14), value: on)
             .background(GeometryReader { g in
                 Color.clear.preference(key: MCFrameKey.self, value: [id: g.frame(in: .global)])
@@ -221,5 +216,20 @@ extension View {
             MCFocus.shared.frames = f
             DispatchQueue.main.async { MCFocus.shared.settle() }
         }
+    }
+}
+
+/// The Switch ring: cyan, standing off the item, breathing slowly.
+struct MCRing: View {
+    let corner: CGFloat
+    let color: Color
+    @State private var breathe = false
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: corner + 7)
+            .stroke(color, lineWidth: 5)
+            .padding(-7)
+            .opacity(breathe ? 1 : 0.55)
+            .onAppear { withAnimation(.easeInOut(duration: 1.6).repeatForever(autoreverses: true)) { breathe = true } }
     }
 }

@@ -21,6 +21,7 @@ struct MCRoot: View {
     @State private var pickingArt: String?
     @State private var photo: PhotosPickerItem?
     @State private var artRev = 0
+    @State private var enterTick = 0
 
     private let settings = MCSettings()
     /// Set by the controller: asks for text (a PC's address) with the system's keyboard dialog.
@@ -90,6 +91,7 @@ struct MCRoot: View {
 
     private func go(_ p: MCPage) {
         page = p
+        enterTick += 1
         focus.id = nil
         DispatchQueue.main.async { focus.settle() }
     }
@@ -220,21 +222,33 @@ struct MCRoot: View {
 
     private func homePage(_ m: MCMetrics, _ p: MCPalette) -> some View {
         let games = store.homeGames()
+        // PCs found on the network but not paired yet: a tile each, so pairing is one press from Home
+        let unpaired = store.hosts.filter { store.online($0) && !store.paired($0) }
         let gap: CGFloat = 32
         let usableW = m.designWidth - 2 * m.edge
-        let ts: CGFloat = m.portrait ? min((usableW - gap) / 2, m.designHeight * 0.34) : 380
-        let titles = Dictionary(games.map { ("g:\($0.key)", $0.title) }, uniquingKeysWith: { a, _ in a })
-        let name = focus.id.flatMap { titles[$0] } ?? (focus.padActive ? nil : games.first?.title)
-        focus.preferred["page"] = games.first.map { "g:\($0.key)" } ?? "g:add"
+        // on its side the tiles take the height left after the bars, the name line and the round buttons
+        let free = m.designHeight - 120 - 110 - 128 - 230 - 40
+        let ts: CGFloat = m.portrait ? min((usableW - gap) / 2, m.designHeight * 0.34) : min(max(380, free), 520)
+        var titles = Dictionary(games.map { ("g:\($0.key)", $0.title) }, uniquingKeysWith: { a, _ in a })
+        titles["g:all"] = "All games"
+        titles["g:add"] = "Add a PC"
+        unpaired.forEach { titles["g:pair:\($0.uuid)"] = "Pair \($0.name)" }
+        let firstId = games.first.map { "g:\($0.key)" } ?? unpaired.first.map { "g:pair:\($0.uuid)" } ?? "g:add"
+        let name = focus.id.flatMap { titles[$0] } ?? (focus.padActive ? nil : titles[firstId])
+        focus.preferred["page"] = firstId
         return VStack(alignment: .leading, spacing: 0) {
             Spacer(minLength: 0).frame(maxHeight: m.px(80))
             Text(name ?? " ").mcFont(34, m).foregroundColor(p.ring).lineLimit(1)
                 .padding(.leading, m.px(m.edge)).frame(height: m.px(48))
                 .animation(nil, value: name)
+                .modifier(MCRise(order: 0, tick: enterTick))
             ScrollViewReader { proxy in
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: m.px(gap)) {
-                        if games.isEmpty {
+                        ForEach(unpaired, id: \.uuid) { h in
+                            tile(nil, kind: "pair:\(h.uuid)", label: "Pair \(h.name)", size: ts, m, p) { store.pair(h) }
+                        }
+                        if games.isEmpty && unpaired.isEmpty {
                             tile(nil, kind: "add", label: "Add a PC", size: ts, m, p) { go(.consoles) }
                         }
                         ForEach(games) { g in
@@ -250,9 +264,18 @@ struct MCRoot: View {
                 }
             }
             .frame(height: m.px(ts + 40))
+            .modifier(MCRise(order: 1, tick: enterTick))
+            if games.isEmpty {
+                Text(unpaired.isEmpty ? "Looking for PCs running Sunshine on this network. Or add one by its address in Consoles."
+                                      : "Press a PC to pair it: a PIN shows here, and you type it into Sunshine on the PC.")
+                    .mcFont(26, m, weight: .medium).foregroundColor(p.sub)
+                    .padding(.leading, m.px(m.edge)).padding(.top, m.px(8))
+                    .modifier(MCRise(order: 2, tick: enterTick))
+            }
             roundButtons(m, p)
-                .padding(.top, m.px(m.portrait ? 64 : 60))
+                .padding(.top, m.px(m.portrait ? 64 : 50))
                 .frame(maxWidth: .infinity)
+                .modifier(MCRise(order: 3, tick: enterTick))
             Spacer(minLength: 0)
         }
     }
@@ -292,6 +315,9 @@ struct MCRoot: View {
                     Image(uiImage: img).resizable().scaledToFill()
                 } else if let g = g {
                     CoverArt(colors: Covers.colors(g.seed))
+                } else if kind.hasPrefix("pair:") {
+                    CoverArt(colors: Covers.colors(label))
+                        .overlay(Image(systemName: "link").font(.system(size: s * 0.22, weight: .bold)).foregroundColor(.white.opacity(0.9)))
                 } else if kind == "all" {
                     p.tile.overlay(allGrid(s, p))
                 } else {
@@ -307,7 +333,7 @@ struct MCRoot: View {
                 Text("+").font(.system(size: s * 0.3, weight: .semibold)).foregroundColor(.white)
                     .frame(width: s, height: s)
             }
-            if g != nil && box == nil || kind == "add" {
+            if g != nil && box == nil || kind == "add" || kind.hasPrefix("pair:") {
                 Text(label).font(.system(size: m.px(36), weight: .heavy)).foregroundColor(.white).lineLimit(3)
                     .shadow(color: .black.opacity(0.35), radius: m.px(5), y: m.px(2))
                     .padding(.horizontal, m.px(26 * k)).padding(.bottom, m.px(24 * k))
@@ -809,5 +835,24 @@ enum MCArt {
         let c = Color(.sRGB, red: Double(px[0]) / 255, green: Double(px[1]) / 255, blue: Double(px[2]) / 255)
         tints[key] = c
         return c
+    }
+}
+
+/// Screens build in: each part rises and fades in, 55 ms after the one before (the handheld's entrance).
+struct MCRise: ViewModifier {
+    let order: Int
+    let tick: Int
+    @State private var shown = false
+
+    func body(content: Content) -> some View {
+        content
+            .opacity(shown ? 1 : 0)
+            .offset(y: shown ? 0 : 24)
+            .onAppear { rise() }
+            .onChange(of: tick) { _, _ in shown = false; rise() }
+    }
+
+    private func rise() {
+        withAnimation(.easeOut(duration: 0.35).delay(0.055 * Double(order))) { shown = true }
     }
 }
