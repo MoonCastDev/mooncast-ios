@@ -36,6 +36,9 @@ extern int ff_isom_write_av1c(AVIOContext *pb, const uint8_t *buf, int size,
     // MoonCast: Settings → Picture → Super resolution draws through FSR instead of the display layer
     MCFsrView* mcFsr;
     MCFsrDecoder* mcFsrDecoder;
+    // MoonCast: Ultra low latency takes each frame as it arrives (no wait for the screen refresh)
+    BOOL mcUltra;
+    volatile BOOL mcFrameThreadRunning;
     
     CADisplayLink* _displayLink;
     BOOL framePacing;
@@ -117,6 +120,21 @@ extern int ff_isom_write_av1c(AVIOContext *pb, const uint8_t *buf, int size,
 
 - (void)start
 {
+    mcUltra = MCUltraLowLatency.enabled;
+    if (mcUltra) {
+        mcFrameThreadRunning = YES;
+        NSThread* t = [[NSThread alloc] initWithBlock:^{
+            VIDEO_FRAME_HANDLE handle;
+            PDECODE_UNIT du;
+            while (self->mcFrameThreadRunning && LiWaitForNextVideoFrame(&handle, &du)) {
+                LiCompleteVideoFrame(handle, DrSubmitDecodeUnit(du));
+            }
+        }];
+        t.name = @"MoonCast frames";
+        t.qualityOfService = NSQualityOfServiceUserInteractive;
+        [t start];
+        return;
+    }
     _displayLink = [CADisplayLink displayLinkWithTarget:self selector:@selector(displayLinkCallback:)];
     if (@available(iOS 15.0, tvOS 15.0, *)) {
         _displayLink.preferredFrameRateRange = CAFrameRateRangeMake(self->frameRate, self->frameRate, self->frameRate);
@@ -158,6 +176,7 @@ int DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
 
 - (void)stop
 {
+    mcFrameThreadRunning = NO;
     [_displayLink invalidate];
     [mcFsrDecoder invalidate];
     mcFsrDecoder = nil;
@@ -615,6 +634,14 @@ int DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
         return DR_NEED_IDR;
     }
 
+    if (self->mcUltra) {
+        // show it now: no lining up with the display's refresh
+        CFArrayRef att = CMSampleBufferGetSampleAttachmentsArray(sampleBuffer, YES);
+        if (att != NULL && CFArrayGetCount(att) > 0) {
+            CFDictionarySetValue((CFMutableDictionaryRef)CFArrayGetValueAtIndex(att, 0), kCMSampleAttachmentKey_DisplayImmediately, kCFBooleanTrue);
+        }
+    }
+
     // Enqueue the next frame (MoonCast: through FSR when it's on)
     if (self->mcFsrDecoder != nil) {
         [self->mcFsrDecoder decode:sampleBuffer];
@@ -624,11 +651,15 @@ int DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
     }
     
     if (du->frameType == FRAME_TYPE_IDR) {
-        // Ensure the layer is visible now
-        self->displayLayer.hidden = self->mcFsrDecoder != nil;
-        
-        // Tell our parent VC to hide the progress indicator
-        [self->_callbacks videoContentShown];
+        // (the Ultra low latency frame thread isn't the main thread: the view work goes there)
+        BOOL hide = self->mcFsrDecoder != nil;
+        void (^shown)(void) = ^{
+            // Ensure the layer is visible now
+            self->displayLayer.hidden = hide;
+            // Tell our parent VC to hide the progress indicator
+            [self->_callbacks videoContentShown];
+        };
+        if ([NSThread isMainThread]) shown(); else dispatch_async(dispatch_get_main_queue(), shown);
     }
     
     // Dereference the buffers

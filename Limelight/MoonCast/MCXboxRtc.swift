@@ -255,6 +255,11 @@ final class MCXboxRtc: NSObject, RTCPeerConnectionDelegate, RTCDataChannelDelega
         cfg.sdpSemantics = .unifiedPlan
         cfg.bundlePolicy = .maxBundle
         cfg.rtcpMuxPolicy = .require
+        if MCUltraLowLatency.enabled {
+            // Ultra low latency: keep the sound close to the picture
+            cfg.audioJitterBufferMaxPackets = 10
+            cfg.audioJitterBufferFastAccelerate = true
+        }
         guard let p = f.peerConnection(with: cfg, constraints: RTCMediaConstraints(mandatoryConstraints: nil, optionalConstraints: nil), delegate: self) else {
             throw MCXbox.HttpError(code: 0, body: "Couldn't create the connection")
         }

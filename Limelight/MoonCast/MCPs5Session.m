@@ -119,9 +119,10 @@ static void MCChiakiLog(ChiakiLogLevel level, const char* msg, void* user) {
     size_t n = samples * channels;
     size_t h = atomic_load(&head), t = atomic_load(&tail);
     size_t queued = (h + MC_RING - t) % MC_RING;
-    // more than 120 ms waiting: drop the old part so the sound stays close to the picture
-    if (queued > rate * channels * 120 / 1000) {
-        atomic_store(&tail, (h + MC_RING - rate * channels * 40 / 1000) % MC_RING);
+    // more than 120 ms waiting (60 with Ultra low latency): drop the old part so the sound stays close to the picture
+    size_t cap = MCUltraLowLatency.enabled ? 60 : 120, keep = MCUltraLowLatency.enabled ? 20 : 40;
+    if (queued > rate * channels * cap / 1000) {
+        atomic_store(&tail, (h + MC_RING - rate * channels * keep / 1000) % MC_RING);
     }
     for (size_t i = 0; i < n; i++) {
         ring[h] = buf[i];

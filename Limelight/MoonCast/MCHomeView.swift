@@ -797,7 +797,7 @@ struct MCRoot: View {
     /// An icon for each setting, as the handheld's rows have.
     static let icons: [String: String] = [
         "s:res": "rectangle.expand.vertical", "s:fps": "speedometer", "s:rate": "gauge.with.dots.needle.67percent", "s:codec": "film",
-        "s:hdr": "sun.max", "s:fsr": "sparkles", "s:fsrsharp": "wand.and.rays", "s:pacing": "metronome", "s:stats": "chart.bar", "s:opt": "wand.and.stars",
+        "s:hdr": "sun.max", "s:ull": "bolt", "s:fsr": "sparkles", "s:fsrsharp": "wand.and.rays", "s:pacing": "metronome", "s:stats": "chart.bar", "s:opt": "wand.and.stars",
         "s:spk": "speaker.wave.2", "s:pcaudio": "hifispeaker", "s:feel": "music.note",
         "s:size": "textformat.size", "s:rotate": "rotate.right", "s:touch": "hand.point.up.left", "s:osc": "gamecontroller",
         "s:multi": "person.2", "s:swap": "arrow.left.arrow.right", "s:mouse": "computermouse",
@@ -912,6 +912,10 @@ struct MCRoot: View {
             toggle("s:hdr", "HDR", "Only when the PC, the game and this screen support it", v.hdr, m, p) { settings.save { $0.hdr.toggle() } }
             choice("s:pacing", "Frame pacing", "Trade a little delay for smoother motion", ["Lowest delay", "Smoothest"],
                    v.pacing ? 1 : 0, m, p) { i in settings.save { $0.pacing = i == 1 } }
+            toggle("s:ull", "Ultra low latency", "Shows each PC frame the moment it's decoded and keeps sound close behind on PS5 and Xbox. A rough Wi-Fi can stutter more",
+                   UserDefaults.standard.bool(forKey: "mc_ultra_low_latency"), m, p) {
+                UserDefaults.standard.set(!UserDefaults.standard.bool(forKey: "mc_ultra_low_latency"), forKey: "mc_ultra_low_latency")
+            }
             toggle("s:stats", "Stats while playing", "Frame rate, delay and lost frames in a corner", v.stats, m, p) { settings.save { $0.stats.toggle() } }
             toggle("s:opt", "Let the PC set game settings", "Sunshine and GeForce change the game's resolution to match", v.optimize, m, p) {
                 settings.save { $0.optimize.toggle() }

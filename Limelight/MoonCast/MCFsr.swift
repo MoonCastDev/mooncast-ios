@@ -30,6 +30,13 @@ final class MCFsr: NSObject {
     @objc static func wanted(videoHeight: Int) -> Bool { enabled && worthIt(videoHeight: videoHeight, screenHeight: screenPixelHeight) }
 }
 
+/// Settings → Picture → Ultra low latency (the handheld's switch, iPad style): PC frames shown the moment they're
+/// decoded instead of at the next screen refresh, less sound queued on PS5 and Xbox. A rough Wi-Fi can stutter more.
+@objc(MCUltraLowLatency)
+final class MCUltraLowLatency: NSObject {
+    @objc static var enabled: Bool { UserDefaults.standard.bool(forKey: "mc_ultra_low_latency") }
+}
+
 /// The picture, drawn through FSR. Feed it decoded frames with display(_:); any thread.
 @objc(MCFsrView)
 final class MCFsrView: UIView {
