@@ -4,7 +4,6 @@
 //
 
 import UIKit
-import AVFoundation
 
 final class MCSettings {
     private let dm = DataManager()
@@ -78,29 +77,31 @@ final class MCSettings {
     }
 }
 
-/// Settings → Picture → Picture shape (the handheld's ShapeBox): Fit keeps the whole picture with bars, Fill crops
-/// it to fill the screen, Stretch fills the screen and changes the picture's shape. Used by the PC, PS5 and Xbox players.
+/// Settings → Picture → Picture shape (the handheld's ShapeBox): Fit keeps the whole picture with bars, Zoom goes
+/// halfway to Fill (half the bars, a little cropped at the sides), Fill crops it to fill the screen, Stretch fills the
+/// screen and changes the picture's shape. Used by the PC, PS5 and Xbox players.
 @objc(MCPictureShape)
 final class MCPictureShape: NSObject {
-    /// "fit", "fill" or "stretch".
+    /// "fit", "zoom", "fill" or "stretch".
     @objc static var current: String { UserDefaults.standard.string(forKey: "mc_picture_shape") ?? "fit" }
 
     /// The picture's size in an area of this size, for a stream of this aspect ratio (width / height).
     @objc static func size(in area: CGSize, aspect: CGFloat) -> CGSize {
         guard aspect > 0, area.width > 0, area.height > 0 else { return area }
         let wide = area.width > area.height * aspect
+        let fit = wide ? CGSize(width: area.height * aspect, height: area.height) : CGSize(width: area.width, height: area.width / aspect)
+        let fill = wide ? CGSize(width: area.width, height: area.width / aspect) : CGSize(width: area.height * aspect, height: area.height)
         switch current {
         case "stretch": return area
-        case "fill": return wide ? CGSize(width: area.width, height: area.width / aspect) : CGSize(width: area.height * aspect, height: area.height)
-        default: return wide ? CGSize(width: area.height * aspect, height: area.height) : CGSize(width: area.width, height: area.width / aspect)
+        case "fill": return fill
+        case "zoom": return CGSize(width: (fit.width + fill.width) / 2, height: (fit.height + fill.height) / 2)
+        default: return fit
         }
     }
 
-    @objc static var videoGravity: AVLayerVideoGravity {
-        switch current {
-        case "stretch": return .resize
-        case "fill": return .resizeAspectFill
-        default: return .resizeAspect
-        }
+    /// Where the picture goes in [bounds]: its size from [size(in:aspect:)], centred (the parts outside are cut off).
+    static func frame(in bounds: CGRect, aspect: CGFloat) -> CGRect {
+        let s = size(in: bounds.size, aspect: aspect)
+        return CGRect(x: bounds.midX - s.width / 2, y: bounds.midY - s.height / 2, width: s.width, height: s.height)
     }
 }
