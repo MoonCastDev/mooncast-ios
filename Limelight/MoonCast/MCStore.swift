@@ -1,0 +1,376 @@
+//
+//  MCStore.swift
+//  MoonCast: the home's data. Moonlight's own pieces do the work, as on Android: DiscoveryManager finds and polls
+//  PCs, PairManager pairs, ConnectionHelper fetches the game lists, AppAssetManager the box art, and
+//  StreamFrameViewController plays.
+//
+
+import SwiftUI
+import GameController
+
+/// One thing you can play. PCs only for now; PS5 and Xbox join later.
+struct MCGame: Identifiable, Equatable {
+    let key: String
+    let title: String
+    let src: String
+    let seed: String
+    let running: Bool
+    let host: TemporaryHost?
+    let app: TemporaryApp?
+    var id: String { key }
+
+    static func == (a: MCGame, b: MCGame) -> Bool { a.key == b.key && a.title == b.title && a.running == b.running }
+}
+
+/// A question with options (Cancel first where it matters), shown as the handheld's dialog card.
+struct MCDialog: Identifiable {
+    struct Opt {
+        let title: String
+        var sub: String? = nil
+        var danger = false
+        var picked = false
+        let run: () -> Void
+    }
+    let id = UUID()
+    let title: String
+    var message: String? = nil
+    var big: String? = nil
+    var opts: [Opt]
+}
+
+final class MCStore: NSObject, ObservableObject, DiscoveryCallback, PairCallback, AppAssetCallback {
+    static let shared = MCStore()
+
+    @Published private(set) var hosts: [TemporaryHost] = []
+    /// Bumped when anything in the hosts changes (they're Objective-C objects SwiftUI can't watch).
+    @Published private(set) var revision = 0
+    @Published var dialog: MCDialog?
+    @Published var busy: String?
+
+    /// Set by the home's controller: starts Moonlight's stream screen.
+    var onStream: ((StreamConfiguration) -> Void)?
+
+    private var disc: DiscoveryManager!
+    private var assets: AppAssetManager!
+    private let pairQueue = OperationQueue()
+    private var clientCert: Data?
+    private var started = false
+    private var running = false
+    private var listFetched: [String: Date] = [:]
+    private var listBusy = Set<String>()
+    private var lastGame: [String: String] = [:]
+    private let art = NSCache<NSString, UIImage>()
+    private var bumpQueued = false
+
+    // MARK: lifecycle
+
+    func start() {
+        guard !started else { return }
+        started = true
+        CryptoManager.generateKeyPairUsingSSL()
+        _ = IdManager.getUniqueId()
+        clientCert = CryptoManager.readCertFromFile()
+        hosts = MCBridge.savedHosts()
+        disc = DiscoveryManager(hosts: hosts, andCallback: self)
+        assets = AppAssetManager(callback: self)
+    }
+
+    /// The home is on screen: look for PCs and keep their state fresh.
+    func resume() {
+        start()
+        guard !running else { return }
+        running = true
+        disc.resetDiscoveryState()
+        disc.startDiscovery()
+        hosts.filter { $0.pairState == PairState.paired }.forEach { assets.retrieveAssets(from: $0) }
+        bump()
+    }
+
+    /// A stream starts or the app goes to the background.
+    func pause() {
+        guard running else { return }
+        running = false
+        disc.stopDiscovery()
+        assets.stopRetrieving()
+    }
+
+    private func bump() {
+        if bumpQueued { return }
+        bumpQueued = true
+        DispatchQueue.main.async {
+            self.bumpQueued = false
+            self.revision += 1
+        }
+    }
+
+    // MARK: games
+
+    func paired(_ h: TemporaryHost) -> Bool { h.pairState == PairState.paired }
+    func online(_ h: TemporaryHost) -> Bool { h.state == State.online }
+
+    func apps(_ h: TemporaryHost) -> [TemporaryApp] {
+        ((h.appList as? Set<TemporaryApp>) ?? []).sorted { ($0.name ?? "").localizedCaseInsensitiveCompare($1.name ?? "") == .orderedAscending }
+    }
+
+    func hidden(_ h: TemporaryHost) -> Set<String> {
+        Set(UserDefaults.standard.stringArray(forKey: "mc_hidden_\(h.uuid)") ?? [])
+    }
+
+    func setHidden(_ h: TemporaryHost, _ appId: String, _ on: Bool) {
+        var s = hidden(h)
+        if on { s.insert(appId) } else { s.remove(appId) }
+        UserDefaults.standard.set(Array(s), forKey: "mc_hidden_\(h.uuid)")
+        bump()
+    }
+
+    /// Every game: every PC game that isn't hidden.
+    func allGames() -> [MCGame] {
+        var out: [MCGame] = []
+        for h in hosts where paired(h) {
+            let hide = hidden(h)
+            for a in apps(h) where !hide.contains(a.id ?? "") {
+                out.append(MCGame(key: "pc:\(h.uuid):\(a.id ?? "")", title: a.name ?? "", src: "PC", seed: a.name ?? "",
+                                  running: online(h) && h.currentGame == a.id, host: h, app: a))
+            }
+        }
+        return out
+    }
+
+    /// Home's row: what's running, the last few played, then the rest of the PC games A to Z, up to ten.
+    func homeGames() -> [MCGame] {
+        let all = allGames()
+        let byKey = Dictionary(all.map { ($0.key, $0) }, uniquingKeysWith: { a, _ in a })
+        let recent = MCRecents.list().compactMap { byKey[$0] }
+        var ordered: [MCGame] = []
+        func add(_ g: MCGame) { if !ordered.contains(where: { $0.key == g.key }) { ordered.append(g) } }
+        all.filter { $0.running }.forEach(add)
+        recent.prefix(5).forEach(add)
+        let kept = ordered.count
+        recent.forEach(add)
+        all.sorted { $0.title.lowercased() < $1.title.lowercased() }.forEach(add)
+        return Array(ordered.prefix(max(10, kept)))
+    }
+
+    func boxArt(_ app: TemporaryApp) -> UIImage? {
+        guard let path = AppAssetManager.boxArtPath(for: app) else { return nil }
+        if let img = art.object(forKey: path as NSString) { return img }
+        guard let img = UIImage(contentsOfFile: path) else { return nil }
+        art.setObject(img, forKey: path as NSString)
+        return img
+    }
+
+    // MARK: playing
+
+    func play(_ g: MCGame) {
+        guard let h = g.host, let a = g.app else { return }
+        if !online(h) {
+            pcOffline(h)
+            return
+        }
+        let current = apps(h).first { $0.id == h.currentGame && h.currentGame != "0" }
+        if let cur = current, cur.id != a.id {
+            dialog = MCDialog(title: "Quit \(cur.name ?? "the game") and start \(a.name ?? "this one")?",
+                              message: "\(h.name) is playing \(cur.name ?? "another game"). Anything not saved in it is lost.",
+                              opts: [.init(title: "Cancel", picked: true) {},
+                                     .init(title: "Quit and start", danger: true) { [weak self] in
+                                         self?.quit(h) { ok in if ok { self?.stream(g) } }
+                                     }])
+            return
+        }
+        stream(g)
+    }
+
+    private func stream(_ g: MCGame) {
+        guard let a = g.app else { return }
+        MCRecents.touch(g.key)
+        let cfg = MCBridge.streamConfig(for: a)
+        onStream?(cfg)
+    }
+
+    func quit(_ h: TemporaryHost, then: ((Bool) -> Void)? = nil) {
+        busy = "Quitting the game…"
+        DispatchQueue.global(qos: .userInitiated).async {
+            let err = MCBridge.quitApp(on: h, discovery: self.disc)
+            DispatchQueue.main.async {
+                self.busy = nil
+                self.bump()
+                if let err = err {
+                    self.dialog = MCDialog(title: "Couldn't quit", message: err, opts: [.init(title: "OK") {}])
+                }
+                then?(err == nil)
+            }
+        }
+    }
+
+    private func pcOffline(_ h: TemporaryHost) {
+        var opts: [MCDialog.Opt] = [.init(title: "Cancel", picked: true) {}]
+        if h.mac != nil && h.mac != "00:00:00:00:00:00" {
+            opts.append(.init(title: "Wake it up", sub: "Sends Wake-on-LAN") { [weak self] in self?.wake(h) })
+        }
+        dialog = MCDialog(title: "\(h.name) is off or asleep", message: "Turn it on, or check it's on the same network.", opts: opts)
+    }
+
+    // MARK: PCs
+
+    func wake(_ h: TemporaryHost) {
+        DispatchQueue.global().async { WakeOnLanManager.wake(h) }
+        dialog = MCDialog(title: "Wake-up sent", message: "\(h.name) may take a moment to come up.", opts: [.init(title: "OK") {}])
+    }
+
+    func remove(_ h: TemporaryHost) {
+        disc.removeHost(fromDiscovery: h)
+        MCBridge.remove(h)
+        hosts.removeAll { $0 === h }
+        bump()
+    }
+
+    func addPc(_ address: String) {
+        let a = address.trimmingCharacters(in: .whitespaces)
+        guard !a.isEmpty else { return }
+        busy = "Looking for \(a)…"
+        DispatchQueue.global(qos: .userInitiated).async {
+            self.disc.discoverHost(a) { host, error in
+                DispatchQueue.main.async {
+                    self.busy = nil
+                    if let host = host {
+                        if !self.hosts.contains(where: { $0.uuid == host.uuid }) { self.hosts.append(host) }
+                        self.bump()
+                        if host.pairState != PairState.paired { self.pair(host) }
+                    } else {
+                        self.dialog = MCDialog(title: "No PC found at \(a)", message: error ?? "Check the address and that Sunshine is running.",
+                                               opts: [.init(title: "OK") {}])
+                    }
+                }
+            }
+        }
+    }
+
+    private var pairing: TemporaryHost?
+
+    /// Pairs with a PC: shows the PIN to type into Sunshine.
+    func pair(_ h: TemporaryHost) {
+        busy = "Contacting \(h.name)…"
+        DispatchQueue.global(qos: .userInitiated).async {
+            var tries = 0
+            while h.state == State.unknown && tries < 10 { sleep(1); tries += 1 }
+            if let err = MCBridge.refreshServerInfo(h, discovery: self.disc) {
+                DispatchQueue.main.async {
+                    self.busy = nil
+                    self.dialog = MCDialog(title: "Couldn't reach \(h.name)", message: err, opts: [.init(title: "OK") {}])
+                }
+                return
+            }
+            if h.pairState == PairState.paired {
+                DispatchQueue.main.async { self.busy = nil; self.fetchApps(h, force: true) }
+                return
+            }
+            self.disc.stopDiscoveryBlocking()
+            self.pairing = h
+            let http = HttpManager(host: h)
+            let op = PairManager(manager: http, clientCert: self.clientCert, callback: self)
+            self.pairQueue.addOperation(op!)
+        }
+    }
+
+    func startPairing(_ pin: String!) {
+        DispatchQueue.main.sync {
+            self.busy = nil
+            let name = self.pairing?.name ?? "the PC"
+            self.dialog = MCDialog(title: "Pair with \(name)",
+                                   message: "Enter this PIN on the PC: in Sunshine's web page, open PIN and type it in.",
+                                   big: pin,
+                                   opts: [.init(title: "Cancel", picked: true) { [weak self] in
+                                       self?.pairing = nil
+                                       self?.disc.startDiscovery()
+                                   }])
+        }
+    }
+
+    func pairSuccessful(_ serverCert: Data!) {
+        DispatchQueue.main.async {
+            guard let h = self.pairing else { return }
+            h.serverCert = serverCert
+            h.pairState = PairState.paired
+            self.pairing = nil
+            self.dialog = nil
+            self.disc.startDiscovery()
+            self.fetchApps(h, force: true)
+        }
+    }
+
+    func pairFailed(_ message: String!) {
+        DispatchQueue.main.async {
+            self.pairing = nil
+            self.disc.startDiscovery()
+            self.dialog = MCDialog(title: "Pairing didn't work", message: message, opts: [.init(title: "OK") {}])
+        }
+    }
+
+    func alreadyPaired() {
+        DispatchQueue.main.async {
+            guard let h = self.pairing else { return }
+            self.pairing = nil
+            self.dialog = nil
+            self.disc.startDiscovery()
+            h.pairState = PairState.paired
+            self.fetchApps(h, force: true)
+        }
+    }
+
+    // MARK: Moonlight callbacks
+
+    func updateAllHosts(_ list: [Any]!) {
+        let copy = (list as? [TemporaryHost]) ?? []
+        DispatchQueue.main.async {
+            self.hosts = copy
+            for h in copy where self.paired(h) && self.online(h) {
+                let age = self.listFetched[h.uuid].map { -$0.timeIntervalSinceNow } ?? .infinity
+                // a game started or quit on the PC, or the list is old: fetch it again
+                let changed = self.lastGame[h.uuid] != h.currentGame
+                self.lastGame[h.uuid] = h.currentGame
+                if age > 120 || h.appList.isEmpty || changed && age > 5 { self.fetchApps(h) }
+            }
+            self.bump()
+        }
+    }
+
+    func fetchApps(_ h: TemporaryHost, force: Bool = false) {
+        guard !listBusy.contains(h.uuid) else { return }
+        listBusy.insert(h.uuid)
+        listFetched[h.uuid] = Date()
+        DispatchQueue.global(qos: .utility).async {
+            let err = MCBridge.refreshAppList(h, discovery: self.disc)
+            DispatchQueue.main.async {
+                self.listBusy.remove(h.uuid)
+                if err == nil, self.running { self.assets.retrieveAssets(from: h) }
+                self.bump()
+            }
+        }
+    }
+
+    func receivedAsset(for app: TemporaryApp!) { bump() }
+
+    // MARK: controllers
+
+    func controllersDialog() {
+        let pads = GCController.controllers()
+        let names = pads.map { c -> String in
+            let b = c.battery.map { " · \(Int($0.batteryLevel * 100))%" } ?? ""
+            return (c.vendorName ?? "Controller") + b
+        }
+        dialog = MCDialog(title: "Controllers",
+                          message: names.isEmpty ? "None connected. Pair one in the iPad's Settings → Bluetooth, with the pad in pairing mode."
+                                                 : names.joined(separator: "\n"),
+                          opts: [.init(title: "OK") {}])
+    }
+}
+
+/// What you played last, newest first (Recents.kt).
+enum MCRecents {
+    static func list() -> [String] { UserDefaults.standard.stringArray(forKey: "mc_recents") ?? [] }
+    static func touch(_ key: String) {
+        var l = list().filter { $0 != key }
+        l.insert(key, at: 0)
+        UserDefaults.standard.set(Array(l.prefix(30)), forKey: "mc_recents")
+    }
+}

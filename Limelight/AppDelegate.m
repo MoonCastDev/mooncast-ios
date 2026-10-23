@@ -7,6 +7,9 @@
 //
 
 #import "AppDelegate.h"
+#if !TARGET_OS_TV
+#import "Moonlight-Swift.h"
+#endif
 
 @implementation AppDelegate
 
@@ -28,6 +31,8 @@ static NSString* DB_NAME = @"Limelight_iOS.sqlite";
     if (shortcut != nil) {
         _pcUuidToLoad = (NSString*)[shortcut.userInfo objectForKey:@"UUID"];
     }
+    // MoonCast: the app opens on the MoonCast home instead of Moonlight's PC list
+    self.window.rootViewController = [MCLaunch makeRoot];
 #endif
     return YES;
 }

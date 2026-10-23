@@ -136,6 +136,13 @@
 		FBD349621A0089F6002D2A60 /* DataManager.m in Sources */ = {isa = PBXBuildFile; fileRef = FBD349611A0089F6002D2A60 /* DataManager.m */; };
 		FBDE86E019F7A837001C18A8 /* UIComputerView.m in Sources */ = {isa = PBXBuildFile; fileRef = FBDE86DF19F7A837001C18A8 /* UIComputerView.m */; };
 		FBDE86E619F82297001C18A8 /* UIAppView.m in Sources */ = {isa = PBXBuildFile; fileRef = FBDE86E519F82297001C18A8 /* UIAppView.m */; };
+		076CF9B2CB2707A0DAB6C0B2 /* MCBridge.m in Sources */ = {isa = PBXBuildFile; fileRef = 9B2FA25D79B7D8917F22935B /* MCBridge.m */; };
+		13E705C48ED30EDB2CE108A2 /* MCTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06B5484C54BA4A9F57C30E27 /* MCTheme.swift */; };
+		421AB7DB91BAA8CD389F1822 /* MCFocus.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57EC89D35CCB441DEB7AB98B /* MCFocus.swift */; };
+		F73F113939F6ABBC1668E2E7 /* MCStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 28033385C565F89A23E36D2A /* MCStore.swift */; };
+		224B02B6AEAA6F3CABC2DF69 /* MCSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9192AAC9AD3C9BA70CDCFD51 /* MCSettings.swift */; };
+		94DDCAD01A2BE13A9C98D249 /* MCHomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77438C5E5B5F35CC0257CFE0 /* MCHomeView.swift */; };
+		BF51F93CA32CDAAB1DC41167 /* MCHomeController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 56B247B5645B17A2E36734ED /* MCHomeController.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -320,6 +327,14 @@
 		FBDE86DF19F7A837001C18A8 /* UIComputerView.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = UIComputerView.m; sourceTree = "<group>"; };
 		FBDE86E419F82297001C18A8 /* UIAppView.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = UIAppView.h; sourceTree = "<group>"; };
 		FBDE86E519F82297001C18A8 /* UIAppView.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = UIAppView.m; sourceTree = "<group>"; };
+		DC760B029113ED63E4C78FAF /* MCBridge.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = MCBridge.h; sourceTree = "<group>"; };
+		9B2FA25D79B7D8917F22935B /* MCBridge.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = MCBridge.m; sourceTree = "<group>"; };
+		06B5484C54BA4A9F57C30E27 /* MCTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCTheme.swift; sourceTree = "<group>"; };
+		57EC89D35CCB441DEB7AB98B /* MCFocus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCFocus.swift; sourceTree = "<group>"; };
+		28033385C565F89A23E36D2A /* MCStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCStore.swift; sourceTree = "<group>"; };
+		9192AAC9AD3C9BA70CDCFD51 /* MCSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCSettings.swift; sourceTree = "<group>"; };
+		77438C5E5B5F35CC0257CFE0 /* MCHomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCHomeView.swift; sourceTree = "<group>"; };
+		56B247B5645B17A2E36734ED /* MCHomeController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCHomeController.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -456,6 +471,7 @@
 				FB290CFA19B2C406004C83CF /* Supporting Files */,
 				FB290D0219B2C406004C83CF /* AppDelegate.h */,
 				FB290D0319B2C406004C83CF /* AppDelegate.m */,
+				5E34F220FEBEF6D9522FF9ED /* MoonCast */,
 				FBDE86DE19F7A837001C18A8 /* UIComputerView.h */,
 				FBDE86DF19F7A837001C18A8 /* UIComputerView.m */,
 				FBDE86E419F82297001C18A8 /* UIAppView.h */,
@@ -685,6 +701,21 @@
 			name = Database;
 			sourceTree = "<group>";
 		};
+		5E34F220FEBEF6D9522FF9ED /* MoonCast */ = {
+			isa = PBXGroup;
+			children = (
+				DC760B029113ED63E4C78FAF /* MCBridge.h */,
+				9B2FA25D79B7D8917F22935B /* MCBridge.m */,
+				06B5484C54BA4A9F57C30E27 /* MCTheme.swift */,
+				57EC89D35CCB441DEB7AB98B /* MCFocus.swift */,
+				28033385C565F89A23E36D2A /* MCStore.swift */,
+				9192AAC9AD3C9BA70CDCFD51 /* MCSettings.swift */,
+				77438C5E5B5F35CC0257CFE0 /* MCHomeView.swift */,
+				56B247B5645B17A2E36734ED /* MCHomeController.swift */,
+			);
+			path = MoonCast;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -885,6 +916,13 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				076CF9B2CB2707A0DAB6C0B2 /* MCBridge.m in Sources */,
+				13E705C48ED30EDB2CE108A2 /* MCTheme.swift in Sources */,
+				421AB7DB91BAA8CD389F1822 /* MCFocus.swift in Sources */,
+				F73F113939F6ABBC1668E2E7 /* MCStore.swift in Sources */,
+				224B02B6AEAA6F3CABC2DF69 /* MCSettings.swift in Sources */,
+				94DDCAD01A2BE13A9C98D249 /* MCHomeView.swift in Sources */,
+				BF51F93CA32CDAAB1DC41167 /* MCHomeController.swift in Sources */,
 				FB290D0719B2C406004C83CF /* Limelight.xcdatamodeld in Sources */,
 				9819CC22254F180F008A7C8E /* AbsoluteTouchHandler.m in Sources */,
 				9819CC14254F107A008A7C8E /* RelativeTouchHandler.m in Sources */,
