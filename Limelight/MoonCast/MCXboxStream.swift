@@ -39,10 +39,10 @@ final class MCXboxStreamController: UIViewController, MCXboxRtc.Listener, MCQuic
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .black
-        video.videoContentMode = MCPictureShape.current == "fill" ? .scaleAspectFill : MCPictureShape.current == "stretch" ? .scaleToFill : .scaleAspectFit
-        video.clipsToBounds = true
-        video.frame = view.bounds
-        video.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        // the view is sized for Settings → Picture → Picture shape in viewDidLayoutSubviews
+        video.videoContentMode = .scaleToFill
+        view.clipsToBounds = true
+        video.frame = MCPictureShape.frame(in: view.bounds, aspect: 16.0 / 9.0)
         view.addSubview(video)
         // Settings → Picture → Super resolution
         if MCFsr.enabled {
@@ -78,6 +78,7 @@ final class MCXboxStreamController: UIViewController, MCXboxRtc.Listener, MCQuic
 
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
+        video.frame = MCPictureShape.frame(in: view.bounds, aspect: 16.0 / 9.0)
         status.frame = CGRect(x: 40, y: view.bounds.midY + 10, width: view.bounds.width - 80, height: 80)
         spinner.center = CGPoint(x: view.bounds.midX, y: view.bounds.midY - 30)
     }

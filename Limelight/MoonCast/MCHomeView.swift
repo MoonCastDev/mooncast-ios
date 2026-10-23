@@ -973,9 +973,9 @@ struct MCRoot: View {
             let ud = UserDefaults.standard
             toggle("s:range", "Full range colour", "Experimental. Deeper blacks if the PC sends them; looks washed out or crushed if not",
                    ud.bool(forKey: "mc_full_range"), m, p) { ud.set(!ud.bool(forKey: "mc_full_range"), forKey: "mc_full_range") }
-            let shapes = ["fit", "fill", "stretch"]
-            choice("s:shape", "Picture shape", "Fit shows all of it, Fill crops the edges to fill the screen, Stretch fills it and changes the shape",
-                   ["Fit", "Fill", "Stretch"], shapes.firstIndex(of: MCPictureShape.current) ?? 0, m, p) { i in ud.set(shapes[i], forKey: "mc_picture_shape") }
+            let shapes = ["fit", "zoom", "fill", "stretch"]
+            choice("s:shape", "Picture shape", "Fit shows all of it. Zoom halves the bars, trimming the sides only slightly. Fill crops the edges to fill the screen. Stretch fills it and changes the shape",
+                   ["Fit", "Zoom", "Fill", "Stretch"], shapes.firstIndex(of: MCPictureShape.current) ?? 0, m, p) { i in ud.set(shapes[i], forKey: "mc_picture_shape") }
             choice("s:pacing", "Frame pacing", "Trade a little delay for smoother motion", ["Lowest delay", "Smoothest"],
                    v.pacing ? 1 : 0, m, p) { i in settings.save { $0.pacing = i == 1 } }
             toggle("s:ull", "Ultra low latency", "Shows each PC frame the moment it's decoded and keeps sound close behind on PS5 and Xbox. A rough Wi-Fi can stutter more",

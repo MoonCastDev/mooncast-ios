@@ -134,7 +134,7 @@ final class MCPs5StreamController: UIViewController, MCPs5SessionDelegate, MCQui
 
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
-        session?.videoLayer.frame = view.bounds
+        session?.videoLayer.frame = MCPictureShape.frame(in: view.bounds, aspect: 16.0 / 9.0)
         status.frame = CGRect(x: 40, y: view.bounds.midY + 10, width: view.bounds.width - 80, height: 80)
         spinner.center = CGPoint(x: view.bounds.midX, y: view.bounds.midY - 30)
     }
@@ -204,7 +204,8 @@ final class MCPs5StreamController: UIViewController, MCPs5SessionDelegate, MCQui
         }
         s.delegate = self
         session = s
-        s.videoLayer.frame = view.bounds
+        s.videoLayer.frame = MCPictureShape.frame(in: view.bounds, aspect: 16.0 / 9.0)
+        view.clipsToBounds = true
         view.layer.insertSublayer(s.videoLayer, at: 0)
         // over PSN start blocks while the hole is punched: keep the screen live
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
