@@ -232,6 +232,13 @@
 }
 
 - (NSString*) generatePIN {
+#if DEBUG
+    // MoonCast test runs: a fixed PIN from the launch environment, so pairing can be approved on the PC by script
+    NSString* fixed = [[NSProcessInfo processInfo] environment][@"MC_PIN"];
+    if (fixed.length == 4) {
+        return fixed;
+    }
+#endif
     NSString* PIN = [NSString stringWithFormat:@"%d%d%d%d",
                      arc4random_uniform(10), arc4random_uniform(10),
                      arc4random_uniform(10), arc4random_uniform(10)];

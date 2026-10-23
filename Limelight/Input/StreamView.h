@@ -28,6 +28,11 @@
      interactionDelegate:(id<UserInteractionDelegate>)interactionDelegate
                   config:(StreamConfiguration*)streamConfig;
 - (void) showOnScreenControls;
+
+// MoonCast: 0 = touch off, 1 = mouse (trackpad), 2 = touch (clicks where you tap)
+- (void) mcSetTouchMode:(int)mode;
+- (int) mcTouchMode;
+- (void) mcToggleKeyboard;
 - (OnScreenControlsLevel) getCurrentOscState;
 
 #if !TARGET_OS_TV

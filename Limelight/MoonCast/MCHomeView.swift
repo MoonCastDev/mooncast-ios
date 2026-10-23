@@ -59,7 +59,7 @@ struct MCRoot: View {
             .preferredColorScheme(theme == "light" ? .light : .dark)
         }
         .mcCollectFrames()
-        .onAppear { hookButtons() }
+        .onAppear { hookButtons(); testStart() }
         .onChange(of: store.dialog?.id) { _, _ in
             if let d = store.dialog {
                 focus.scope = "dialog"
@@ -88,6 +88,19 @@ struct MCRoot: View {
     }
 
     // MARK: navigation
+
+    /// Test runs only: MC_PAGE opens a page (home, games, consoles, settings), MC_GROUP a settings group,
+    /// MC_THEME sets the theme, so every screen can be checked from a script.
+    private func testStart() {
+        #if DEBUG
+        let env = ProcessInfo.processInfo.environment
+        if let t = env["MC_THEME"] { theme = t }
+        if let g = env["MC_GROUP"] { group = g }
+        if let pg = env["MC_PAGE"], let target = [MCPage.home, .games, .consoles, .settings].first(where: { $0.rawValue.lowercased().hasPrefix(pg.lowercased()) || (pg == "games" && $0 == .games) }) {
+            go(target)
+        }
+        #endif
+    }
 
     private func go(_ p: MCPage) {
         page = p
@@ -223,7 +236,7 @@ struct MCRoot: View {
     private func homePage(_ m: MCMetrics, _ p: MCPalette) -> some View {
         let games = store.homeGames()
         // PCs found on the network but not paired yet: a tile each, so pairing is one press from Home
-        let unpaired = store.hosts.filter { store.online($0) && !store.paired($0) }
+        let unpaired = games.isEmpty ? store.hosts.filter { store.online($0) && !store.paired($0) } : []
         let gap: CGFloat = 32
         let usableW = m.designWidth - 2 * m.edge
         // on its side the tiles take the height left after the bars, the name line and the round buttons
@@ -234,7 +247,8 @@ struct MCRoot: View {
         titles["g:add"] = "Add a PC"
         unpaired.forEach { titles["g:pair:\($0.uuid)"] = "Pair \($0.name)" }
         let firstId = games.first.map { "g:\($0.key)" } ?? unpaired.first.map { "g:pair:\($0.uuid)" } ?? "g:add"
-        let name = focus.id.flatMap { titles[$0] } ?? (focus.padActive ? nil : titles[firstId])
+        // with a pad the name follows the ring; on touch it's the first tile's (what you'd start)
+        let name = focus.padActive ? focus.id.flatMap { titles[$0] } : titles[firstId]
         focus.preferred["page"] = firstId
         return VStack(alignment: .leading, spacing: 0) {
             Spacer(minLength: 0).frame(maxHeight: m.px(80))
@@ -308,6 +322,9 @@ struct MCRoot: View {
         let id = g.map { "g:\($0.key)" } ?? "g:\(kind)"
         let custom = g.flatMap { MCArt.image($0.key) }
         let box = custom == nil ? g?.app.flatMap { store.boxArt($0) } : nil
+        // GeForce Experience's placeholder covers carry no name: show it, as Moonlight does
+        let placeholder = box.map { b in let w = Int(b.size.width * b.scale), h = Int(b.size.height * b.scale)
+                                    return (w == 130 && h == 180) || (w == 628 && h == 888) } ?? false
         let k = min(size / 380, 1.5)
         return ZStack(alignment: .topLeading) {
             Group {
@@ -333,7 +350,7 @@ struct MCRoot: View {
                 Text("+").font(.system(size: s * 0.3, weight: .semibold)).foregroundColor(.white)
                     .frame(width: s, height: s)
             }
-            if g != nil && box == nil || kind == "add" || kind.hasPrefix("pair:") {
+            if g != nil && (box == nil || placeholder) || kind == "add" || kind.hasPrefix("pair:") {
                 Text(label).font(.system(size: m.px(36), weight: .heavy)).foregroundColor(.white).lineLimit(3)
                     .shadow(color: .black.opacity(0.35), radius: m.px(5), y: m.px(2))
                     .padding(.horizontal, m.px(26 * k)).padding(.bottom, m.px(24 * k))
@@ -656,8 +673,14 @@ struct MCRoot: View {
                 settings.save { $0.audioOnPC.toggle() }
             }
         case "controls":
-            choice("s:touch", "Touch screen", "In PC games. Mouse is a trackpad, Touch clicks where you tap", ["Mouse", "Touch"],
-                   v.absoluteTouch ? 1 : 0, m, p) { i in settings.save { $0.absoluteTouch = i == 1 } }
+            let touch = ["off", "mouse", "touch"]
+            let curTouch = UserDefaults.standard.string(forKey: "mc_touch_default") ?? "off"
+            choice("s:touch", "Touch screen", "In PC games. Mouse is a trackpad, Touch clicks where you tap. The Quick menu switches it while playing",
+                   ["Off", "Mouse", "Touch"], touch.firstIndex(of: curTouch) ?? 0, m, p) { i in
+                UserDefaults.standard.set(touch[i], forKey: "mc_touch_default")
+                // Moonlight's own setting: Touch also allows pinch to zoom and turns the on-screen controller off
+                settings.save { $0.absoluteTouch = i == 2 }
+            }
             choice("s:osc", "On-screen controller", "Auto shows it when no controller is connected", ["Off", "Auto", "Simple", "Full"],
                    min(v.onscreen, 3), m, p) { i in settings.save { $0.onscreen = i } }
             toggle("s:multi", "More than one player", "On a PC each pad is its own player", v.multi, m, p) { settings.save { $0.multi.toggle() } }

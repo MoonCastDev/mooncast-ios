@@ -71,6 +71,12 @@ final class MCStore: NSObject, ObservableObject, DiscoveryCallback, PairCallback
         _ = IdManager.getUniqueId()
         clientCert = CryptoManager.readCertFromFile()
         hosts = MCBridge.savedHosts()
+        // a handheld streams at its own screen size unless you chose one (Moonlight's default is 720p)
+        if !UserDefaults.standard.bool(forKey: "mc_res_init") {
+            UserDefaults.standard.set(true, forKey: "mc_res_init")
+            let n = MCSettings.native
+            MCSettings().save { $0.width = n.0; $0.height = n.1; $0.bitrate = MCRoot.defaultBitrate(n.0, n.1, $0.framerate) }
+        }
         disc = DiscoveryManager(hosts: hosts, andCallback: self)
         assets = AppAssetManager(callback: self)
     }
@@ -83,6 +89,7 @@ final class MCStore: NSObject, ObservableObject, DiscoveryCallback, PairCallback
         disc.resetDiscoveryState()
         disc.startDiscovery()
         hosts.filter { $0.pairState == PairState.paired }.forEach { assets.retrieveAssets(from: $0) }
+        startTicking()
         bump()
     }
 
@@ -90,6 +97,8 @@ final class MCStore: NSObject, ObservableObject, DiscoveryCallback, PairCallback
     func pause() {
         guard running else { return }
         running = false
+        ticker?.invalidate()
+        ticker = nil
         disc.stopDiscovery()
         assets.stopRetrieving()
     }
@@ -200,6 +209,12 @@ final class MCStore: NSObject, ObservableObject, DiscoveryCallback, PairCallback
                 then?(err == nil)
             }
         }
+    }
+
+    /// The Quick menu's Quit game: the stream screen is closing, quit on the PC it played from.
+    func quitGame(atAddress address: String) {
+        guard let h = hosts.first(where: { $0.activeAddress == address || $0.address == address || $0.localAddress == address }) else { return }
+        quit(h)
     }
 
     private func pcOffline(_ h: TemporaryHost) {
@@ -323,15 +338,46 @@ final class MCStore: NSObject, ObservableObject, DiscoveryCallback, PairCallback
         let copy = (list as? [TemporaryHost]) ?? []
         DispatchQueue.main.async {
             self.hosts = copy
-            for h in copy where self.paired(h) && self.online(h) {
-                let age = self.listFetched[h.uuid].map { -$0.timeIntervalSinceNow } ?? .infinity
-                // a game started or quit on the PC, or the list is old: fetch it again
-                let changed = self.lastGame[h.uuid] != h.currentGame
-                self.lastGame[h.uuid] = h.currentGame
-                if age > 120 || h.appList.isEmpty || changed && age > 5 { self.fetchApps(h) }
-            }
-            self.bump()
+            self.tick()
         }
+    }
+
+    /// Discovery changes the hosts in place (online, paired, the running game) without a callback: look every two
+    /// seconds while the home is up, redraw when anything changed, and fetch a game list that's missing or stale.
+    private var ticker: Timer?
+    private var lastState = ""
+
+    private func startTicking() {
+        ticker?.invalidate()
+        ticker = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in self?.tick() }
+    }
+
+    private func tick() {
+        let state = hosts.map { "\($0.uuid)|\($0.state.rawValue)|\($0.pairState.rawValue)|\($0.currentGame ?? "")|\($0.appList.count)" }.joined(separator: ";")
+        if state != lastState { lastState = state; bump() }
+        testAutoPair()
+        for h in hosts where paired(h) && online(h) {
+            let age = listFetched[h.uuid].map { -$0.timeIntervalSinceNow } ?? .infinity
+            // a game started or quit on the PC, or the list is old: fetch it again
+            let changed = lastGame[h.uuid] != h.currentGame
+            lastGame[h.uuid] = h.currentGame
+            if age > 120 || h.appList.isEmpty && age > 10 || changed && age > 5 { fetchApps(h) }
+        }
+    }
+
+    #if DEBUG
+    private var autoPaired = false
+    #endif
+
+    /// Test runs only: MC_AUTOPAIR=<part of a PC's name> pairs with it once it's found (with MC_PIN set, the PIN is
+    /// known in advance and approved on the PC by script).
+    private func testAutoPair() {
+        #if DEBUG
+        guard !autoPaired, let want = ProcessInfo.processInfo.environment["MC_AUTOPAIR"], !want.isEmpty,
+              let h = hosts.first(where: { $0.name.localizedCaseInsensitiveContains(want) && online($0) && !paired($0) }) else { return }
+        autoPaired = true
+        pair(h)
+        #endif
     }
 
     func fetchApps(_ h: TemporaryHost, force: Bool = false) {

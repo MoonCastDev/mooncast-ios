@@ -12,6 +12,21 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
+/// What the stream screen does for the Quick menu (StreamFrameViewController implements it).
+@protocol MCQuickActions <NSObject>
+- (NSDictionary*) mcStats;
+- (NSString*) mcTitle;
+- (NSString*) mcHostAddress;
+- (BOOL) mcStatsOn;
+- (void) mcToggleStats;
+- (int) mcTouchMode;
+- (void) mcSetTouchMode:(int)mode;
+- (void) mcToggleKeyboard;
+- (void) mcTaskManager;
+- (void) mcMenuOpen:(BOOL)open;
+- (void) mcDisconnect;
+@end
+
 @interface MCBridge : NSObject
 
 /// What MainFrameViewController's prepareToStreamApp builds: the saved settings, clamped to this screen.

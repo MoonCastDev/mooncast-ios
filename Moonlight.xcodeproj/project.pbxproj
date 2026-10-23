@@ -143,6 +143,7 @@
 		224B02B6AEAA6F3CABC2DF69 /* MCSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9192AAC9AD3C9BA70CDCFD51 /* MCSettings.swift */; };
 		94DDCAD01A2BE13A9C98D249 /* MCHomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77438C5E5B5F35CC0257CFE0 /* MCHomeView.swift */; };
 		BF51F93CA32CDAAB1DC41167 /* MCHomeController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 56B247B5645B17A2E36734ED /* MCHomeController.swift */; };
+		0108EDC4BA9A23E2C3FC93C0 /* MCQuickMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4774BAE4CE059F7BAA4BB2E /* MCQuickMenu.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -335,6 +336,7 @@
 		9192AAC9AD3C9BA70CDCFD51 /* MCSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCSettings.swift; sourceTree = "<group>"; };
 		77438C5E5B5F35CC0257CFE0 /* MCHomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCHomeView.swift; sourceTree = "<group>"; };
 		56B247B5645B17A2E36734ED /* MCHomeController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCHomeController.swift; sourceTree = "<group>"; };
+		D4774BAE4CE059F7BAA4BB2E /* MCQuickMenu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCQuickMenu.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -704,6 +706,7 @@
 		5E34F220FEBEF6D9522FF9ED /* MoonCast */ = {
 			isa = PBXGroup;
 			children = (
+				D4774BAE4CE059F7BAA4BB2E /* MCQuickMenu.swift */,
 				DC760B029113ED63E4C78FAF /* MCBridge.h */,
 				9B2FA25D79B7D8917F22935B /* MCBridge.m */,
 				06B5484C54BA4A9F57C30E27 /* MCTheme.swift */,
@@ -916,6 +919,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				0108EDC4BA9A23E2C3FC93C0 /* MCQuickMenu.swift in Sources */,
 				076CF9B2CB2707A0DAB6C0B2 /* MCBridge.m in Sources */,
 				13E705C48ED30EDB2CE108A2 /* MCTheme.swift in Sources */,
 				421AB7DB91BAA8CD389F1822 /* MCFocus.swift in Sources */,
@@ -1240,6 +1244,7 @@
 		FB290D2119B2C406004C83CF /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_IDENTITY = "iPhone Developer";

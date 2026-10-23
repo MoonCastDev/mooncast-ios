@@ -21,8 +21,24 @@ final class MCFocus: ObservableObject {
     /// The connected controller's name, for the hint bar.
     @Published var padName = ""
 
-    /// Where each item is on screen, by scope (the page, or an open dialog).
-    var frames: [String: CGRect] = [:]
+    /// Where each item is on screen, per hosting root (the home, the Quick menu), merged.
+    var framesByRoot: [String: [String: CGRect]] = [:]
+    var frames: [String: CGRect] { framesByRoot.values.reduce(into: [:]) { $0.merge($1) { $1 } } }
+    private var scopeStack: [(String, ((MCButton) -> Bool)?)] = []
+
+    /// The Quick menu takes the pad over the home's page or dialog; popping gives it back.
+    func pushScope(_ s: String) {
+        scopeStack.append((scope, pageButton))
+        scope = s
+        id = nil
+    }
+
+    func popScope() {
+        guard let (s, b) = scopeStack.popLast() else { return }
+        scope = s
+        pageButton = b
+        id = nil
+    }
     var scopes: [String: String] = [:]
     var actions: [String: () -> Void] = [:]
     var menus: [String: () -> Void] = [:]
@@ -211,9 +227,9 @@ extension View {
     }
 
     /// At the root: collects every item's place for the focus.
-    func mcCollectFrames() -> some View {
+    func mcCollectFrames(root: String = "home") -> some View {
         onPreferenceChange(MCFrameKey.self) { f in
-            MCFocus.shared.frames = f
+            MCFocus.shared.framesByRoot[root] = f
             DispatchQueue.main.async { MCFocus.shared.settle() }
         }
     }

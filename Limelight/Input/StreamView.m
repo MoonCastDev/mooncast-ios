@@ -38,6 +38,7 @@ static const double X1_MOUSE_SPEED_DIVISOR = 2.5;
     double accumulatedMouseDeltaY;
     
     UIResponder* touchHandler;
+    int mcTouchMode;
     
     id<UserInteractionDelegate> interactionDelegate;
     NSTimer* interactionTimer;
@@ -67,12 +68,9 @@ static const double X1_MOUSE_SPEED_DIVISOR = 2.5;
     self->touchHandler = [[RelativeTouchHandler alloc] initWithView:self];
 #else
     // iOS uses RelativeTouchHandler or AbsoluteTouchHandler depending on user preference
-    if (settings.absoluteTouchMode) {
-        self->touchHandler = [[AbsoluteTouchHandler alloc] initWithView:self];
-    }
-    else {
-        self->touchHandler = [[RelativeTouchHandler alloc] initWithView:self];
-    }
+    // MoonCast: Settings → Controls → Touch screen (Off, Mouse, Touch); Off by default, as on the handheld
+    NSString* touchPref = [[NSUserDefaults standardUserDefaults] stringForKey:@"mc_touch_default"] ?: @"off";
+    [self mcSetTouchMode:[touchPref isEqualToString:@"touch"] ? 2 : [touchPref isEqualToString:@"mouse"] ? 1 : 0];
     
     onScreenControls = [[OnScreenControls alloc] initWithView:self controllerSup:controllerSupport streamConfig:streamConfig];
     OnScreenControlsLevel level = (OnScreenControlsLevel)[settings.onscreenControls integerValue];
@@ -158,6 +156,33 @@ static const double X1_MOUSE_SPEED_DIVISOR = 2.5;
     else {
         // User is still touching the screen. Restart the timer.
         [self startInteractionTimer];
+    }
+}
+
+- (void) mcSetTouchMode:(int)mode {
+    mcTouchMode = mode;
+    if (mode == 2) {
+        self->touchHandler = [[AbsoluteTouchHandler alloc] initWithView:self];
+    }
+    else if (mode == 1) {
+        self->touchHandler = [[RelativeTouchHandler alloc] initWithView:self];
+    }
+    else {
+        // touch off: taps and drags reach nothing in the game
+        self->touchHandler = nil;
+    }
+}
+
+- (int) mcTouchMode {
+    return mcTouchMode;
+}
+
+- (void) mcToggleKeyboard {
+    if ([keyInputField isFirstResponder]) {
+        [keyInputField resignFirstResponder];
+    }
+    else {
+        [keyInputField becomeFirstResponder];
     }
 }
 

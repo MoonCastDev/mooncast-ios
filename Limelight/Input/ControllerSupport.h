@@ -50,4 +50,7 @@
 
 -(NSUInteger) getConnectedGamepadCount;
 
+// MoonCast Quick menu: while paused the game gets no pad input (it was sent a neutral state)
+-(void) mcSetPaused:(BOOL)paused;
+
 @end

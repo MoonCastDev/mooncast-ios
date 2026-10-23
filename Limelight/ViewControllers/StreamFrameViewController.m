@@ -7,6 +7,8 @@
 //
 
 #import "StreamFrameViewController.h"
+#import "Moonlight-Swift.h"
+#import "MCBridge.h"
 #import "MainFrameViewController.h"
 #import "VideoDecoderRenderer.h"
 #import "StreamManager.h"
@@ -143,7 +145,7 @@
 #if TARGET_OS_TV
     [_tipLabel setText:@"Tip: Tap the Play/Pause button on the Apple TV Remote to disconnect from your PC"];
 #else
-    [_tipLabel setText:@"Tip: Swipe from the left edge to disconnect from your PC"];
+    [_tipLabel setText:@"Swipe from the left edge, or press Select + Start + LB + RB, for the Quick menu"];
 #endif
     
     [_tipLabel sizeToFit];
@@ -362,9 +364,10 @@
 }
 
 - (void)edgeSwiped {
-    Log(LOG_I, @"User swiped to end stream");
-    
-    [self returnToMainFrame];
+    // MoonCast: the swipe opens the Quick menu (Disconnect is in it) instead of leaving at once
+    if (_exitSwipeRecognizer.state == UIGestureRecognizerStateBegan) {
+        [MCQuickMenu showIn:self];
+    }
 }
 
 - (void) connectionStarted {
@@ -648,10 +651,61 @@
 }
 
 - (void) streamExitRequested {
-    Log(LOG_I, @"Gamepad combo requested stream exit");
-    
-    [self returnToMainFrame];
+    // MoonCast: Select + Start + LB + RB opens the Quick menu, as on the handheld
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [MCQuickMenu showIn:self];
+    });
 }
+
+#pragma mark - MoonCast Quick menu
+
+- (NSDictionary*) mcStats {
+    NSMutableDictionary* d = [[_streamMan mcStats] mutableCopy] ?: [NSMutableDictionary dictionary];
+    d[@"mbps"] = @(self.streamConfig.bitRate / 1000.0f);
+    d[@"size"] = [NSString stringWithFormat:@"%dx%d", self.streamConfig.width, self.streamConfig.height];
+    return d;
+}
+
+- (NSString*) mcTitle { return self.streamConfig.appName ?: @""; }
+
+- (NSString*) mcHostAddress { return self.streamConfig.host ?: @""; }
+
+- (BOOL) mcStatsOn { return _statsUpdateTimer != nil; }
+
+- (void) mcToggleStats {
+    if (_statsUpdateTimer != nil) {
+        [_statsUpdateTimer invalidate];
+        _statsUpdateTimer = nil;
+        [_overlayView setHidden:YES];
+    }
+    else {
+        _statsUpdateTimer = [NSTimer scheduledTimerWithTimeInterval:1.0 target:self selector:@selector(updateStatsOverlay) userInfo:nil repeats:YES];
+        [_overlayView setHidden:NO];
+    }
+}
+
+- (int) mcTouchMode { return [_streamView mcTouchMode]; }
+
+- (void) mcSetTouchMode:(int)mode { [_streamView mcSetTouchMode:mode]; }
+
+- (void) mcToggleKeyboard { [_streamView mcToggleKeyboard]; }
+
+- (void) mcTaskManager {
+    // Ctrl + Shift + Esc
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+        LiSendKeyboardEvent(0x11, KEY_ACTION_DOWN, MODIFIER_CTRL);
+        LiSendKeyboardEvent(0x10, KEY_ACTION_DOWN, MODIFIER_CTRL | MODIFIER_SHIFT);
+        LiSendKeyboardEvent(0x1B, KEY_ACTION_DOWN, MODIFIER_CTRL | MODIFIER_SHIFT);
+        usleep(80 * 1000);
+        LiSendKeyboardEvent(0x1B, KEY_ACTION_UP, MODIFIER_CTRL | MODIFIER_SHIFT);
+        LiSendKeyboardEvent(0x10, KEY_ACTION_UP, MODIFIER_CTRL);
+        LiSendKeyboardEvent(0x11, KEY_ACTION_UP, 0);
+    });
+}
+
+- (void) mcMenuOpen:(BOOL)open { [_controllerSupport mcSetPaused:open]; }
+
+- (void) mcDisconnect { [self returnToMainFrame]; }
 
 - (void)userInteractionBegan {
     // Disable hiding home bar when user is interacting.
