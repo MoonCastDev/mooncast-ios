@@ -101,6 +101,12 @@ enum MCTvFinder {
         return known
     }
 
+    /// On start: ask the target TV (one request) so the "Playing on" pill isn't "not found" until the next scan.
+    static func checkTarget() async {
+        guard let t = target, let tv = await ask(t.ip) else { return }
+        merge([tv], wholeNetwork: false)
+    }
+
     /// Test runs only: MC_TV=<address> makes that MoonCast TV the target before anything plays.
     static func testTarget() async {
         #if DEBUG

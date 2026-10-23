@@ -84,7 +84,7 @@ final class MCStore: NSObject, ObservableObject, DiscoveryCallback, PairCallback
         clientCert = CryptoManager.readCertFromFile()
         hosts = MCBridge.savedHosts()
         MCPs5Store.testAdd()
-        Task { await MCTvFinder.testTarget() }
+        Task { await MCTvFinder.testTarget(); await MCTvFinder.checkTarget(); self.bump() }
         #if DEBUG
         // test runs: MC_SET="key=value;key=value" sets settings (numbers and true/false as such)
         for kv in (ProcessInfo.processInfo.environment["MC_SET"] ?? "").split(separator: ";") {
