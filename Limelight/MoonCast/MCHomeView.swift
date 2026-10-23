@@ -23,6 +23,7 @@ struct MCRoot: View {
     @State private var artRev = 0
     @State private var enterTick = 0
     @State private var padTest = false
+    @State private var licence: MCLicences.Part?
     @AppStorage("hh_screen_size") private var screenSize = "auto"
     @AppStorage("hh_rotate") private var rotate = true
 
@@ -59,6 +60,7 @@ struct MCRoot: View {
                         .padding(.horizontal, m.px(m.edge))
                 }
                 if padTest { MCPadTestView(m: m, p: p) { padTest = false } }
+                if let l = licence { MCLicenceView(part: l, m: m, p: p) { licence = nil } }
                 if let s = store.tvSession {
                     MCTvControllerView(s: s, m: m, p: p, playHere: {
                         let g = s.game
@@ -74,7 +76,7 @@ struct MCRoot: View {
             .preferredColorScheme(theme == "light" ? .light : .dark)
         }
         .mcCollectFrames()
-        .onAppear { hookButtons(); testStart() }
+        .onAppear { hookButtons(); testStart(); askUsage() }
         .onChange(of: store.dialog?.id) { _, _ in
             if let d = store.dialog {
                 focus.scope = "dialog"
@@ -122,6 +124,19 @@ struct MCRoot: View {
             go(target)
         }
         #endif
+    }
+
+    /// An official build asks once, a moment after the home opens, whether to send the anonymous check-in
+    /// (No thanks picked first); after a yes it goes at most once a day.
+    private func askUsage() {
+        if MCUsage.enabled { MCUsage.checkIn(); return }
+        guard MCUsage.shouldAsk else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+            guard store.dialog == nil, MCUsage.shouldAsk else { return }
+            store.dialog = MCDialog(title: MCUsage.question, message: MCUsage.explain,
+                                    opts: [.init(title: "No thanks", picked: true) { MCUsage.answer(false) },
+                                           .init(title: "Yes, send") { MCUsage.answer(true) }])
+        }
     }
 
     private func go(_ p: MCPage) {
@@ -780,12 +795,32 @@ struct MCRoot: View {
         ])
     }
 
+    /// About → Open-source licences: every project, grouped; one opens its full text.
+    private func licences(group g: String? = nil) {
+        let groups = ["The app", "PS5", "Xbox", "More"]
+        guard let g = g else {
+            store.dialog = MCDialog(title: "Open-source licences", message: "MoonCast is free software (\(MCLicences.sourceLicence)). These are the projects inside it.",
+                                    opts: [.init(title: "Done", picked: true) {}] + groups.map { name in
+                                        let n = MCLicences.parts.filter { $0.group == name }.count
+                                        return .init(title: name, sub: "\(n) project\(n == 1 ? "" : "s")") { DispatchQueue.main.async { licences(group: name) } }
+                                    })
+            return
+        }
+        store.dialog = MCDialog(title: g, opts: [.init(title: "‹ Licences", picked: true) { DispatchQueue.main.async { licences() } }] +
+                                MCLicences.parts.filter { $0.group == g }.map { part in
+                                    .init(title: part.name, sub: "\(part.licence) · \(part.what)") { licence = part }
+                                })
+    }
+
     private func hiddenGames(_ h: TemporaryHost) {
         let ids = store.hidden(h)
         let names = Dictionary(store.apps(h).map { ($0.id ?? "", $0.name ?? "") }, uniquingKeysWith: { a, _ in a })
         var opts: [MCDialog.Opt] = [.init(title: "Done", picked: true) {}]
+        if ids.count > 1 {
+            opts.append(.init(title: "Show all", sub: "\(ids.count) games") { ids.forEach { store.setHidden(h, $0, false) } })
+        }
         for id in ids.sorted() {
-            opts.append(.init(title: "Show \(names[id] ?? "game \(id)")") { store.setHidden(h, id, false) })
+            opts.append(.init(title: "Show \(names[id] ?? "game \(id) (not on the PC now)")") { store.setHidden(h, id, false) })
         }
         store.dialog = MCDialog(title: "Hidden on \(h.name)", message: "Pick one to show it again.", opts: opts)
     }
@@ -803,6 +838,11 @@ struct MCRoot: View {
         "s:multi": "person.2", "s:swap": "arrow.left.arrow.right", "s:mouse": "computermouse",
         "s:ps:res": "rectangle.expand.vertical", "s:ps:fps": "speedometer", "s:ps:rate": "gauge.with.dots.needle.67percent",
         "s:ps:codec": "film", "s:ps:disc": "moon.zzz", "s:ps:swap": "arrow.left.arrow.right", "s:theme": "paintpalette",
+        "s:profile": "house", "s:range": "circle.lefthalf.filled", "s:shape": "aspectratio", "s:osctrans": "square.on.square.dashed",
+        "s:dz": "smallcircle.filled.circle", "s:motion": "gyroscope", "s:xb:dz": "smallcircle.filled.circle",
+        "s:ps:awayres": "rectangle.expand.vertical", "s:ps:awayrate": "gauge.with.dots.needle.67percent",
+        "s:xb:res": "rectangle.expand.vertical", "s:xb:rate": "gauge.with.dots.needle.67percent", "s:xb:rumble": "waveform",
+        "s:xb:swap": "arrow.left.arrow.right", "s:xb:coop": "person.2", "s:usage": "chart.line.uptrend.xyaxis",
     ]
 
     private func row(_ id: String, icon: String, color: Color, title: String, sub: String?, right: String?, switchOn: Bool? = nil,
@@ -876,6 +916,8 @@ struct MCRoot: View {
         let v = settings.load()
         switch group {
         case "picture":
+            choice("s:profile", "Streaming profile", "Home and Away keep their own picture and sound settings. Pick Away on a slow or far network",
+                   ["Home", "Away"], MCSettings.profile == "away" ? 1 : 0, m, p) { i in settings.switchProfile(to: i == 1 ? "away" : "home") }
             let native = MCSettings.native
             let res: [(String, (Int, Int))] = [("720p", (1280, 720)), ("1080p", (1920, 1080)), ("1440p", (2560, 1440)), ("4K", (3840, 2160)),
                                                ("Native \(native.0)×\(native.1)", native)]
@@ -886,16 +928,33 @@ struct MCRoot: View {
             }
             let maxFps = UIScreen.main.maximumFramesPerSecond
             let fps = [30, 60, 90, 120].filter { $0 <= max(60, maxFps) }
-            choice("s:fps", "Frame rate", "60 is smooth. 120 needs a ProMotion screen and a fast PC", fps.map { "\($0) fps" },
+            let topFps = max(60, maxFps)
+            choice("s:fps", "Frame rate", "60 is smooth. 120 needs a ProMotion screen and a fast PC", fps.map { "\($0) fps" } + ["Custom…"],
                    fps.firstIndex(of: v.framerate) ?? -1, other: "\(v.framerate) fps", m, p) { i in
+                if i == fps.count {
+                    askText("Custom frame rate", "15 to \(topFps) fps") { t in
+                        guard let n = Int(t.trimmingCharacters(in: .whitespaces)) else { return }
+                        settings.save { $0.framerate = max(15, min(topFps, n)); $0.bitrate = MCRoot.defaultBitrate($0.width, $0.height, $0.framerate) }
+                        settingsRev += 1
+                    }
+                    return
+                }
                 settings.save { $0.framerate = fps[i]; $0.bitrate = MCRoot.defaultBitrate($0.width, $0.height, $0.framerate) }
             }
             let auto = MCRoot.defaultBitrate(v.width, v.height, v.framerate)
             let rates = [5, 10, 15, 20, 30, 40, 50, 80, 100, 150].map { $0 * 1000 }
             choice("s:rate", "Bitrate", "Auto suits the resolution and frame rate. Higher looks better on a fast network",
-                   ["Auto (\(auto / 1000) Mbps)"] + rates.map { "\($0 / 1000) Mbps" },
+                   ["Auto (\(auto / 1000) Mbps)"] + rates.map { "\($0 / 1000) Mbps" } + ["Custom…"],
                    v.bitrate == auto ? 0 : (rates.firstIndex(of: v.bitrate).map { $0 + 1 } ?? -1),
                    other: String(format: "%.1f Mbps", Double(v.bitrate) / 1000), m, p) { i in
+                if i == rates.count + 1 {
+                    askText("Custom bitrate", "0.5 to 150 Mbps") { t in
+                        guard let n = Double(t.replacingOccurrences(of: ",", with: ".").trimmingCharacters(in: .whitespaces)) else { return }
+                        settings.save { $0.bitrate = Int((max(0.5, min(150, n)) * 2).rounded()) * 500 }
+                        settingsRev += 1
+                    }
+                    return
+                }
                 settings.save { $0.bitrate = i == 0 ? auto : rates[i - 1] }
             }
             choice("s:codec", "Video codec", "H.265 and AV1 look better at the same bitrate", ["Auto", "H.264", "H.265", "AV1"],
@@ -910,6 +969,12 @@ struct MCRoot: View {
                     UserDefaults.standard.set(sharp[i], forKey: "mc_fsr_sharpness") }
             }
             toggle("s:hdr", "HDR", "Only when the PC, the game and this screen support it", v.hdr, m, p) { settings.save { $0.hdr.toggle() } }
+            let ud = UserDefaults.standard
+            toggle("s:range", "Full range colour", "Experimental. Deeper blacks if the PC sends them; looks washed out or crushed if not",
+                   ud.bool(forKey: "mc_full_range"), m, p) { ud.set(!ud.bool(forKey: "mc_full_range"), forKey: "mc_full_range") }
+            let shapes = ["fit", "fill", "stretch"]
+            choice("s:shape", "Picture shape", "Fit shows all of it, Fill crops the edges to fill the screen, Stretch fills it and changes the shape",
+                   ["Fit", "Fill", "Stretch"], shapes.firstIndex(of: MCPictureShape.current) ?? 0, m, p) { i in ud.set(shapes[i], forKey: "mc_picture_shape") }
             choice("s:pacing", "Frame pacing", "Trade a little delay for smoother motion", ["Lowest delay", "Smoothest"],
                    v.pacing ? 1 : 0, m, p) { i in settings.save { $0.pacing = i == 1 } }
             toggle("s:ull", "Ultra low latency", "Shows each PC frame the moment it's decoded and keeps sound close behind on PS5 and Xbox. A rough Wi-Fi can stutter more",
@@ -952,6 +1017,12 @@ struct MCRoot: View {
             }
             choice("s:osc", "On-screen controller", "Auto shows it when no controller is connected", ["Off", "Auto", "Simple", "Full"],
                    min(v.onscreen, 3), m, p) { i in settings.save { $0.onscreen = i } }
+            if v.onscreen != 0 {
+                let see = [0, 15, 30, 50, 70, 85]
+                choice("s:osctrans", "Controller transparency", "How much of the game shows through the on-screen controller",
+                       see.map { "\($0)%" }, see.firstIndex(of: UserDefaults.standard.integer(forKey: "mc_osc_transparency")) ?? 0, m, p) { i in
+                    UserDefaults.standard.set(see[i], forKey: "mc_osc_transparency") }
+            }
         case "pads":
             row("s:padtest", icon: "gamecontroller", color: MCPalette.blue, title: "Test a controller",
                 sub: "See every button, stick and trigger live, and try the rumble", right: nil, m, p) { padTest = true }
@@ -961,6 +1032,13 @@ struct MCRoot: View {
             }
             toggle("s:multi", "More than one player", "On a PC each pad is its own player", v.multi, m, p) { settings.save { $0.multi.toggle() } }
             toggle("s:swap", "Swap A and B", "For Nintendo-style layouts", v.swapAB, m, p) { settings.save { $0.swapAB.toggle() } }
+            let dzs = [0, 3, 5, 7, 10, 15]
+            choice("s:dz", "Stick deadzone", "Raise it if a worn stick drifts in PC games", dzs.map { $0 == 0 ? "Off" : "\($0)%" },
+                   dzs.firstIndex(of: UserDefaults.standard.object(forKey: "mc_stick_deadzone") as? Int ?? 7) ?? 3, m, p) { i in
+                UserDefaults.standard.set(dzs[i], forKey: "mc_stick_deadzone") }
+            let motion = UserDefaults.standard.object(forKey: "mc_motion") as? Bool ?? true
+            toggle("s:motion", "Motion", "Lets PC games use the controller's gyro, as on a DualSense or DualShock", motion, m, p) {
+                UserDefaults.standard.set(!motion, forKey: "mc_motion") }
             toggle("s:mouse", "Mouse and trackpad", "Use a connected mouse or the Magic Keyboard's trackpad in PC games", v.btMouse, m, p) {
                 settings.save { $0.btMouse.toggle() }
             }
@@ -988,8 +1066,9 @@ struct MCRoot: View {
             choice("s:ps:fps", "Frame rate", "60 fps is smoother; 30 fps lets a weak link keep up", ["30 fps", "60 fps"], MCPs5Store.fps >= 60 ? 1 : 0, m, p) { i in
                 d.set(i == 1 ? 60 : 30, forKey: "ps5_fps") }
             let rates = [0, 10, 15, 20, 30]
-            choice("s:ps:rate", "Bitrate", "Auto: 30 Mbps at 1080p, 15 at 720p", rates.map { $0 == 0 ? "Auto" : "\($0) Mbps" },
-                   rates.firstIndex(of: MCPs5Store.bitrate) ?? 0, m, p) { i in d.set(rates[i], forKey: "ps5_bitrate") }
+            choice("s:ps:rate", "Bitrate", "Auto: 30 Mbps at 1080p, 15 at 720p", rates.map { $0 == 0 ? "Auto" : "\($0) Mbps" } + ["Custom…"],
+                   rates.firstIndex(of: MCPs5Store.bitrate) ?? -1, other: "\(MCPs5Store.bitrate) Mbps", m, p) { i in
+                if i == rates.count { customPs5Rate("ps5_bitrate") } else { d.set(rates[i], forKey: "ps5_bitrate") } }
             choice("s:ps:codec", "Video codec", "H.265 looks better at the same bitrate", ["H.264", "H.265"], MCPs5Store.h265 ? 1 : 0, m, p) { i in
                 d.set(i == 1, forKey: "ps5_h265") }
             let disc = ["ask", "rest", "keep"]
@@ -1006,8 +1085,9 @@ struct MCRoot: View {
             choice("s:ps:awayres", "Resolution", "Over PlayStation Network. Lower keeps a weak link smooth", ["540p", "720p", "1080p"],
                    [540, 720, 1080].firstIndex(of: MCPs5Store.awayHeight) ?? 1, m, p) { i in d.set([540, 720, 1080][i], forKey: "ps5_away_resolution") }
             let awayRates = [0, 5, 8, 10, 15]
-            choice("s:ps:awayrate", "Bitrate", "Auto: 10 Mbps", awayRates.map { $0 == 0 ? "Auto" : "\($0) Mbps" },
-                   awayRates.firstIndex(of: MCPs5Store.awayBitrate) ?? 0, m, p) { i in d.set(awayRates[i], forKey: "ps5_away_bitrate") }
+            choice("s:ps:awayrate", "Bitrate", "Auto: 10 Mbps", awayRates.map { $0 == 0 ? "Auto" : "\($0) Mbps" } + ["Custom…"],
+                   awayRates.firstIndex(of: MCPs5Store.awayBitrate) ?? -1, other: "\(MCPs5Store.awayBitrate) Mbps", m, p) { i in
+                if i == awayRates.count { customPs5Rate("ps5_away_bitrate") } else { d.set(awayRates[i], forKey: "ps5_away_bitrate") } }
             info("s:ps:btn", "PS button", "L2 + Start on pads without one", m, p)
             info("s:ps:touch", "Touchpad", "Select + Start, or touch the screen while playing", m, p)
         case "xbox":
@@ -1034,14 +1114,35 @@ struct MCRoot: View {
                    rumbles.firstIndex(of: d.string(forKey: "xbox_rumble") ?? "strong") ?? 3, m, p) { i in d.set(rumbles[i], forKey: "xbox_rumble") }
             toggle("s:xb:swap", "Swap A and B", "For Nintendo-style layouts", MCXbox.swapAB, m, p) { d.set(!MCXbox.swapAB, forKey: "xbox_swap_ab") }
             toggle("s:xb:coop", "Two players", "A second controller plays as player 2", MCXbox.coop, m, p) { d.set(!MCXbox.coop, forKey: "xbox_coop") }
+            let xdz = [0, 3, 5, 8, 10, 15]
+            choice("s:xb:dz", "Stick deadzone", "Raise it if a worn stick drifts", xdz.map { $0 == 0 ? "Off" : "\($0)%" },
+                   xdz.firstIndex(of: d.object(forKey: "xbox_deadzone") as? Int ?? 8) ?? 3, m, p) { i in d.set(xdz[i], forKey: "xbox_deadzone") }
         case "theme":
             choice("s:theme", "Theme", "Dark is charcoal with white type; Light is the reverse", ["Dark", "Light"],
                    theme == "light" ? 1 : 0, m, p) { i in theme = i == 1 ? "light" : "dark" }
         default:
             let ver = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ""
             let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? ""
-            info("s:ver", "MoonCast for iPad", "Version \(ver) (\(build)). Early build: PC streaming", m, p)
-            info("s:lic", "Open source", "Built on Moonlight for iOS (GPL-3.0). github.com/MoonCastDev/mooncast-ios", m, p)
+            info("s:ver", "MoonCast for iPad", "Version \(ver) (\(build))", m, p)
+            row("s:lic", icon: "doc.text", color: p.sub, title: "Open-source licences",
+                sub: "The \(MCLicences.parts.count) projects MoonCast is built on, and their licences", right: nil, m, p) { licences() }
+            row("s:src", icon: "chevron.left.forwardslash.chevron.right", color: p.sub, title: "Source code",
+                sub: "github.com/MoonCastDev · \(MCLicences.sourceLicence)", right: nil, m, p) {
+                if let u = URL(string: MCLicences.source) { UIApplication.shared.open(u) }
+            }
+            if MCUsage.available {
+                toggle("s:usage", "Anonymous usage check-in", "Once a day: version, device model, and whether PC, PS5 or Xbox was played",
+                       MCUsage.enabled, m, p) { MCUsage.answer(!MCUsage.enabled) }
+            }
+        }
+    }
+
+    /// Settings → PlayStation → Bitrate → Custom: 2 to 50 Mbps.
+    private func customPs5Rate(_ key: String) {
+        askText("Custom bitrate", "2 to 50 Mbps") { t in
+            guard let n = Double(t.replacingOccurrences(of: ",", with: ".").trimmingCharacters(in: .whitespaces)) else { return }
+            UserDefaults.standard.set(Int(max(2, min(50, n)).rounded()), forKey: key)
+            settingsRev += 1
         }
     }
 

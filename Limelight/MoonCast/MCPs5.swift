@@ -415,6 +415,8 @@ final class MCPs5StreamController: UIViewController, MCPs5SessionDelegate, MCQui
         DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in self?.leave() }
     }
 
+    func mcLeaveKeepOn() { leave() }
+
     func mcDisconnect() {
         switch MCPs5Store.onDisconnect {
         case "rest": mcRestMode()

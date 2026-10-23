@@ -30,6 +30,8 @@ NS_ASSUME_NONNULL_BEGIN
 - (NSString*) mcKind;
 - (void) mcPsButton;
 - (void) mcRestMode;
+/// Leaves without asking (Move to a TV): a PS5 stays on for the TV
+- (void) mcLeaveKeepOn;
 @end
 
 @interface MCBridge : NSObject

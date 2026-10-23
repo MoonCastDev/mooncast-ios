@@ -115,10 +115,10 @@ final class MCFsrView: UIView {
               let y = plane(pb, 0, .r8Unorm), let uv = plane(pb, 1, .rg8Unorm), let drawable = metal.nextDrawable(),
               let cb = queue.makeCommandBuffer() else { inFlight.signal(); return }
         let inW = CVPixelBufferGetWidth(pb), inH = CVPixelBufferGetHeight(pb)
-        // fit the stream into the screen
+        // the stream on the screen as Settings → Picture → Picture shape says
         let dw = drawableSize.width, dh = drawableSize.height
-        var outW = dw, outH = dw / aspect
-        if outH > dh { outH = dh; outW = dh * aspect }
+        let out = MCPictureShape.size(in: drawableSize, aspect: aspect)
+        let outW = out.width, outH = out.height
         let ow = max(1, Int(outW.rounded())), oh = max(1, Int(outH.rounded()))
         let ox = (Int(dw) - ow) / 2, oy = (Int(dh) - oh) / 2
         if rgbTex?.width != inW || rgbTex?.height != inH { rgbTex = texture(inW, inH) }
@@ -158,7 +158,10 @@ final class MCFsrView: UIView {
         // 3. RCAS sharpening into the screen
         var r: [Float] = [sharp, Float(ow), Float(oh), Float(ox), Float(oy), 0, 0, 0]
         pass(drawable.texture, clear: true) { e in
-            e.setViewport(MTLViewport(originX: Double(ox), originY: Double(oy), width: Double(ow), height: Double(oh), znear: 0, zfar: 1))
+            // Fill makes the picture larger than the screen: draw only the part on it
+            let vx = max(0, ox), vy = max(0, oy)
+            e.setViewport(MTLViewport(originX: Double(vx), originY: Double(vy), width: Double(min(ow - (vx - ox), Int(dw) - vx)),
+                                      height: Double(min(oh - (vy - oy), Int(dh) - vy)), znear: 0, zfar: 1))
             e.setRenderPipelineState(rcasPipe!)
             e.setFragmentTexture(easu, index: 0)
             e.setFragmentBytes(&r, length: r.count * 4, index: 0)

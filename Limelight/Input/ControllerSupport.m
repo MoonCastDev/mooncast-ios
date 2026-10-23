@@ -97,6 +97,12 @@ static const double MOUSE_SPEED_DIVISOR = 1.25;
             // No motion supported for this controller
             return;
         }
+
+        // MoonCast: Settings → Controllers → Motion off keeps the pad's gyro and accelerometer from the game
+        NSNumber* motionPref = [[NSUserDefaults standardUserDefaults] objectForKey:@"mc_motion"];
+        if (motionPref != nil && !motionPref.boolValue) {
+            reportRateHz = 0;
+        }
         
         switch (motionType) {
             case LI_MOTION_TYPE_ACCEL:
@@ -189,8 +195,30 @@ static const double MOUSE_SPEED_DIVISOR = 1.25;
     }
 }
 
+// MoonCast: Settings → Controllers → Stick deadzone (percent, 7 by default as on the handheld). Inside it the stick
+// reads centred; outside it the travel is rescaled so the edge still reaches full.
+static void mcDeadzone(short* x, short* y)
+{
+    NSNumber* pref = [[NSUserDefaults standardUserDefaults] objectForKey:@"mc_stick_deadzone"];
+    float dz = (pref != nil ? pref.floatValue : 7.0f) / 100.0f;
+    if (dz <= 0) {
+        return;
+    }
+    float fx = *x / 32767.0f, fy = *y / 32767.0f;
+    float mag = sqrtf(fx * fx + fy * fy);
+    if (mag < dz) {
+        *x = 0;
+        *y = 0;
+        return;
+    }
+    float k = (fminf(mag, 1.0f) - dz) / (1.0f - dz) / mag;
+    *x = (short)fmaxf(-32768.0f, fminf(32767.0f, fx * k * 32767.0f));
+    *y = (short)fmaxf(-32768.0f, fminf(32767.0f, fy * k * 32767.0f));
+}
+
 -(void) updateLeftStick:(Controller*)controller x:(short)x y:(short)y
 {
+    mcDeadzone(&x, &y);
     @synchronized(controller) {
         controller.lastLeftStickX = x;
         controller.lastLeftStickY = y;
@@ -199,6 +227,7 @@ static const double MOUSE_SPEED_DIVISOR = 1.25;
 
 -(void) updateRightStick:(Controller*)controller x:(short)x y:(short)y
 {
+    mcDeadzone(&x, &y);
     @synchronized(controller) {
         controller.lastRightStickX = x;
         controller.lastRightStickY = y;

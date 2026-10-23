@@ -43,6 +43,9 @@ enum MCTvFinder {
         set { d.set(newValue?.id ?? "", forKey: "mc_tv_target") }
     }
 
+    /// The TV the Quick menu offers to move a game to: where games go, else the last one seen.
+    static var lastTv: MCTvBox? { target ?? known.first }
+
     private static func save(_ l: [MCTvBox]) { d.set(try? JSONEncoder().encode(Array(l.prefix(12))), forKey: "mc_tvs") }
 
     static func forget(_ id: String) {
