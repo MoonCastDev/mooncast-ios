@@ -78,6 +78,44 @@ enum MCPsn {
         let le = (0..<8).map { UInt8((uid >> (8 * UInt64($0))) & 0xff) }
         UserDefaults.standard.set(Data(le).base64EncodedString(), forKey: "psn_account_id")
         UserDefaults.standard.set(info["online_id"] as? String ?? "", forKey: "psn_online_id")
+        _ = await refreshDevices()
+    }
+
+    struct Device: Codable { let name: String; let duid: String; let remotePlay: Bool }
+
+    /// The consoles on this account PSN can reach over the internet (cached).
+    static var devices: [Device] {
+        guard let d = UserDefaults.standard.data(forKey: "psn_devices") else { return [] }
+        return (try? JSONDecoder().decode([Device].self, from: d)) ?? []
+    }
+
+    static func refreshDevices() async -> [Device] {
+        guard let tok = await freshToken(),
+              let url = URL(string: "https://web.np.playstation.com/api/cloudAssistedNavigation/v2/users/me/clients?platform=PS5&includeFields=device&limit=10&offset=0")
+        else { return devices }
+        var r = URLRequest(url: url, timeoutInterval: 8)
+        r.setValue("Bearer \(tok)", forHTTPHeaderField: "Authorization")
+        r.setValue("jp", forHTTPHeaderField: "Accept-Language")
+        guard let (d, resp) = try? await URLSession.shared.data(for: r), (resp as? HTTPURLResponse)?.statusCode == 200,
+              let j = try? JSONSerialization.jsonObject(with: d) as? [String: Any], let clients = j["clients"] as? [[String: Any]] else { return devices }
+        let out = clients.map { c -> Device in
+            let dev = c["device"] as? [String: Any]
+            let feats = dev?["enabledFeatures"] as? [String] ?? []
+            return Device(name: dev?["name"] as? String ?? "", duid: c["duid"] as? String ?? "", remotePlay: feats.contains("remotePlay"))
+        }
+        UserDefaults.standard.set(try? JSONEncoder().encode(out), forKey: "psn_devices")
+        return out
+    }
+
+    /// (token, duid, account id) to reach this console over PSN, or nil.
+    static func remoteFor(_ consoleName: String) async -> (String, String, Data)? {
+        guard let acc = accountId, let accData = Data(base64Encoded: acc) else { return nil }
+        var devs = devices
+        if devs.isEmpty { devs = await refreshDevices() }
+        let remote = devs.filter { $0.remotePlay && !$0.duid.isEmpty }
+        guard let d = remote.first(where: { $0.name.caseInsensitiveCompare(consoleName) == .orderedSame }) ?? (remote.count == 1 ? remote[0] : nil),
+              let tok = await freshToken() else { return nil }
+        return (tok, d.duid, accData)
     }
 
     /// The token, renewed when it's near its ~1 h expiry (for play away from home).

@@ -29,8 +29,16 @@ NS_ASSUME_NONNULL_BEGIN
 - (instancetype) initWithHost:(NSString*)host registKey:(NSString*)registKeyHex morning:(NSString*)morningHex
                         width:(int)width height:(int)height fps:(int)fps bitrate:(int)bitrateKbps h265:(BOOL)h265;
 
-/// Nil when it started, else what went wrong.
+/// Away from home: the PSN token, the console's PSN device id (hex) and the account id (8 bytes). When set, start
+/// first punches a hole through PSN to the console (up to a minute).
+@property (nonatomic, copy, nullable) NSString* psnToken;
+@property (nonatomic, copy, nullable) NSString* psnDuid;
+@property (nonatomic, copy, nullable) NSData* psnAccountId;
+
+/// Nil when it started, else what went wrong. Over PSN this blocks: call it off the main thread.
 - (nullable NSString*) start;
+/// Stops a PSN connect in flight (the screen closed).
++ (void) cancelPsn;
 /// Ends the session and waits for it (safe to call twice).
 - (void) stop;
 /// Puts the PS5 in rest mode, then ends.

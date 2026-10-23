@@ -864,6 +864,12 @@ struct MCRoot: View {
                 askText("Console PIN", "4 digits, empty to turn it off") { v in
                     UserDefaults.standard.set(v.filter(\.isNumber).prefix(4).description, forKey: "ps5_login_pin"); settingsRev += 1 }
             }
+            header("Away from home", m, p)
+            choice("s:ps:awayres", "Resolution", "Over PlayStation Network. Lower keeps a weak link smooth", ["540p", "720p", "1080p"],
+                   [540, 720, 1080].firstIndex(of: MCPs5Store.awayHeight) ?? 1, m, p) { i in d.set([540, 720, 1080][i], forKey: "ps5_away_resolution") }
+            let awayRates = [0, 5, 8, 10, 15]
+            choice("s:ps:awayrate", "Bitrate", "Auto: 10 Mbps", awayRates.map { $0 == 0 ? "Auto" : "\($0) Mbps" },
+                   awayRates.firstIndex(of: MCPs5Store.awayBitrate) ?? 0, m, p) { i in d.set(awayRates[i], forKey: "ps5_away_bitrate") }
             info("s:ps:btn", "PS button", "L2 + Start on pads without one", m, p)
             info("s:ps:touch", "Touchpad", "Select + Start", m, p)
         case "theme":

@@ -12,6 +12,48 @@
 #include <chiaki/discovery.h>
 #include <chiaki/log.h>
 #include <chiaki/regist.h>
+#include <chiaki/remote/holepunch.h>
+#include <pthread.h>
+
+static pthread_mutex_t mcPsnMutex = PTHREAD_MUTEX_INITIALIZER;
+static ChiakiHolepunchSession mcPsnActive = NULL;
+static bool mcPsnCancelled = false;
+
+/// Remote Play over PSN, as the Android app's mc_psn_connect: STUN with port guessing, offer, punch the control port.
+static ChiakiHolepunchSession MCPsnConnect(ChiakiLog* log, const char* token, NSString* duidHex) {
+    NSData* duid = nil;
+    {
+        NSMutableData* d = [NSMutableData data];
+        for (NSUInteger i = 0; i + 1 < duidHex.length; i += 2) {
+            unsigned int b = 0;
+            [[NSScanner scannerWithString:[duidHex substringWithRange:NSMakeRange(i, 2)]] scanHexInt:&b];
+            uint8_t c = (uint8_t)b; [d appendBytes:&c length:1];
+        }
+        duid = d;
+    }
+    if (duid.length == 0) return NULL;
+    ChiakiHolepunchSession hs = chiaki_holepunch_session_init(token, log);
+    if (!hs) return NULL;
+    pthread_mutex_lock(&mcPsnMutex);
+    mcPsnActive = hs; mcPsnCancelled = false;
+    pthread_mutex_unlock(&mcPsnMutex);
+    chiaki_holepunch_session_force_port_guessing(hs, true);
+    ChiakiErrorCode err = chiaki_holepunch_session_create(hs);
+    if (err == CHIAKI_ERR_SUCCESS) err = holepunch_session_create_offer(hs);
+    if (err == CHIAKI_ERR_SUCCESS) err = chiaki_holepunch_session_start(hs, duid.bytes, CHIAKI_HOLEPUNCH_CONSOLE_TYPE_PS5);
+    if (err == CHIAKI_ERR_SUCCESS) err = chiaki_holepunch_session_punch_hole(hs, CHIAKI_HOLEPUNCH_PORT_TYPE_CTRL);
+    pthread_mutex_lock(&mcPsnMutex);
+    mcPsnActive = NULL;
+    bool cancelled = mcPsnCancelled;
+    pthread_mutex_unlock(&mcPsnMutex);
+    if (err == CHIAKI_ERR_SUCCESS && cancelled) err = CHIAKI_ERR_CANCELED;
+    if (err != CHIAKI_ERR_SUCCESS) {
+        CHIAKI_LOGE(log, "MoonCast PSN: hole-punch failed: %s", chiaki_error_string(err));
+        chiaki_holepunch_session_fini(hs);
+        return NULL;
+    }
+    return hs;
+}
 
 static NSData* MCHex(NSString* hex) {
     NSMutableData* d = [NSMutableData data];
@@ -179,7 +221,24 @@ static void MCRegistCb(ChiakiRegistEvent* e, void* user) {
     return self;
 }
 
++ (void) cancelPsn {
+    pthread_mutex_lock(&mcPsnMutex);
+    mcPsnCancelled = true;
+    if (mcPsnActive) chiaki_holepunch_main_thread_cancel(mcPsnActive, false);
+    pthread_mutex_unlock(&mcPsnMutex);
+}
+
 - (nullable NSString*) start {
+    // the curl inside chiaki has no trust store on iPadOS: give it Mozilla's roots, shipped in the app
+    NSString* ca = [[NSBundle mainBundle] pathForResource:@"cacert" ofType:@"pem"];
+    if (ca) setenv("MC_CA_BUNDLE", ca.fileSystemRepresentation, 1);
+    if (self.psnToken.length && self.psnDuid.length) {
+        ChiakiHolepunchSession hs = MCPsnConnect(&_log, self.psnToken.UTF8String, self.psnDuid);
+        if (!hs) return @"Couldn't reach the PS5 over PlayStation Network.";
+        _info.holepunch_session = hs;
+        if (self.psnAccountId.length == CHIAKI_PSN_ACCOUNT_ID_SIZE) memcpy(_info.psn_account_id, self.psnAccountId.bytes, CHIAKI_PSN_ACCOUNT_ID_SIZE);
+    }
+    @synchronized (self) { if (_stopped) return @""; }
     ChiakiErrorCode err = chiaki_session_init(&_session, &_info, &_log);
     if (err != CHIAKI_ERR_SUCCESS) {
         return [NSString stringWithFormat:@"Couldn't set up the session: %s", chiaki_error_string(err)];

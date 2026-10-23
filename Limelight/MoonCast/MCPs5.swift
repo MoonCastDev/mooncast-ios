@@ -73,6 +73,10 @@ enum MCPs5Store {
     static var onDisconnect: String { UserDefaults.standard.string(forKey: "ps5_on_disconnect") ?? "ask" }
     static var swapCrossCircle: Bool { UserDefaults.standard.bool(forKey: "ps5_swap_cross_circle") }
     static var loginPin: String { UserDefaults.standard.string(forKey: "ps5_login_pin") ?? "" }
+    // Away from home (over PSN): lighter by default, as Android's Away profile
+    static var awayHeight: Int { UserDefaults.standard.object(forKey: "ps5_away_resolution") as? Int ?? 720 }
+    /// 0 = Auto (10 Mbps)
+    static var awayBitrate: Int { UserDefaults.standard.object(forKey: "ps5_away_bitrate") as? Int ?? 0 }
 }
 
 /// The PS5 stream screen.
@@ -89,6 +93,8 @@ final class MCPs5StreamController: UIViewController, MCPs5SessionDelegate, MCQui
     private var menuOpen = false
     private var statsOn = UserDefaults.standard.bool(forKey: "ps5_stats")
     private var comboFired = false
+    private var remote: (String, String, Data)?
+    private var remoteDecided = false
 
     init(console: MCPs5Console) {
         self.console = console
@@ -149,18 +155,53 @@ final class MCPs5StreamController: UIViewController, MCPs5SessionDelegate, MCQui
 
     private func attempt() {
         guard !closed else { return }
+        // at home the PS5 answers Remote Play's probe (even in rest mode); when it doesn't and PSN is signed in, play
+        // over PlayStation Network
+        if !remoteDecided {
+            remoteDecided = true
+            setStatus("Looking for \(console.name)…")
+            let host = console.host, name = console.name
+            Task.detached {
+                let home = MCPs5Probe.probe(host).power != .notFound
+                let r = home ? nil : await MCPsn.remoteFor(name)
+                await MainActor.run {
+                    self.remote = r
+                    if !home && r == nil && !MCPsn.signedIn {
+                        self.failed("\(name) isn't on this network. To play it away from home, sign in to PlayStation Network in Settings → PlayStation.")
+                        return
+                    }
+                    self.attempt()
+                }
+            }
+            return
+        }
         tries += 1
-        setStatus(tries == 1 ? "Connecting to \(console.name)…" : "Connecting to \(console.name)… (try \(tries))")
+        let away = remote != nil
+        setStatus(away ? "Connecting to \(console.name) over PlayStation Network… (up to a minute)"
+                       : tries == 1 ? "Connecting to \(console.name)…" : "Connecting to \(console.name)… (try \(tries))")
         session?.stop()
-        let h = MCPs5Store.height
-        let rate = MCPs5Store.bitrate > 0 ? MCPs5Store.bitrate * 1000 : (h >= 1080 ? 30000 : 15000)
+        let h = away ? MCPs5Store.awayHeight : MCPs5Store.height
+        let rate = away ? (MCPs5Store.awayBitrate > 0 ? MCPs5Store.awayBitrate * 1000 : 10000)
+                        : (MCPs5Store.bitrate > 0 ? MCPs5Store.bitrate * 1000 : (h >= 1080 ? 30000 : 15000))
         let s = MCPs5Session(host: console.host, registKey: console.registKey, morning: console.morning,
-                             width: h >= 1080 ? 1920 : 1280, height: Int32(h), fps: Int32(MCPs5Store.fps), bitrate: Int32(rate), h265: MCPs5Store.h265)
+                             width: h >= 1080 ? 1920 : h >= 720 ? 1280 : 960, height: Int32(h), fps: Int32(MCPs5Store.fps), bitrate: Int32(rate), h265: MCPs5Store.h265)
+        if let r = remote { s.psnToken = r.0; s.psnDuid = r.1; s.psnAccountId = r.2 }
         s.delegate = self
         session = s
         s.videoLayer.frame = view.bounds
         view.layer.insertSublayer(s.videoLayer, at: 0)
-        if let err = s.start() { failed(err) }
+        // over PSN start blocks while the hole is punched: keep the screen live
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            let err = s.start()
+            DispatchQueue.main.async {
+                guard let self = self, !self.closed, let err = err, !err.isEmpty else { return }
+                if away && self.tries < 2 {
+                    self.attempt()
+                } else {
+                    self.failed(err)
+                }
+            }
+        }
     }
 
     func ps5Connected() {
@@ -172,7 +213,7 @@ final class MCPs5StreamController: UIViewController, MCPs5SessionDelegate, MCQui
     func ps5Quit(_ reason: String) {
         guard !closed else { return }
         session?.videoLayer.removeFromSuperlayer()
-        if !connected && tries < 8 && !reason.isEmpty {
+        if !connected && tries < (remote == nil ? 8 : 2) && !reason.isEmpty {
             DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in self?.attempt() }
             return
         }
@@ -205,6 +246,7 @@ final class MCPs5StreamController: UIViewController, MCPs5SessionDelegate, MCQui
     private func leave() {
         guard !closed else { return }
         closed = true
+        MCPs5Session.cancelPsn()
         cornerTimer?.invalidate()
         UIApplication.shared.isIdleTimerDisabled = false
         let s = session
