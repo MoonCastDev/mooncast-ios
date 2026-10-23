@@ -73,13 +73,18 @@ static void MCChiakiLog(ChiakiLogLevel level, const char* msg, void* user) {
 
 #pragma mark - audio: a small ring of 16-bit frames pulled by AVAudioSourceNode
 
-#define MC_RING 48000 * 2   // one second of stereo
+#define MC_RING (48000 * 2)   // one second of stereo
 
+/// Sound from the PS5 to the speaker: a single-producer / single-consumer ring. Only the decoder thread moves
+/// `head` (and drops new sound when the ring is full); only the audio render thread moves `tail` (and skips ahead
+/// when too much is queued, so the sound stays close to the picture).
 @interface MCPs5Audio : NSObject {
 @public
     int16_t ring[MC_RING];
     _Atomic size_t head, tail;
+    _Atomic int renders;
     uint32_t channels, rate;
+    size_t capSamples, keepSamples;
 }
 @property (nonatomic) AVAudioEngine* engine;
 @end
@@ -89,46 +94,58 @@ static void MCChiakiLog(ChiakiLogLevel level, const char* msg, void* user) {
 - (void) startWithChannels:(uint32_t)ch rate:(uint32_t)r {
     channels = ch ? ch : 2;
     rate = r ? r : 48000;
-    [[AVAudioSession sharedInstance] setCategory:AVAudioSessionCategoryPlayback mode:AVAudioSessionModeDefault options:AVAudioSessionCategoryOptionMixWithOthers error:nil];
+    BOOL ull = MCUltraLowLatency.enabled;
+    capSamples = (size_t)rate * channels * (ull ? 60 : 120) / 1000;
+    keepSamples = (size_t)rate * channels * (ull ? 20 : 40) / 1000;
+    NSError* err = nil;
+    if (![[AVAudioSession sharedInstance] setCategory:AVAudioSessionCategoryPlayback mode:AVAudioSessionModeDefault options:AVAudioSessionCategoryOptionMixWithOthers error:&err]) NSLog(@"MCAUDIO category: %@", err);
     [[AVAudioSession sharedInstance] setPreferredIOBufferDuration:0.005 error:nil];
-    [[AVAudioSession sharedInstance] setActive:YES error:nil];
+    if (![[AVAudioSession sharedInstance] setActive:YES error:&err]) NSLog(@"MCAUDIO active: %@", err);
     self.engine = [[AVAudioEngine alloc] init];
     AVAudioFormat* fmt = [[AVAudioFormat alloc] initWithCommonFormat:AVAudioPCMFormatFloat32 sampleRate:rate channels:channels interleaved:NO];
     __unsafe_unretained MCPs5Audio* me = self;
     AVAudioSourceNode* src = [[AVAudioSourceNode alloc] initWithFormat:fmt renderBlock:^OSStatus(BOOL* silence, const AudioTimeStamp* ts, AVAudioFrameCount frames, AudioBufferList* out) {
         uint32_t chs = me->channels;
-        size_t h = atomic_load(&me->head), t = atomic_load(&me->tail);
-        size_t avail = (h + MC_RING - t) % MC_RING / chs;
+        size_t h = atomic_load_explicit(&me->head, memory_order_acquire);
+        size_t t = atomic_load_explicit(&me->tail, memory_order_relaxed);
+        size_t queued = (h + MC_RING - t) % MC_RING;
+        if (queued > me->capSamples) {
+            // too far behind the picture: skip to the newest sound
+            t = (h + MC_RING - me->keepSamples) % MC_RING;
+            queued = me->keepSamples;
+        }
+        size_t avail = queued / chs;
+        size_t used = MIN((size_t)frames, avail);
         for (AVAudioFrameCount f = 0; f < frames; f++) {
             for (uint32_t c = 0; c < chs && c < out->mNumberBuffers; c++) {
-                float v = 0;
-                if (f < avail) v = me->ring[(t + f * chs + c) % MC_RING] / 32768.0f;
-                ((float*)out->mBuffers[c].mData)[f] = v;
+                ((float*)out->mBuffers[c].mData)[f] = f < used ? me->ring[(t + f * chs + c) % MC_RING] / 32768.0f : 0.0f;
             }
         }
-        size_t used = MIN((size_t)frames, avail);
-        atomic_store(&me->tail, (t + used * chs) % MC_RING);
+        atomic_store_explicit(&me->tail, (t + used * chs) % MC_RING, memory_order_release);
+        atomic_fetch_add_explicit(&me->renders, 1, memory_order_relaxed);
+        if (used == 0) *silence = YES;
         return noErr;
     }];
     [self.engine attachNode:src];
     [self.engine connect:src to:self.engine.mainMixerNode format:fmt];
-    [self.engine startAndReturnError:nil];
+    if (![self.engine startAndReturnError:&err]) NSLog(@"MCAUDIO engine: %@", err);
 }
 
 - (void) push:(int16_t*)buf samples:(size_t)samples {
     size_t n = samples * channels;
-    size_t h = atomic_load(&head), t = atomic_load(&tail);
-    size_t queued = (h + MC_RING - t) % MC_RING;
-    // more than 120 ms waiting (60 with Ultra low latency): drop the old part so the sound stays close to the picture
-    size_t cap = MCUltraLowLatency.enabled ? 60 : 120, keep = MCUltraLowLatency.enabled ? 20 : 40;
-    if (queued > rate * channels * cap / 1000) {
-        atomic_store(&tail, (h + MC_RING - rate * channels * keep / 1000) % MC_RING);
-    }
+    size_t h = atomic_load_explicit(&head, memory_order_relaxed);
+    size_t t = atomic_load_explicit(&tail, memory_order_acquire);
+    size_t free = MC_RING - 1 - (h + MC_RING - t) % MC_RING;
+    if (n > free) return;   // the speaker isn't keeping up: drop this packet (the render side skips ahead)
     for (size_t i = 0; i < n; i++) {
         ring[h] = buf[i];
         h = (h + 1) % MC_RING;
     }
-    atomic_store(&head, h);
+    atomic_store_explicit(&head, h, memory_order_release);
+#if DEBUG
+    static int pushes = 0;
+    if (++pushes % 500 == 1) NSLog(@"MCAUDIO push #%d queued=%zu renders=%d", pushes, (h + MC_RING - t) % MC_RING, atomic_load(&renders));
+#endif
 }
 
 - (void) stop {
@@ -506,6 +523,7 @@ static bool MCVideo(uint8_t* buf, size_t size, int32_t lost, bool recovered, voi
 }
 
 static void MCAudioSettings(uint32_t channels, uint32_t rate, void* user) {
+    NSLog(@"MCAUDIO settings ch=%u rate=%u", channels, rate);
     MCPs5Session* s = (__bridge MCPs5Session*)user;
     // async: stop() may be waiting on the main thread for this session's threads
     dispatch_async(dispatch_get_main_queue(), ^{
