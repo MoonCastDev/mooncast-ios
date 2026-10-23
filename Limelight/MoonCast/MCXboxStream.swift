@@ -141,6 +141,7 @@ final class MCXboxStreamController: UIViewController, MCXboxRtc.Listener, MCQuic
         guard !closed else { return }
         closed = true
         timer?.invalidate()
+        MCRumble.shared.stop()
         rtc?.stop()
         rtc = nil
         UIApplication.shared.isIdleTimerDisabled = false

@@ -50,6 +50,11 @@ NS_ASSUME_NONNULL_BEGIN
               leftX:(int16_t)lx leftY:(int16_t)ly rightX:(int16_t)rx rightY:(int16_t)ry;
 - (void) setLoginPin:(NSString*)pin;
 
+/// The DualSense touchpad (1920 x 942): a finger down returns its id (-1 when two are already down), then moves, then up.
+- (int) touchDownX:(int)x y:(int)y;
+- (void) touchMove:(int)touchId x:(int)x y:(int)y;
+- (void) touchUp:(int)touchId;
+
 /// fps (shown), rtt ms, Mbps received, frames lost (since start).
 - (NSDictionary*) stats;
 

@@ -152,6 +152,7 @@ static void MCChiakiLog(ChiakiLogLevel level, const char* msg, void* user) {
     NSData* _vps; NSData* _sps; NSData* _pps;
     uint64_t _frames, _bytes, _lost;
     CFTimeInterval _statsStart;
+    ChiakiControllerState _pad;   // buttons and sticks from the controller, touches from the screen
     double _fps, _mbps;
 }
 @property (nonatomic) AVSampleBufferDisplayLayer* videoLayer;
@@ -200,6 +201,7 @@ static void MCRegistCb(ChiakiRegistEvent* e, void* user) {
         chiaki_log_init(&_log, CHIAKI_LOG_ALL & ~CHIAKI_LOG_VERBOSE, MCChiakiLog, NULL);
         memset(&_info, 0, sizeof(_info));
         _info.ps5 = true;
+        chiaki_controller_state_set_idle(&_pad);
         _hostC = strdup(host.UTF8String);
         _info.host = _hostC;
         NSData* rk = MCHex(registKeyHex);
@@ -293,12 +295,37 @@ static void MCRegistCb(ChiakiRegistEvent* e, void* user) {
 - (void) setButtons:(uint32_t)buttons l2:(uint8_t)l2 r2:(uint8_t)r2
               leftX:(int16_t)lx leftY:(int16_t)ly rightX:(int16_t)rx rightY:(int16_t)ry {
     if (!_started || _stopped) return;
-    ChiakiControllerState s;
-    chiaki_controller_state_set_idle(&s);
-    s.buttons = buttons;
-    s.l2_state = l2; s.r2_state = r2;
-    s.left_x = lx; s.left_y = ly; s.right_x = rx; s.right_y = ry;
-    chiaki_session_set_controller_state(&_session, &s);
+    @synchronized (self) {
+        _pad.buttons = buttons;
+        _pad.l2_state = l2; _pad.r2_state = r2;
+        _pad.left_x = lx; _pad.left_y = ly; _pad.right_x = rx; _pad.right_y = ry;
+        chiaki_session_set_controller_state(&_session, &_pad);
+    }
+}
+
+- (int) touchDownX:(int)x y:(int)y {
+    if (!_started || _stopped) return -1;
+    @synchronized (self) {
+        int8_t tid = chiaki_controller_state_start_touch(&_pad, (uint16_t)x, (uint16_t)y);
+        chiaki_session_set_controller_state(&_session, &_pad);
+        return tid;
+    }
+}
+
+- (void) touchMove:(int)touchId x:(int)x y:(int)y {
+    if (!_started || _stopped || touchId < 0) return;
+    @synchronized (self) {
+        chiaki_controller_state_set_touch_pos(&_pad, (uint8_t)touchId, (uint16_t)x, (uint16_t)y);
+        chiaki_session_set_controller_state(&_session, &_pad);
+    }
+}
+
+- (void) touchUp:(int)touchId {
+    if (!_started || _stopped || touchId < 0) return;
+    @synchronized (self) {
+        chiaki_controller_state_stop_touch(&_pad, (uint8_t)touchId);
+        chiaki_session_set_controller_state(&_session, &_pad);
+    }
 }
 
 - (void) setLoginPin:(NSString*)pin {

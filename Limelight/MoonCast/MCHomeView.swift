@@ -1009,7 +1009,7 @@ struct MCRoot: View {
             choice("s:ps:awayrate", "Bitrate", "Auto: 10 Mbps", awayRates.map { $0 == 0 ? "Auto" : "\($0) Mbps" },
                    awayRates.firstIndex(of: MCPs5Store.awayBitrate) ?? 0, m, p) { i in d.set(awayRates[i], forKey: "ps5_away_bitrate") }
             info("s:ps:btn", "PS button", "L2 + Start on pads without one", m, p)
-            info("s:ps:touch", "Touchpad", "Select + Start", m, p)
+            info("s:ps:touch", "Touchpad", "Select + Start, or touch the screen while playing", m, p)
         case "xbox":
             let d = UserDefaults.standard
             if MCXbox.signedIn {
@@ -1029,6 +1029,9 @@ struct MCRoot: View {
             let caps = [0, 5, 10, 15, 20, 30]
             choice("s:xb:rate", "Bitrate", "Auto lets the Xbox decide. A cap keeps a weak Wi-Fi from stuttering", caps.map { $0 == 0 ? "Auto" : "\($0) Mbps" },
                    caps.firstIndex(of: MCXbox.maxMbps) ?? 0, m, p) { i in d.set(caps[i], forKey: "xbox_bitrate") }
+            let rumbles = ["off", "weak", "medium", "strong"]
+            choice("s:xb:rumble", "Rumble", "How strongly the controller shakes", ["Off", "Weak", "Medium", "Strong"],
+                   rumbles.firstIndex(of: d.string(forKey: "xbox_rumble") ?? "strong") ?? 3, m, p) { i in d.set(rumbles[i], forKey: "xbox_rumble") }
             toggle("s:xb:swap", "Swap A and B", "For Nintendo-style layouts", MCXbox.swapAB, m, p) { d.set(!MCXbox.swapAB, forKey: "xbox_swap_ab") }
             toggle("s:xb:coop", "Two players", "A second controller plays as player 2", MCXbox.coop, m, p) { d.set(!MCXbox.coop, forKey: "xbox_coop") }
         case "theme":

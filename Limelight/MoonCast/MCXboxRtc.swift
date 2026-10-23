@@ -385,11 +385,29 @@ final class MCXboxRtc: NSObject, RTCPeerConnectionDelegate, RTCDataChannelDelega
     func dataChannel(_ ch: RTCDataChannel, didReceiveMessageWith buffer: RTCDataBuffer) {
         let data = buffer.data
         work.async { [self] in
+            if ch.label == "input" { parseInput(data); return }
             if ch.label == "message",
                let j = try? JSONSerialization.jsonObject(with: data) as? [String: Any], j["type"] as? String == "HandshakeAck", !inputStarted {
                 onHandshake()
             }
         }
+    }
+
+    /// Server messages on the input channel: rumble (report type bit 128), as XStreaming reads them.
+    private func parseInput(_ d: Data) {
+        let b = [UInt8](d)
+        guard b.count >= 2 else { return }
+        let type = Int(b[0]) | Int(b[1]) << 8
+        var off = 2
+        if type & 16 != 0 { off += 8 }
+        guard type & 128 != 0, b.count >= off + 11 else { return }
+        let pad = Int(b[off + 1])
+        let left = Float(b[off + 2]) / 100, right = Float(b[off + 3]) / 100
+        let dur = Double(Int(b[off + 6]) | Int(b[off + 7]) << 8) / 1000
+        let scale: Float = { switch UserDefaults.standard.string(forKey: "xbox_rumble") ?? "strong" {
+            case "off": return 0; case "weak": return 0.35; case "medium": return 0.65; default: return 1 } }()
+        // left motor = the heavy, low one; right = the light, high one
+        MCRumble.shared.rumble(low: min(1, left * scale), high: min(1, right * scale), seconds: dur > 0 ? dur : 0.3, pad: pad)
     }
 
     /// The Xbox accepted us: authorise, announce the pads, start input, describe this client.

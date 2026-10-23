@@ -264,13 +264,39 @@ final class MCPs5StreamController: UIViewController, MCPs5SessionDelegate, MCQui
     }
 
     func ps5Rumble(_ left: UInt8, right: UInt8) {
-        // rumble through Core Haptics comes later; most pads on iPad rumble via GCDeviceHaptics
+        MCRumble.shared.rumble(low: Float(left) / 255, high: Float(right) / 255)
     }
+
+    // the screen is the DualSense touchpad (1920 x 942), as the handheld's touch does for a PS5
+    private var touchIds: [ObjectIdentifier: Int32] = [:]
+
+    private func pad(_ t: UITouch) -> (Int32, Int32) {
+        let p = t.location(in: view)
+        return (Int32(max(0, min(1919, p.x / view.bounds.width * 1920))), Int32(max(0, min(941, p.y / view.bounds.height * 942))))
+    }
+
+    override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
+        guard connected, !menuOpen, let s = session else { return }
+        for t in touches { let (x, y) = pad(t); let id = s.touchDownX(x, y: y); if id >= 0 { touchIds[ObjectIdentifier(t)] = id } }
+    }
+
+    override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
+        guard let s = session else { return }
+        for t in touches { if let id = touchIds[ObjectIdentifier(t)] { let (x, y) = pad(t); s.touchMove(id, x: x, y: y) } }
+    }
+
+    override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
+        guard let s = session else { return }
+        for t in touches { if let id = touchIds.removeValue(forKey: ObjectIdentifier(t)) { s.touchUp(id) } }
+    }
+
+    override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) { touchesEnded(touches, with: event) }
 
     private func leave() {
         guard !closed else { return }
         closed = true
         MCPs5Session.cancelPsn()
+        MCRumble.shared.stop()
         cornerTimer?.invalidate()
         UIApplication.shared.isIdleTimerDisabled = false
         let s = session

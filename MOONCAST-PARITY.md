@@ -17,6 +17,8 @@ What the handheld app (MoonCastDev/moonlight-android, `app/src/handheld`) does, 
 | Stream | Moonlight PC stream | Done (Moonlight's own) |
 | Stream | Quick menu: stats, Keyboard, Streaming status, Touch Off/Mouse/Touch, Controllers, Task Manager, Disconnect, Quit | Done, tested on a stream (2420x1668 60 fps H.265) |
 | Stream | Hibernate PC | Hidden (as in the Android release) |
+| Stream | Rumble (PS5, Xbox), PS5 touchpad | Built (untested) |
+| Stream | Ultra low latency | Built (PC frames immediate, less audio queued) |
 | Stream | FSR 1.0 super resolution | Built in Metal for PC, PS5, Xbox (untested) |
 | Settings | Picture: resolution (Native default), fps, bitrate, codec, HDR, frame pacing, stats | Done |
 | Settings | Sound, Controls (touch default, on-screen pad, players, swap, mouse), Theme, About | Done |
