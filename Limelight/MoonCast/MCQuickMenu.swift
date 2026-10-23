@@ -26,7 +26,31 @@ final class MCQuickMenu: NSObject {
         host = h
         MCFocus.shared.pushScope("qm")
         MCPad.shared.attach()
-        model.onClose = { close(actions) }
+        model.onClose = { close(actions); MCQuickMenu.model = nil }
+        MCQuickMenu.model = model
+    }
+
+    private static var model: MCQuickModel?
+
+    /// Test runs only: MC_QM_STEPS="8:open,11:1,14:close,18:open,22:5" (seconds after the stream starts: open the
+    /// menu, press item N, close it), so the menu can be checked from a script.
+    @objc static func runTestSteps(in vc: UIViewController) {
+        #if DEBUG
+        guard let steps = ProcessInfo.processInfo.environment["MC_QM_STEPS"] else { return }
+        for step in steps.split(separator: ",") {
+            let parts = step.split(separator: ":")
+            guard parts.count == 2, let t = Double(parts[0]) else { continue }
+            let what = String(parts[1])
+            DispatchQueue.main.asyncAfter(deadline: .now() + t) { [weak vc] in
+                guard let vc = vc else { return }
+                switch what {
+                case "open": show(in: vc)
+                case "close": if let a = vc as? MCQuickActions { close(a) }
+                default: if let i = Int(what) { model?.press?(i) }
+                }
+            }
+        }
+        #endif
     }
 
     static func close(_ actions: MCQuickActions) {
@@ -44,6 +68,8 @@ final class MCQuickMenu: NSObject {
 final class MCQuickModel: ObservableObject {
     let actions: MCQuickActions
     var onClose: () -> Void = {}
+    /// Presses item N (test runs)
+    var press: ((Int) -> Void)?
     @Published var stats: [(String, String)] = []
     @Published var rev = 0
     private var timer: Timer?
@@ -123,14 +149,19 @@ struct MCQuickMenuView: View {
             ZStack(alignment: upright ? .bottom : .trailing) {
                 Color.black.opacity(0.5).ignoresSafeArea().onTapGesture { model.close() }
                 panel(m, p)
-                    .frame(width: upright ? geo.size.width : m.px(680), height: upright ? geo.size.height * 0.62 : nil)
-                    .frame(maxHeight: upright ? nil : .infinity)
-                    .background(p.panel.opacity(0.94).ignoresSafeArea())
-                    .clipShape(RoundedRectangle(cornerRadius: upright ? m.px(36) : 0))
+                    .padding(.top, geo.safeAreaInsets.top)
+                    .padding(.bottom, geo.safeAreaInsets.bottom)
+                    .frame(width: upright ? geo.size.width : m.px(680),
+                           height: upright ? geo.size.height * 0.62 : geo.size.height + geo.safeAreaInsets.top + geo.safeAreaInsets.bottom)
+                    .background(UnevenRoundedRectangle(topLeadingRadius: upright ? m.px(36) : 0, topTrailingRadius: upright ? m.px(36) : 0)
+                        .fill(p.panel.opacity(0.94)))
             }
+            .ignoresSafeArea()
         }
         .mcCollectFrames(root: "qm")
         .onAppear {
+            let list = items()
+            model.press = { i in if i < list.count { items()[i].run() } }
             MCFocus.shared.preferred["qm"] = "qm:0"
             MCFocus.shared.id = "qm:0"
             MCFocus.shared.pageButton = { b in

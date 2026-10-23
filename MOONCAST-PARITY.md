@@ -15,7 +15,7 @@ What the handheld app (MoonCastDev/moonlight-android, `app/src/handheld`) does, 
 | Consoles | PS5: register, PSN sign-in, wake, play at home and away | To do (chiaki for iPadOS) |
 | Consoles | Xbox: sign-in, consoles list, play | To do (WebRTC + xCloud/xHome protocol) |
 | Stream | Moonlight PC stream | Done (Moonlight's own) |
-| Stream | Quick menu: stats, Keyboard, Streaming status, Touch Off/Mouse/Touch, Controllers, Task Manager, Disconnect, Quit | Built, awaiting a stream test |
+| Stream | Quick menu: stats, Keyboard, Streaming status, Touch Off/Mouse/Touch, Controllers, Task Manager, Disconnect, Quit | Done, tested on a stream (2420x1668 60 fps H.265) |
 | Stream | Hibernate PC | Hidden (as in the Android release) |
 | Stream | FSR 1.0 super resolution | To do (Metal port) |
 | Settings | Picture: resolution (Native default), fps, bitrate, codec, HDR, frame pacing, stats | Done |

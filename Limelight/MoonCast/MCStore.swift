@@ -356,6 +356,7 @@ final class MCStore: NSObject, ObservableObject, DiscoveryCallback, PairCallback
         let state = hosts.map { "\($0.uuid)|\($0.state.rawValue)|\($0.pairState.rawValue)|\($0.currentGame ?? "")|\($0.appList.count)" }.joined(separator: ";")
         if state != lastState { lastState = state; bump() }
         testAutoPair()
+        testAutoPlay()
         for h in hosts where paired(h) && online(h) {
             let age = listFetched[h.uuid].map { -$0.timeIntervalSinceNow } ?? .infinity
             // a game started or quit on the PC, or the list is old: fetch it again
@@ -368,6 +369,20 @@ final class MCStore: NSObject, ObservableObject, DiscoveryCallback, PairCallback
     #if DEBUG
     private var autoPaired = false
     #endif
+
+    #if DEBUG
+    private var autoPlayed = false
+    #endif
+
+    /// Test runs only: MC_PLAY=<game name> starts that game once its PC is online.
+    private func testAutoPlay() {
+        #if DEBUG
+        guard !autoPlayed, let want = ProcessInfo.processInfo.environment["MC_PLAY"], !want.isEmpty,
+              let g = allGames().first(where: { $0.title.caseInsensitiveCompare(want) == .orderedSame }), let h = g.host, online(h) else { return }
+        autoPlayed = true
+        play(g)
+        #endif
+    }
 
     /// Test runs only: MC_AUTOPAIR=<part of a PC's name> pairs with it once it's found (with MC_PIN set, the PIN is
     /// known in advance and approved on the PC by script).

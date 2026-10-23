@@ -286,7 +286,8 @@
         [_overlayView setFont:[UIFont systemFontOfSize:12]];
 #endif
         [_overlayView setAlpha:0.5];
-        [self.view addSubview:_overlayView];
+        // MoonCast: over the picture but under the Quick menu
+        [self.view insertSubview:_overlayView aboveSubview:(_scrollView != nil ? (UIView*)_scrollView : (UIView*)_streamView)];
     }
     
     if (text != nil) {
@@ -371,6 +372,11 @@
 }
 
 - (void) connectionStarted {
+#if DEBUG
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [MCQuickMenu runTestStepsIn:self];
+    });
+#endif
     Log(LOG_I, @"Connection started");
     dispatch_async(dispatch_get_main_queue(), ^{
         // Leave the spinner spinning until it's obscured by
