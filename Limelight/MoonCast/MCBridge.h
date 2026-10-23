@@ -63,6 +63,13 @@ NS_ASSUME_NONNULL_BEGIN
 /// Removes a PC from this device.
 + (void) removeHost:(TemporaryHost*)host;
 
+/// This device's Sunshine client identity in the form the MoonCast TV reads (identity transfer): "cert" is the
+/// PEM certificate, "key" the private key as PKCS#8 DER. Nil when there is none yet (never paired).
++ (nullable NSDictionary<NSString*, NSData*>*) clientIdentity;
+
+/// A host address with its port ("address", "port"; 47989 when it has none). Nil for an empty address.
++ (nullable NSDictionary*) splitAddress:(nullable NSString*)addressPort;
+
 @end
 
 NS_ASSUME_NONNULL_END

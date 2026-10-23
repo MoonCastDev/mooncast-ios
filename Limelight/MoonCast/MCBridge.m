@@ -14,12 +14,54 @@
 #import "ConnectionHelper.h"
 #import "ControllerSupport.h"
 #import "StreamFrameViewController.h"
+#import "CryptoManager.h"
+#import "Utils.h"
+
+#include <openssl/pem.h>
+#include <openssl/x509.h>
 
 #import <AVFoundation/AVFoundation.h>
 #import <VideoToolbox/VideoToolbox.h>
 #include <Limelight.h>
 
 @implementation MCBridge
+
++ (NSDictionary<NSString*, NSData*>*) clientIdentity {
+    NSData* cert = [CryptoManager readCertFromFile];
+    NSData* keyPem = [CryptoManager readKeyFromFile];
+    if (cert == nil || keyPem == nil) {
+        return nil;
+    }
+    BIO* in = BIO_new_mem_buf(keyPem.bytes, (int)keyPem.length);
+    EVP_PKEY* pkey = PEM_read_bio_PrivateKey(in, NULL, NULL, NULL);
+    BIO_free(in);
+    if (pkey == NULL) {
+        return nil;
+    }
+    // unencrypted PKCS#8 DER, as the Android apps keep client.key
+    BIO* out = BIO_new(BIO_s_mem());
+    NSData* key = nil;
+    if (i2d_PKCS8PrivateKey_bio(out, pkey, NULL, NULL, 0, NULL, NULL) == 1) {
+        char* p;
+        long n = BIO_get_mem_data(out, &p);
+        key = [NSData dataWithBytes:p length:n];
+    }
+    BIO_free(out);
+    EVP_PKEY_free(pkey);
+    return key == nil ? nil : @{ @"cert": cert, @"key": key };
+}
+
++ (NSDictionary*) splitAddress:(NSString*)addressPort {
+    if (addressPort.length == 0) {
+        return nil;
+    }
+    NSRange a, p;
+    if (![Utils parseAddressPortString:addressPort address:&a port:&p]) {
+        return nil;
+    }
+    int port = p.location != NSNotFound ? [[addressPort substringWithRange:p] intValue] : 47989;
+    return @{ @"address": [addressPort substringWithRange:a], @"port": @(port > 0 ? port : 47989) };
+}
 
 + (StreamConfiguration*) streamConfigForApp:(TemporaryApp*)app {
     StreamConfiguration* config = [[StreamConfiguration alloc] init];

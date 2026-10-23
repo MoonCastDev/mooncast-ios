@@ -21,6 +21,8 @@ struct MCTvBox: Codable, Equatable {
     var version: Int
     var seen: Double
     var paired: Bool
+    /// The TV's receiver key for identity transfer (raw X25519, base64). New each time its app starts.
+    var identityKey: String? = nil
     var canXbox: Bool { version >= 2 }
 }
 
@@ -86,7 +88,8 @@ enum MCTvFinder {
         let id = (j["id"] as? String).flatMap { $0.isEmpty ? nil : $0 } ?? "ip:\(ip)"
         let name = (j["name"] as? String).flatMap { $0.isEmpty ? nil : $0 } ?? "MoonCast TV"
         return MCTvBox(id: id, ip: ip, name: name, pc: j["pc"] as? String ?? "", xbox: j["xbox"] as? Bool ?? false,
-                       version: j["version"] as? Int ?? 1, seen: Date().timeIntervalSince1970, paired: j["paired"] as? Bool ?? true)
+                       version: j["version"] as? Int ?? 1, seen: Date().timeIntervalSince1970, paired: j["paired"] as? Bool ?? true,
+                       identityKey: (j["identityKey"] as? String).flatMap { $0.isEmpty ? nil : $0 })
     }
 
     /// Asks every address of this /24 (about two seconds), the known TVs first.
@@ -133,6 +136,35 @@ enum MCTvFinder {
     }
 }
 
+/// Identity transfer (IdentityTransfer.java): this iPad's Sunshine client identity and one PC's details, encrypted to
+/// a MoonCast TV's key so the Wi-Fi only carries ciphertext; the TV keeps it in memory for one session.
+/// Blob: ephemeral X25519 public key (32) | GCM nonce (12) | AES-256-GCM ciphertext and tag. The key is HKDF-SHA256
+/// over the X25519 shared secret, salted with both public keys, info and AAD "mooncast-identity-v1".
+enum MCIdentity {
+    private static let info = Data("mooncast-identity-v1".utf8)
+
+    static func encrypt(_ receiverRaw: Data, _ plain: Data) throws -> Data {
+        let recv = try Curve25519.KeyAgreement.PublicKey(rawRepresentation: receiverRaw)
+        let eph = Curve25519.KeyAgreement.PrivateKey()
+        let ephRaw = eph.publicKey.rawRepresentation
+        let shared = try eph.sharedSecretFromKeyAgreement(with: recv)
+        let key = shared.hkdfDerivedSymmetricKey(using: SHA256.self, salt: ephRaw + receiverRaw, sharedInfo: info, outputByteCount: 32)
+        let box = try AES.GCM.seal(plain, using: key, nonce: AES.GCM.Nonce(), authenticating: info)
+        return ephRaw + Data(box.nonce) + box.ciphertext + box.tag
+    }
+
+    /// Base64 of the sealed identity for [h], or nil (no identity yet, or the PC has no certificate or address).
+    static func seal(_ receiverKeyB64: String, for h: TemporaryHost) -> String? {
+        guard let id = MCBridge.clientIdentity(), let cert = id["cert"], let key = id["key"], let serverCert = h.serverCert,
+              let addr = MCBridge.splitAddress(h.localAddress ?? h.activeAddress) ?? MCBridge.splitAddress(h.activeAddress),
+              let raw = Data(base64Encoded: receiverKeyB64), raw.count == 32 else { return nil }
+        let j: [String: Any] = ["cert": cert.base64EncodedString(), "key": key.base64EncodedString(), "uuid": h.uuid, "name": h.name,
+                                "address": addr["address"] ?? "", "port": addr["port"] ?? 47989, "serverCert": serverCert.base64EncodedString()]
+        guard let plain = try? JSONSerialization.data(withJSONObject: j), let blob = try? encrypt(raw, plain) else { return nil }
+        return blob.base64EncodedString()
+    }
+}
+
 /// What to send: a PC game, a PS5 or an Xbox.
 enum MCTvSender {
     static func newPadKey() -> String {
@@ -160,7 +192,15 @@ enum MCTvSender {
         if let a = g.app {
             j["appId"] = a.id ?? ""
             j["appName"] = a.name ?? g.title
-            if !tv.paired { return "\(tv.name) isn't paired with your PC yet. Pair it with the PC on the TV first." }
+            // A TV with no pairing gets this iPad's identity, sealed to the TV's key, for this session only. Ask the
+            // TV again first: its key changes each time its app starts, so a remembered one can be stale.
+            let live = await MCTvFinder.ask(tv.ip) ?? tv
+            if !live.paired {
+                guard let key = live.identityKey, let h = g.host, let sealed = MCIdentity.seal(key, for: h) else {
+                    return "\(tv.name) isn't paired with your PC yet. Update MoonCast on the TV, or pair it with the PC there."
+                }
+                j["identity"] = sealed
+            }
         } else if let c = g.ps {
             j["ps5host"] = c.host; j["registKey"] = c.registKey; j["morning"] = c.morning; j["ps5"] = "true"
             // signed in to PSN: let the TV reach the console over the internet too (it still tries the LAN first)
