@@ -7,6 +7,7 @@
 //
 
 #import "VideoDecoderRenderer.h"
+#import "Moonlight-Swift.h"
 #import "StreamView.h"
 
 #include <libavcodec/avcodec.h>
@@ -32,6 +33,9 @@ extern int ff_isom_write_av1c(AVIOContext *pb, const uint8_t *buf, int size,
     NSData *masteringDisplayColorVolume;
     NSData *contentLightLevelInfo;
     CMVideoFormatDescriptionRef formatDesc;
+    // MoonCast: Settings → Picture → Super resolution draws through FSR instead of the display layer
+    MCFsrView* mcFsr;
+    MCFsrDecoder* mcFsrDecoder;
     
     CADisplayLink* _displayLink;
     BOOL framePacing;
@@ -97,6 +101,18 @@ extern int ff_isom_write_av1c(AVIOContext *pb, const uint8_t *buf, int size,
 {
     self->videoFormat = videoFormat;
     self->frameRate = frameRate;
+    // FSR for 8-bit streams clearly smaller than the screen (HDR keeps the display layer)
+    if (!(videoFormat & VIDEO_FORMAT_MASK_10BIT) && [MCFsr wantedWithVideoHeight:videoHeight]) {
+        void (^make)(void) = ^{
+            MCFsrView* v = [[MCFsrView alloc] initWithFrame:self->displayLayer.frame sharpness:MCFsr.sharpness];
+            if (!v.ready) return;
+            v.aspect = self->_streamAspectRatio;
+            [self->_view insertSubview:v atIndex:0];
+            self->mcFsr = v;
+            self->mcFsrDecoder = [[MCFsrDecoder alloc] initWithView:v];
+        };
+        if ([NSThread isMainThread]) make(); else dispatch_sync(dispatch_get_main_queue(), make);
+    }
 }
 
 - (void)start
@@ -143,6 +159,11 @@ int DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
 - (void)stop
 {
     [_displayLink invalidate];
+    [mcFsrDecoder invalidate];
+    mcFsrDecoder = nil;
+    MCFsrView* v = mcFsr;
+    mcFsr = nil;
+    dispatch_async(dispatch_get_main_queue(), ^{ [v removeFromSuperview]; });
 }
 
 #define NALU_START_PREFIX_SIZE 3
@@ -594,12 +615,17 @@ int DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
         return DR_NEED_IDR;
     }
 
-    // Enqueue the next frame
-    [self->displayLayer enqueueSampleBuffer:sampleBuffer];
+    // Enqueue the next frame (MoonCast: through FSR when it's on)
+    if (self->mcFsrDecoder != nil) {
+        [self->mcFsrDecoder decode:sampleBuffer];
+    }
+    else {
+        [self->displayLayer enqueueSampleBuffer:sampleBuffer];
+    }
     
     if (du->frameType == FRAME_TYPE_IDR) {
         // Ensure the layer is visible now
-        self->displayLayer.hidden = NO;
+        self->displayLayer.hidden = self->mcFsrDecoder != nil;
         
         // Tell our parent VC to hide the progress indicator
         [self->_callbacks videoContentShown];

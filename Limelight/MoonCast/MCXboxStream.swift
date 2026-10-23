@@ -23,6 +23,8 @@ final class MCXboxStreamController: UIViewController, MCXboxRtc.Listener, MCQuic
     private var comboFired = false
     private var statsOn = UserDefaults.standard.bool(forKey: "xbox_stats")
     private var last = MCXboxRtc.Stats()
+    private var fsr: MCFsrView?
+    private var fsrRenderer: MCFsrRtcRenderer?
 
     init(console: MCXbox.Console) {
         self.console = console
@@ -41,6 +43,17 @@ final class MCXboxStreamController: UIViewController, MCXboxRtc.Listener, MCQuic
         video.frame = view.bounds
         video.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         view.addSubview(video)
+        // Settings → Picture → Super resolution
+        if MCFsr.enabled {
+            let v = MCFsrView(frame: view.bounds, sharpness: MCFsr.sharpness)
+            if v.ready {
+                v.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+                v.isHidden = true
+                view.addSubview(v)
+                fsr = v
+                fsrRenderer = MCFsrRtcRenderer(fsr: v, plain: video)
+            }
+        }
         status.textColor = .white
         status.font = .systemFont(ofSize: 22, weight: .bold)
         status.textAlignment = .center
@@ -94,7 +107,7 @@ final class MCXboxStreamController: UIViewController, MCXboxRtc.Listener, MCQuic
         guard !closed else { return }
         rtc?.stop()
         let r = MCXboxRtc(consoleId: console.id, auth: auth, resolution: MCXbox.resolution == 0 ? 1080 : MCXbox.resolution,
-                          coop: MCXbox.coop, maxMbps: MCXbox.maxMbps, renderer: video)
+                          coop: MCXbox.coop, maxMbps: MCXbox.maxMbps, renderer: fsrRenderer ?? video)
         r.listener = self
         rtc = r
         r.start()

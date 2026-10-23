@@ -94,6 +94,7 @@ final class MCPs5StreamController: UIViewController, MCPs5SessionDelegate, MCQui
     private var statsOn = UserDefaults.standard.bool(forKey: "ps5_stats")
     private var comboFired = false
     private var remote: (String, String, Data)?
+    private var fsr: MCFsrView?
     private var remoteDecided = false
 
     init(console: MCPs5Console) {
@@ -186,6 +187,18 @@ final class MCPs5StreamController: UIViewController, MCPs5SessionDelegate, MCQui
         let s = MCPs5Session(host: console.host, registKey: console.registKey, morning: console.morning,
                              width: h >= 1080 ? 1920 : h >= 720 ? 1280 : 960, height: Int32(h), fps: Int32(MCPs5Store.fps), bitrate: Int32(rate), h265: MCPs5Store.h265)
         if let r = remote { s.psnToken = r.0; s.psnDuid = r.1; s.psnAccountId = r.2 }
+        // Settings → Picture → Super resolution: 720p / 1080p up to the iPad's screen through FSR
+        fsr?.removeFromSuperview(); fsr = nil
+        if MCFsr.wanted(videoHeight: h) {
+            let v = MCFsrView(frame: view.bounds, sharpness: MCFsr.sharpness)
+            if v.ready {
+                v.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+                view.insertSubview(v, at: 0)
+                fsr = v
+                s.fsrDecoder = MCFsrDecoder(view: v)
+                s.videoLayer.isHidden = true
+            }
+        }
         s.delegate = self
         session = s
         s.videoLayer.frame = view.bounds

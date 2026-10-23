@@ -24,6 +24,8 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, weak) id<MCPs5SessionDelegate> delegate;
 /// Where the picture is drawn.
 @property (nonatomic, readonly) AVSampleBufferDisplayLayer* videoLayer;
+/// Set when the picture goes through FSR (Settings → Picture → Super resolution): frames are decoded for it instead.
+@property (nonatomic, strong, nullable) id fsrDecoder;
 
 /// registKey and morning are hex (as stored by registration). width 1280/1920, fps 30/60, bitrate kbps, h265.
 - (instancetype) initWithHost:(NSString*)host registKey:(NSString*)registKeyHex morning:(NSString*)morningHex

@@ -790,7 +790,7 @@ struct MCRoot: View {
     /// An icon for each setting, as the handheld's rows have.
     static let icons: [String: String] = [
         "s:res": "rectangle.expand.vertical", "s:fps": "speedometer", "s:rate": "gauge.with.dots.needle.67percent", "s:codec": "film",
-        "s:hdr": "sun.max", "s:pacing": "metronome", "s:stats": "chart.bar", "s:opt": "wand.and.stars",
+        "s:hdr": "sun.max", "s:fsr": "sparkles", "s:fsrsharp": "wand.and.rays", "s:pacing": "metronome", "s:stats": "chart.bar", "s:opt": "wand.and.stars",
         "s:spk": "speaker.wave.2", "s:pcaudio": "hifispeaker", "s:feel": "music.note",
         "s:size": "textformat.size", "s:rotate": "rotate.right", "s:touch": "hand.point.up.left", "s:osc": "gamecontroller",
         "s:multi": "person.2", "s:swap": "arrow.left.arrow.right", "s:mouse": "computermouse",
@@ -893,6 +893,15 @@ struct MCRoot: View {
             }
             choice("s:codec", "Video codec", "H.265 and AV1 look better at the same bitrate", ["Auto", "H.264", "H.265", "AV1"],
                    Int(v.codec), m, p) { i in settings.save { $0.codec = UInt32(i) } }
+            let fsrOn = UserDefaults.standard.string(forKey: "mc_super_resolution") == "fsr1"
+            choice("s:fsr", "Super resolution", "AMD FSR 1.0 sharpens a lower resolution up to this screen. For PC, PS5 and Xbox; not with HDR",
+                   ["Off", "FSR 1.0"], fsrOn ? 1 : 0, m, p) { i in UserDefaults.standard.set(i == 1 ? "fsr1" : "off", forKey: "mc_super_resolution") }
+            if fsrOn {
+                let sharp = [0, 20, 40, 60, 80, 100]
+                choice("s:fsrsharp", "Sharpening", "How crisp FSR makes edges. Lower it if you see halos", sharp.map { "\($0)%" },
+                       sharp.firstIndex(of: UserDefaults.standard.object(forKey: "mc_fsr_sharpness") as? Int ?? 60) ?? 3, m, p) { i in
+                    UserDefaults.standard.set(sharp[i], forKey: "mc_fsr_sharpness") }
+            }
             toggle("s:hdr", "HDR", "Only when the PC, the game and this screen support it", v.hdr, m, p) { settings.save { $0.hdr.toggle() } }
             choice("s:pacing", "Frame pacing", "Trade a little delay for smoother motion", ["Lowest delay", "Smoothest"],
                    v.pacing ? 1 : 0, m, p) { i in settings.save { $0.pacing = i == 1 } }

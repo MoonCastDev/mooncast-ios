@@ -5,6 +5,7 @@
 
 #import "MCPs5Session.h"
 #import <VideoToolbox/VideoToolbox.h>
+#import "Moonlight-Swift.h"
 #import <stdatomic.h>
 
 #include <chiaki/session.h>
@@ -452,11 +453,16 @@ static void MCRegistCb(ChiakiRegistEvent* e, void* user) {
         CFArrayRef att = CMSampleBufferGetSampleAttachmentsArray(sb, YES);
         CFMutableDictionaryRef dict = (CFMutableDictionaryRef)CFArrayGetValueAtIndex(att, 0);
         CFDictionarySetValue(dict, kCMSampleAttachmentKey_DisplayImmediately, kCFBooleanTrue);
-        AVSampleBufferDisplayLayer* layer = self.videoLayer;
-        if (layer.status == AVQueuedSampleBufferRenderingStatusFailed || layer.requiresFlushToResumeDecoding) {
-            [layer flush];
+        MCFsrDecoder* fsr = self.fsrDecoder;
+        if (fsr != nil) {
+            [fsr decode:sb];
+        } else {
+            AVSampleBufferDisplayLayer* layer = self.videoLayer;
+            if (layer.status == AVQueuedSampleBufferRenderingStatusFailed || layer.requiresFlushToResumeDecoding) {
+                [layer flush];
+            }
+            [layer enqueueSampleBuffer:sb];
         }
-        [layer enqueueSampleBuffer:sb];
         CFRelease(sb);
     }
     CFRelease(block);
