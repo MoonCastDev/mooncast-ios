@@ -509,6 +509,15 @@ struct MCRoot: View {
                             row("ps:\(c.host)", icon: "PS", color: MCPalette.blue, title: c.name, sub: ps5Line(c), right: "Linked", m, p) { ps5Menu(c) }
                         }
                     }
+                    let xbs = MCXbox.consoles
+                    if !xbs.isEmpty {
+                        header("Xbox", m, p)
+                        ForEach(xbs, id: \.id) { c in
+                            row("xb:\(c.id)", icon: "XB", color: MCPalette.green, title: c.name,
+                                sub: c.type + (c.powerState.isEmpty ? "" : " · \(c.powerState == "On" ? "On" : c.powerState == "ConnectedStandby" ? "Sleeping" : c.powerState)"),
+                                right: nil, m, p) { xboxMenu(c) }
+                        }
+                    }
                     header("Add", m, p)
                     row("add:pc", icon: "plus", color: MCPalette.green, title: "Add a PC by its address",
                         sub: "When it isn't found by itself (another network, a VPN)", right: nil, m, p) {
@@ -517,9 +526,9 @@ struct MCRoot: View {
                     row("add:ps", icon: "PS", color: MCPalette.blue, title: "Add a PlayStation 5", sub: "Sign in to PSN and link it with the console's 8-digit code", right: nil, m, p) {
                         linkPs5()
                     }
-                    row("add:xb", icon: "XB", color: MCPalette.green, title: "Xbox", sub: "Coming to iPad in a later build", right: nil, m, p) {
-                        store.dialog = MCDialog(title: "Xbox on iPad", message: "Xbox Remote Play is on its way to the iPad app. For now it plays PCs.",
-                                                opts: [.init(title: "OK") {}])
+                    row("add:xb", icon: "XB", color: MCPalette.green, title: MCXbox.signedIn ? "Refresh Xbox consoles" : "Add your Xbox",
+                        sub: MCXbox.signedIn ? "Signed in as \(MCXbox.gamertag ?? "your account")" : "Sign in with your Microsoft account", right: nil, m, p) {
+                        if MCXbox.signedIn { refreshXboxes(loud: true) } else { xboxSignIn() }
                     }
                 }
                 .padding(.horizontal, m.px(m.edge))
@@ -572,6 +581,72 @@ struct MCRoot: View {
         var lines = [h.activeAddress.map { "Address: \($0)" }, h.externalAddress.map { "Away: \($0)" }].compactMap { $0 }
         if lines.count == 2 && h.externalAddress == h.activeAddress { lines.removeLast() }
         store.dialog = MCDialog(title: h.name, message: lines.isEmpty ? nil : lines.joined(separator: "\n"), opts: opts)
+    }
+
+    // MARK: Xbox (Microsoft's device-code sign-in, as on the handheld)
+
+    private func xboxSignIn() {
+        store.busy = "Getting a code…"
+        Task { @MainActor in
+            do {
+                let dc = try await MCXbox.startSignIn()
+                store.busy = nil
+                var waiting = true
+                store.dialog = MCDialog(title: "Sign in to Xbox",
+                                        message: "Open \(dc.url.replacingOccurrences(of: "https://", with: "").replacingOccurrences(of: "www.", with: "")) (here or on another device), enter this code and sign in with your Xbox account.",
+                                        big: dc.userCode,
+                                        opts: [.init(title: "Open the page", picked: true) {
+                                                   UIPasteboard.general.string = dc.userCode
+                                                   if let u = URL(string: dc.url) { UIApplication.shared.open(u) }
+                                                   // the dialog closes on a press: put it back while we wait
+                                                   DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { if waiting { xboxWaiting(dc) } }
+                                               },
+                                               .init(title: "Cancel") { waiting = false }])
+                let end = Date().addingTimeInterval(Double(dc.expiresIn))
+                while Date() < end {
+                    try await Task.sleep(nanoseconds: UInt64(max(2, dc.interval)) * 1_000_000_000)
+                    if !waiting && store.dialog == nil { return }
+                    if try await MCXbox.pollSignIn(dc) {
+                        waiting = false
+                        store.dialog = nil
+                        refreshXboxes(loud: true)
+                        return
+                    }
+                }
+            } catch {
+                store.busy = nil
+                store.dialog = MCDialog(title: "Xbox sign-in didn't finish", message: error.localizedDescription, opts: [.init(title: "OK") {}])
+            }
+        }
+    }
+
+    private func xboxWaiting(_ dc: MCXbox.DeviceCode) {
+        store.dialog = MCDialog(title: "Waiting for Microsoft…", message: "Enter the code on the page, then come back here. (It's copied.)",
+                                big: dc.userCode, opts: [.init(title: "Cancel", picked: true) {}])
+    }
+
+    private func refreshXboxes(loud: Bool) {
+        if loud { store.busy = "Finding your Xbox consoles…" }
+        Task { @MainActor in
+            let list = (try? await MCXbox.refreshConsoles()) ?? MCXbox.consoles
+            store.busy = nil
+            settingsRev += 1
+            if loud {
+                store.dialog = MCDialog(title: list.isEmpty ? "No Xbox found" : "Xbox ready",
+                                        message: list.isEmpty ? "This account has no console with remote features on. On the Xbox: Settings → Devices & connections → Remote features."
+                                                              : list.map(\.name).joined(separator: ", ") + " on Home now.",
+                                        opts: [.init(title: "OK") {}])
+            }
+        }
+    }
+
+    private func xboxMenu(_ c: MCXbox.Console) {
+        store.dialog = MCDialog(title: c.name, message: c.type, opts: [
+            .init(title: "Cancel", picked: true) {},
+            .init(title: "Play", sub: "Wakes it if it's sleeping") { store.onXboxStream?(c) },
+            .init(title: "Wake it up", sub: "Needs Sleep power mode on the Xbox") { Task { try? await MCXbox.wake(c.id) } },
+            .init(title: "Turn it off", danger: true) { Task { try? await MCXbox.turnOff(c.id) } },
+        ])
     }
 
     private func ps5Line(_ c: MCPs5Console) -> String {
@@ -722,7 +797,7 @@ struct MCRoot: View {
 
     private var groups: [(String, String)] {
         [("ipad", UIDevice.current.userInterfaceIdiom == .pad ? "iPad" : "iPhone"), ("picture", "Picture"), ("sound", "Sound"), ("pads", "Controllers"),
-         ("ps", "PlayStation"), ("theme", "Theme"), ("about", "About")]
+         ("ps", "PlayStation"), ("xbox", "Xbox"), ("theme", "Theme"), ("about", "About")]
     }
 
     private func settingsPage(_ m: MCMetrics, _ p: MCPalette) -> some View {
@@ -872,6 +947,27 @@ struct MCRoot: View {
                    awayRates.firstIndex(of: MCPs5Store.awayBitrate) ?? 0, m, p) { i in d.set(awayRates[i], forKey: "ps5_away_bitrate") }
             info("s:ps:btn", "PS button", "L2 + Start on pads without one", m, p)
             info("s:ps:touch", "Touchpad", "Select + Start", m, p)
+        case "xbox":
+            let d = UserDefaults.standard
+            if MCXbox.signedIn {
+                row("s:xb:acct", icon: "person.crop.circle", color: MCPalette.green, title: "Xbox network",
+                    sub: "Signed in" + (MCXbox.gamertag.map { " as \($0)" } ?? ""), right: "Sign out", m, p) {
+                    confirm("Sign out of Xbox?", "Your Xbox consoles leave this iPad until you sign in again.", yes: "Sign out") {
+                        MCXbox.signOut(); settingsRev += 1
+                    }
+                }
+            } else {
+                row("s:xb:acct", icon: "person.crop.circle", color: MCPalette.green, title: "Xbox network",
+                    sub: "Sign in once to play your Xbox here, at home or away", right: "Sign in", m, p) { xboxSignIn() }
+            }
+            let res = [0, 720, 1080, 1081]
+            choice("s:xb:res", "Picture", "The Xbox sets quality from this", ["Auto", "720p", "1080p", "1080p high"],
+                   res.firstIndex(of: MCXbox.resolution) ?? 0, m, p) { i in d.set(res[i], forKey: "xbox_resolution") }
+            let caps = [0, 5, 10, 15, 20, 30]
+            choice("s:xb:rate", "Bitrate", "Auto lets the Xbox decide. A cap keeps a weak Wi-Fi from stuttering", caps.map { $0 == 0 ? "Auto" : "\($0) Mbps" },
+                   caps.firstIndex(of: MCXbox.maxMbps) ?? 0, m, p) { i in d.set(caps[i], forKey: "xbox_bitrate") }
+            toggle("s:xb:swap", "Swap A and B", "For Nintendo-style layouts", MCXbox.swapAB, m, p) { d.set(!MCXbox.swapAB, forKey: "xbox_swap_ab") }
+            toggle("s:xb:coop", "Two players", "A second controller plays as player 2", MCXbox.coop, m, p) { d.set(!MCXbox.coop, forKey: "xbox_coop") }
         case "theme":
             choice("s:theme", "Theme", "Dark is charcoal with white type; Light is the reverse", ["Dark", "Light"],
                    theme == "light" ? 1 : 0, m, p) { i in theme = i == 1 ? "light" : "dark" }

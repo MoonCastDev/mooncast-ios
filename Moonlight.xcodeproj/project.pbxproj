@@ -150,6 +150,10 @@
 		04B39A552A8E9EB23855BC8D /* MCPadTest.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7F40DE1E75BC32CDD569D5E /* MCPadTest.swift */; };
 		A0E4173BB0A836D8D394A952 /* MCPsn.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6DE919C6775F47ECA04365B /* MCPsn.swift */; };
 		77493D932A9386F29EB5437D /* cacert.pem in Resources */ = {isa = PBXBuildFile; fileRef = C006F35D7DB1B1DB5C5B6475 /* cacert.pem */; };
+		28A3CE35181FF671F40252BC /* MCXbox.swift in Sources */ = {isa = PBXBuildFile; fileRef = 014BF2FDB8E42F297D71F8FE /* MCXbox.swift */; };
+		9B2D7B96FFF6D0BC75450DD8 /* MCXboxRtc.swift in Sources */ = {isa = PBXBuildFile; fileRef = 64A55B101505CFC0701F88D9 /* MCXboxRtc.swift */; };
+		2A434AF3E76DEA6646D4817D /* MCXboxStream.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97F44F00C12D794774E377EA /* MCXboxStream.swift */; };
+		B0CBBD6C805E5E5A6C67CEB1 /* WebRTC in Frameworks */ = {isa = PBXBuildFile; productRef = 5184E03983AD4884D4905CFA /* WebRTC */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -350,6 +354,9 @@
 		E7F40DE1E75BC32CDD569D5E /* MCPadTest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCPadTest.swift; sourceTree = "<group>"; };
 		A6DE919C6775F47ECA04365B /* MCPsn.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCPsn.swift; sourceTree = "<group>"; };
 		C006F35D7DB1B1DB5C5B6475 /* cacert.pem */ = {isa = PBXFileReference; lastKnownFileType = text; path = cacert.pem; sourceTree = "<group>"; };
+		014BF2FDB8E42F297D71F8FE /* MCXbox.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCXbox.swift; sourceTree = "<group>"; };
+		64A55B101505CFC0701F88D9 /* MCXboxRtc.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCXboxRtc.swift; sourceTree = "<group>"; };
+		97F44F00C12D794774E377EA /* MCXboxStream.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCXboxStream.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -383,6 +390,7 @@
 				FB290CF819B2C406004C83CF /* CoreData.framework in Frameworks */,
 				98181BED2791281100E43572 /* CoreMotion.framework in Frameworks */,
 				F74BEF9C2C1A705600224667 /* OpenSSL in Frameworks */,
+				B0CBBD6C805E5E5A6C67CEB1 /* WebRTC in Frameworks */,
 				98882A072AF60F7200C5A11C /* libavformat.a in Frameworks */,
 				FB290CF619B2C406004C83CF /* UIKit.framework in Frameworks */,
 				FB290CF219B2C406004C83CF /* Foundation.framework in Frameworks */,
@@ -719,6 +727,9 @@
 		5E34F220FEBEF6D9522FF9ED /* MoonCast */ = {
 			isa = PBXGroup;
 			children = (
+				97F44F00C12D794774E377EA /* MCXboxStream.swift */,
+				64A55B101505CFC0701F88D9 /* MCXboxRtc.swift */,
+				014BF2FDB8E42F297D71F8FE /* MCXbox.swift */,
 				C006F35D7DB1B1DB5C5B6475 /* cacert.pem */,
 				A6DE919C6775F47ECA04365B /* MCPsn.swift */,
 				E7F40DE1E75BC32CDD569D5E /* MCPadTest.swift */,
@@ -779,6 +790,7 @@
 			name = Moonlight;
 			packageProductDependencies = (
 				F74BEF9B2C1A705600224667 /* OpenSSL */,
+				5184E03983AD4884D4905CFA /* WebRTC */,
 			);
 			productName = Limelight;
 			productReference = FB290CEE19B2C406004C83CF /* Moonlight.app */;
@@ -821,6 +833,7 @@
 			mainGroup = FB290CE519B2C406004C83CF;
 			packageReferences = (
 				F74BEF9A2C1A705600224667 /* XCRemoteSwiftPackageReference "OpenSSL-Package" */,
+				6440DADD41D88467AC3DFD9F /* XCRemoteSwiftPackageReference "WebRTC" */,
 			);
 			productRefGroup = FB290CEF19B2C406004C83CF /* Products */;
 			projectDirPath = "";
@@ -940,6 +953,9 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				2A434AF3E76DEA6646D4817D /* MCXboxStream.swift in Sources */,
+				9B2D7B96FFF6D0BC75450DD8 /* MCXboxRtc.swift in Sources */,
+				28A3CE35181FF671F40252BC /* MCXbox.swift in Sources */,
 				A0E4173BB0A836D8D394A952 /* MCPsn.swift in Sources */,
 				04B39A552A8E9EB23855BC8D /* MCPadTest.swift in Sources */,
 				6F8C454A346C790A2572F1DC /* MCFeel.swift in Sources */,
@@ -1424,6 +1440,14 @@
 				minimumVersion = 3.1.5004;
 			};
 		};
+		6440DADD41D88467AC3DFD9F /* XCRemoteSwiftPackageReference "WebRTC" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/stasel/WebRTC.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 155.0.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -1436,6 +1460,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = F74BEF9A2C1A705600224667 /* XCRemoteSwiftPackageReference "OpenSSL-Package" */;
 			productName = OpenSSL;
+		};
+		5184E03983AD4884D4905CFA /* WebRTC */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 6440DADD41D88467AC3DFD9F /* XCRemoteSwiftPackageReference "WebRTC" */;
+			productName = WebRTC;
 		};
 /* End XCSwiftPackageProductDependency section */
 

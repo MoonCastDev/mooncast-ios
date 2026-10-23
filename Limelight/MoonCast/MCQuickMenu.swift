@@ -123,6 +123,15 @@ struct MCQuickMenuView: View {
     private func items() -> [Item] {
         let a = model.actions
         let pads = GCController.controllers().count
+        if a.mcKind?() == "xbox" {
+            return [
+                Item(icon: "xbox.logo", label: "Xbox button", detail: "Opens the guide") { model.close(); a.mcPsButton?() },
+                Item(icon: "info.circle", label: "Streaming status", detail: a.mcStatsOn() ? "On" : "Off") { a.mcToggleStats(); model.rev += 1 },
+                Item(icon: "gamecontroller", label: "Controllers", detail: pads == 1 ? "1 connected" : "\(pads) connected") {},
+                Item(icon: "arrow.left", label: "Disconnect", detail: "The game keeps running") { model.close(); a.mcDisconnect() },
+                Item(icon: "power", label: "Turn off the Xbox", detail: "Ends the game", danger: true) { model.close(); a.mcRestMode?() },
+            ]
+        }
         if a.mcKind?() == "ps5" {
             return [
                 Item(icon: "info.circle", label: "Streaming status", detail: a.mcStatsOn() ? "On" : "Off") { a.mcToggleStats(); model.rev += 1 },
@@ -184,7 +193,7 @@ struct MCQuickMenuView: View {
     private func panel(_ m: MCMetrics, _ p: MCPalette) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             Text(model.actions.mcTitle()).mcFont(36, m, weight: .heavy).foregroundColor(p.ink).lineLimit(2)
-            Text((model.actions.mcKind?() == "ps5" ? "PlayStation 5 · " : "") + "Select + Start + LB + RB opens this menu").mcFont(24, m).foregroundColor(p.sub).lineLimit(2)
+            Text((model.actions.mcKind?() == "ps5" ? "PlayStation 5 · " : model.actions.mcKind?() == "xbox" ? "Xbox · " : "") + "Select + Start + LB + RB opens this menu").mcFont(24, m).foregroundColor(p.sub).lineLimit(2)
                 .padding(.top, m.px(8))
             HStack(spacing: m.px(8)) {
                 ForEach(model.stats.indices, id: \.self) { i in

@@ -48,6 +48,10 @@ final class MCHomeController: UIHostingController<MCRoot> {
         }
         rootView = root
         MCStore.shared.onStream = { [weak self] cfg in self?.stream(cfg) }
+        MCStore.shared.onXboxStream = { [weak self] c in
+            MCPad.shared.detach()
+            self?.navigationController?.pushViewController(MCXboxStreamController(console: c), animated: true)
+        }
         MCStore.shared.onPs5Stream = { [weak self] c in
             MCPad.shared.detach()
             self?.navigationController?.pushViewController(MCPs5StreamController(console: c), animated: true)

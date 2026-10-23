@@ -18,6 +18,7 @@ struct MCGame: Identifiable, Equatable {
     let host: TemporaryHost?
     let app: TemporaryApp?
     var ps: MCPs5Console? = nil
+    var xb: MCXbox.Console? = nil
     var id: String { key }
 
     static func == (a: MCGame, b: MCGame) -> Bool { a.key == b.key && a.title == b.title && a.running == b.running }
@@ -52,6 +53,8 @@ final class MCStore: NSObject, ObservableObject, DiscoveryCallback, PairCallback
     var onStream: ((StreamConfiguration) -> Void)?
     /// Set by the home's controller: starts the PS5 stream screen.
     var onPs5Stream: ((MCPs5Console) -> Void)?
+    /// Set by the home's controller: starts the Xbox stream screen.
+    var onXboxStream: ((MCXbox.Console) -> Void)?
     /// Each PS5's own answer to the Remote Play probe (on, rest mode, the game it runs), by address.
     @Published private(set) var ps5Status: [String: MCPs5Probe.Status] = [:]
     private var lastPs5Probe = Date.distantPast
@@ -143,6 +146,9 @@ final class MCStore: NSObject, ObservableObject, DiscoveryCallback, PairCallback
     /// Every game: every PC game that isn't hidden.
     func allGames() -> [MCGame] {
         var out: [MCGame] = []
+        for c in MCXbox.consoles {
+            out.append(MCGame(key: "xb:\(c.id)", title: c.name, src: "Xbox", seed: "xb", running: false, host: nil, app: nil, xb: c))
+        }
         for c in MCPs5Store.list() {
             // as on Android: the tile is named after the game the PS5 is running, and shows Running
             let st = ps5Status[c.host]
@@ -169,7 +175,7 @@ final class MCStore: NSObject, ObservableObject, DiscoveryCallback, PairCallback
         all.filter { $0.running }.forEach(add)
         recent.prefix(5).forEach(add)
         // consoles always keep their place on Home
-        all.filter { $0.ps != nil }.forEach(add)
+        all.filter { $0.ps != nil || $0.xb != nil }.forEach(add)
         let kept = ordered.count
         recent.forEach(add)
         all.sorted { $0.title.lowercased() < $1.title.lowercased() }.forEach(add)
@@ -189,6 +195,10 @@ final class MCStore: NSObject, ObservableObject, DiscoveryCallback, PairCallback
     func play(_ g: MCGame) {
         if let c = g.ps {
             onPs5Stream?(c)
+            return
+        }
+        if let c = g.xb {
+            onXboxStream?(c)
             return
         }
         guard let h = g.host, let a = g.app else { return }
