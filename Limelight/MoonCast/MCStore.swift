@@ -89,6 +89,14 @@ final class MCStore: NSObject, ObservableObject, DiscoveryCallback, PairCallback
         for kv in (ProcessInfo.processInfo.environment["MC_SET"] ?? "").split(separator: ";") {
             let p = kv.split(separator: "=", maxSplits: 1).map(String.init)
             guard p.count == 2 else { continue }
+            // Moonlight's own store: ml_fps=120, ml_res=1920x1080, ml_stats=true
+            if p[0] == "ml_fps", let f = Int(p[1]) { MCSettings().save { $0.framerate = f; $0.bitrate = MCRoot.defaultBitrate($0.width, $0.height, f) }; continue }
+            if p[0] == "ml_res" {
+                let wh = p[1].split(separator: "x").compactMap { Int($0) }
+                if wh.count == 2 { MCSettings().save { $0.width = wh[0]; $0.height = wh[1]; $0.bitrate = MCRoot.defaultBitrate(wh[0], wh[1], $0.framerate) } }
+                continue
+            }
+            if p[0] == "ml_stats" { MCSettings().save { $0.stats = p[1] == "true" }; continue }
             if let i = Int(p[1]) { UserDefaults.standard.set(i, forKey: p[0]) }
             else if p[1] == "true" || p[1] == "false" { UserDefaults.standard.set(p[1] == "true", forKey: p[0]) }
             else { UserDefaults.standard.set(p[1], forKey: p[0]) }
