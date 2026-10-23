@@ -77,8 +77,8 @@ final class MCSettings {
     }
 }
 
-/// Settings → Picture → Picture shape (the handheld's ShapeBox): Fit keeps the whole picture with bars, Zoom goes
-/// halfway to Fill (half the bars, a little cropped at the sides), Fill crops it to fill the screen, Stretch fills the
+/// Settings → Picture → Picture shape (the handheld's ShapeBox): Fit keeps the whole picture with bars, Zoom halves
+/// the bars and trims at most 1.5% from the sides (the rest as a slight stretch), Fill crops it to fill the screen, Stretch fills the
 /// screen and changes the picture's shape. Used by the PC, PS5 and Xbox players.
 @objc(MCPictureShape)
 final class MCPictureShape: NSObject {
@@ -94,7 +94,12 @@ final class MCPictureShape: NSObject {
         switch current {
         case "stretch": return area
         case "fill": return fill
-        case "zoom": return CGSize(width: (fit.width + fill.width) / 2, height: (fit.height + fill.height) / 2)
+        case "zoom":
+            // half the bars, but at most 1.5% cut from each side: consoles put their clock and HUD near the edge.
+            // What's left of the halfway zoom is taken as a slight stretch (about 8% on an iPad with a 16:9 picture).
+            let mid = CGSize(width: (fit.width + fill.width) / 2, height: (fit.height + fill.height) / 2)
+            return wide ? CGSize(width: mid.width, height: min(mid.height, area.height / 0.97))
+                        : CGSize(width: min(mid.width, area.width / 0.97), height: mid.height)
         default: return fit
         }
     }
