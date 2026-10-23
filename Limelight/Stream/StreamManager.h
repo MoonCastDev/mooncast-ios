@@ -17,4 +17,7 @@
 
 - (NSString*) getStatsOverlayText;
 
+// MoonCast Quick menu: fps, rttMs, lossPct, codec (empty before the first frames)
+- (NSDictionary*) mcStats;
+
 @end

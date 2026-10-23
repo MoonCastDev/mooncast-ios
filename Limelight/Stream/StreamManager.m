@@ -147,6 +147,23 @@
     return TRUE;
 }
 
+- (NSDictionary*) mcStats {
+    video_stats_t stats;
+    if (!_connection || ![_connection getVideoStats:&stats]) {
+        return @{};
+    }
+    float interval = stats.endTime - stats.startTime;
+    if (interval <= 0) {
+        return @{};
+    }
+    uint32_t rtt = 0, variance = 0;
+    BOOL haveRtt = LiGetEstimatedRttInfo(&rtt, &variance);
+    return @{ @"fps": @(stats.totalFrames / interval),
+              @"rtt": haveRtt ? @(rtt) : @(-1),
+              @"loss": @(stats.totalFrames > 0 ? 100.0f * stats.networkDroppedFrames / stats.totalFrames : 0),
+              @"codec": [_connection getActiveCodecName] ?: @"" };
+}
+
 - (NSString*) getStatsOverlayText {
     video_stats_t stats;
     

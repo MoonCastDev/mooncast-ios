@@ -9,6 +9,7 @@
 #import "Connection.h"
 #import "StreamConfiguration.h"
 #import "StreamView.h"
+#import "MCBridge.h"
 
 #import <UIKit/UIKit.h>
 
@@ -17,7 +18,7 @@
 
 @interface StreamFrameViewController : GCEventViewController <ConnectionCallbacks, ControllerSupportDelegate, UserInteractionDelegate, UIScrollViewDelegate>
 #else
-@interface StreamFrameViewController : UIViewController <ConnectionCallbacks, ControllerSupportDelegate, UserInteractionDelegate, UIScrollViewDelegate>
+@interface StreamFrameViewController : UIViewController <ConnectionCallbacks, ControllerSupportDelegate, UserInteractionDelegate, UIScrollViewDelegate, MCQuickActions>
 #endif
 @property (nonatomic) StreamConfiguration* streamConfig;
 

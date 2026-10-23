@@ -136,6 +136,29 @@
 		FBD349621A0089F6002D2A60 /* DataManager.m in Sources */ = {isa = PBXBuildFile; fileRef = FBD349611A0089F6002D2A60 /* DataManager.m */; };
 		FBDE86E019F7A837001C18A8 /* UIComputerView.m in Sources */ = {isa = PBXBuildFile; fileRef = FBDE86DF19F7A837001C18A8 /* UIComputerView.m */; };
 		FBDE86E619F82297001C18A8 /* UIAppView.m in Sources */ = {isa = PBXBuildFile; fileRef = FBDE86E519F82297001C18A8 /* UIAppView.m */; };
+		076CF9B2CB2707A0DAB6C0B2 /* MCBridge.m in Sources */ = {isa = PBXBuildFile; fileRef = 9B2FA25D79B7D8917F22935B /* MCBridge.m */; };
+		13E705C48ED30EDB2CE108A2 /* MCTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06B5484C54BA4A9F57C30E27 /* MCTheme.swift */; };
+		421AB7DB91BAA8CD389F1822 /* MCFocus.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57EC89D35CCB441DEB7AB98B /* MCFocus.swift */; };
+		F73F113939F6ABBC1668E2E7 /* MCStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 28033385C565F89A23E36D2A /* MCStore.swift */; };
+		224B02B6AEAA6F3CABC2DF69 /* MCSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9192AAC9AD3C9BA70CDCFD51 /* MCSettings.swift */; };
+		94DDCAD01A2BE13A9C98D249 /* MCHomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77438C5E5B5F35CC0257CFE0 /* MCHomeView.swift */; };
+		BF51F93CA32CDAAB1DC41167 /* MCHomeController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 56B247B5645B17A2E36734ED /* MCHomeController.swift */; };
+		0108EDC4BA9A23E2C3FC93C0 /* MCQuickMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4774BAE4CE059F7BAA4BB2E /* MCQuickMenu.swift */; };
+		7C2CF29AB6580E4818130BFF /* MCPs5Session.m in Sources */ = {isa = PBXBuildFile; fileRef = 8B462D25E7FBB371CB431028 /* MCPs5Session.m */; };
+		8DCB9B24D5B2D4F205B4525C /* MCPs5.swift in Sources */ = {isa = PBXBuildFile; fileRef = 15C949123DBA4635E482F514 /* MCPs5.swift */; };
+		6F8C454A346C790A2572F1DC /* MCFeel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E45621189C52F81F9801A65B /* MCFeel.swift */; };
+		04B39A552A8E9EB23855BC8D /* MCPadTest.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7F40DE1E75BC32CDD569D5E /* MCPadTest.swift */; };
+		A0E4173BB0A836D8D394A952 /* MCPsn.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6DE919C6775F47ECA04365B /* MCPsn.swift */; };
+		77493D932A9386F29EB5437D /* cacert.pem in Resources */ = {isa = PBXBuildFile; fileRef = C006F35D7DB1B1DB5C5B6475 /* cacert.pem */; };
+		28A3CE35181FF671F40252BC /* MCXbox.swift in Sources */ = {isa = PBXBuildFile; fileRef = 014BF2FDB8E42F297D71F8FE /* MCXbox.swift */; };
+		9B2D7B96FFF6D0BC75450DD8 /* MCXboxRtc.swift in Sources */ = {isa = PBXBuildFile; fileRef = 64A55B101505CFC0701F88D9 /* MCXboxRtc.swift */; };
+		2A434AF3E76DEA6646D4817D /* MCXboxStream.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97F44F00C12D794774E377EA /* MCXboxStream.swift */; };
+		B0CBBD6C805E5E5A6C67CEB1 /* WebRTC in Frameworks */ = {isa = PBXBuildFile; productRef = 5184E03983AD4884D4905CFA /* WebRTC */; };
+		2997CBA6344A8BD2050AC4CF /* MCTv.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD5C666DAE3D3251F12AD3F3 /* MCTv.swift */; };
+		A925F786709C42C6EE93BA02 /* MCTvController.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE6AB40699F67EF014C813A6 /* MCTvController.swift */; };
+		B0A9B481E9A94F2C45B81940 /* MCFsr.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87EA2207EA4DFBEE34489F86 /* MCFsr.swift */; };
+		718BB6E7E9DB524121A6CABF /* MCFsrRtc.swift in Sources */ = {isa = PBXBuildFile; fileRef = E768DDE95ABD7645347E8360 /* MCFsrRtc.swift */; };
+		374407372704EED2DE0E5B99 /* MCRumble.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FFE0B49EF2808E127B00C2E /* MCRumble.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -320,6 +343,30 @@
 		FBDE86DF19F7A837001C18A8 /* UIComputerView.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = UIComputerView.m; sourceTree = "<group>"; };
 		FBDE86E419F82297001C18A8 /* UIAppView.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = UIAppView.h; sourceTree = "<group>"; };
 		FBDE86E519F82297001C18A8 /* UIAppView.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = UIAppView.m; sourceTree = "<group>"; };
+		DC760B029113ED63E4C78FAF /* MCBridge.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = MCBridge.h; sourceTree = "<group>"; };
+		9B2FA25D79B7D8917F22935B /* MCBridge.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = MCBridge.m; sourceTree = "<group>"; };
+		06B5484C54BA4A9F57C30E27 /* MCTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCTheme.swift; sourceTree = "<group>"; };
+		57EC89D35CCB441DEB7AB98B /* MCFocus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCFocus.swift; sourceTree = "<group>"; };
+		28033385C565F89A23E36D2A /* MCStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCStore.swift; sourceTree = "<group>"; };
+		9192AAC9AD3C9BA70CDCFD51 /* MCSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCSettings.swift; sourceTree = "<group>"; };
+		77438C5E5B5F35CC0257CFE0 /* MCHomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCHomeView.swift; sourceTree = "<group>"; };
+		56B247B5645B17A2E36734ED /* MCHomeController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCHomeController.swift; sourceTree = "<group>"; };
+		D4774BAE4CE059F7BAA4BB2E /* MCQuickMenu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCQuickMenu.swift; sourceTree = "<group>"; };
+		4348EB46A5E39557B8E2B52C /* MCPs5Session.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = MCPs5Session.h; sourceTree = "<group>"; };
+		8B462D25E7FBB371CB431028 /* MCPs5Session.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = MCPs5Session.m; sourceTree = "<group>"; };
+		15C949123DBA4635E482F514 /* MCPs5.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCPs5.swift; sourceTree = "<group>"; };
+		E45621189C52F81F9801A65B /* MCFeel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCFeel.swift; sourceTree = "<group>"; };
+		E7F40DE1E75BC32CDD569D5E /* MCPadTest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCPadTest.swift; sourceTree = "<group>"; };
+		A6DE919C6775F47ECA04365B /* MCPsn.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCPsn.swift; sourceTree = "<group>"; };
+		C006F35D7DB1B1DB5C5B6475 /* cacert.pem */ = {isa = PBXFileReference; lastKnownFileType = text; path = cacert.pem; sourceTree = "<group>"; };
+		014BF2FDB8E42F297D71F8FE /* MCXbox.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCXbox.swift; sourceTree = "<group>"; };
+		64A55B101505CFC0701F88D9 /* MCXboxRtc.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCXboxRtc.swift; sourceTree = "<group>"; };
+		97F44F00C12D794774E377EA /* MCXboxStream.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCXboxStream.swift; sourceTree = "<group>"; };
+		FD5C666DAE3D3251F12AD3F3 /* MCTv.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCTv.swift; sourceTree = "<group>"; };
+		AE6AB40699F67EF014C813A6 /* MCTvController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCTvController.swift; sourceTree = "<group>"; };
+		87EA2207EA4DFBEE34489F86 /* MCFsr.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCFsr.swift; sourceTree = "<group>"; };
+		E768DDE95ABD7645347E8360 /* MCFsrRtc.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCFsrRtc.swift; sourceTree = "<group>"; };
+		4FFE0B49EF2808E127B00C2E /* MCRumble.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCRumble.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -353,6 +400,7 @@
 				FB290CF819B2C406004C83CF /* CoreData.framework in Frameworks */,
 				98181BED2791281100E43572 /* CoreMotion.framework in Frameworks */,
 				F74BEF9C2C1A705600224667 /* OpenSSL in Frameworks */,
+				B0CBBD6C805E5E5A6C67CEB1 /* WebRTC in Frameworks */,
 				98882A072AF60F7200C5A11C /* libavformat.a in Frameworks */,
 				FB290CF619B2C406004C83CF /* UIKit.framework in Frameworks */,
 				FB290CF219B2C406004C83CF /* Foundation.framework in Frameworks */,
@@ -456,6 +504,7 @@
 				FB290CFA19B2C406004C83CF /* Supporting Files */,
 				FB290D0219B2C406004C83CF /* AppDelegate.h */,
 				FB290D0319B2C406004C83CF /* AppDelegate.m */,
+				5E34F220FEBEF6D9522FF9ED /* MoonCast */,
 				FBDE86DE19F7A837001C18A8 /* UIComputerView.h */,
 				FBDE86DF19F7A837001C18A8 /* UIComputerView.m */,
 				FBDE86E419F82297001C18A8 /* UIAppView.h */,
@@ -685,6 +734,37 @@
 			name = Database;
 			sourceTree = "<group>";
 		};
+		5E34F220FEBEF6D9522FF9ED /* MoonCast */ = {
+			isa = PBXGroup;
+			children = (
+				4FFE0B49EF2808E127B00C2E /* MCRumble.swift */,
+				E768DDE95ABD7645347E8360 /* MCFsrRtc.swift */,
+				87EA2207EA4DFBEE34489F86 /* MCFsr.swift */,
+				AE6AB40699F67EF014C813A6 /* MCTvController.swift */,
+				FD5C666DAE3D3251F12AD3F3 /* MCTv.swift */,
+				97F44F00C12D794774E377EA /* MCXboxStream.swift */,
+				64A55B101505CFC0701F88D9 /* MCXboxRtc.swift */,
+				014BF2FDB8E42F297D71F8FE /* MCXbox.swift */,
+				C006F35D7DB1B1DB5C5B6475 /* cacert.pem */,
+				A6DE919C6775F47ECA04365B /* MCPsn.swift */,
+				E7F40DE1E75BC32CDD569D5E /* MCPadTest.swift */,
+				E45621189C52F81F9801A65B /* MCFeel.swift */,
+				15C949123DBA4635E482F514 /* MCPs5.swift */,
+				8B462D25E7FBB371CB431028 /* MCPs5Session.m */,
+				4348EB46A5E39557B8E2B52C /* MCPs5Session.h */,
+				D4774BAE4CE059F7BAA4BB2E /* MCQuickMenu.swift */,
+				DC760B029113ED63E4C78FAF /* MCBridge.h */,
+				9B2FA25D79B7D8917F22935B /* MCBridge.m */,
+				06B5484C54BA4A9F57C30E27 /* MCTheme.swift */,
+				57EC89D35CCB441DEB7AB98B /* MCFocus.swift */,
+				28033385C565F89A23E36D2A /* MCStore.swift */,
+				9192AAC9AD3C9BA70CDCFD51 /* MCSettings.swift */,
+				77438C5E5B5F35CC0257CFE0 /* MCHomeView.swift */,
+				56B247B5645B17A2E36734ED /* MCHomeController.swift */,
+			);
+			path = MoonCast;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -725,6 +805,7 @@
 			name = Moonlight;
 			packageProductDependencies = (
 				F74BEF9B2C1A705600224667 /* OpenSSL */,
+				5184E03983AD4884D4905CFA /* WebRTC */,
 			);
 			productName = Limelight;
 			productReference = FB290CEE19B2C406004C83CF /* Moonlight.app */;
@@ -767,6 +848,7 @@
 			mainGroup = FB290CE519B2C406004C83CF;
 			packageReferences = (
 				F74BEF9A2C1A705600224667 /* XCRemoteSwiftPackageReference "OpenSSL-Package" */,
+				6440DADD41D88467AC3DFD9F /* XCRemoteSwiftPackageReference "WebRTC" */,
 			);
 			productRefGroup = FB290CEF19B2C406004C83CF /* Products */;
 			projectDirPath = "";
@@ -817,6 +899,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				77493D932A9386F29EB5437D /* cacert.pem in Resources */,
 				FB290E7919B37D81004C83CF /* iPad.storyboard in Resources */,
 				FB290CFE19B2C406004C83CF /* InfoPlist.strings in Resources */,
 				FB290E7B19B38036004C83CF /* iPhone.storyboard in Resources */,
@@ -885,6 +968,27 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				374407372704EED2DE0E5B99 /* MCRumble.swift in Sources */,
+				718BB6E7E9DB524121A6CABF /* MCFsrRtc.swift in Sources */,
+				B0A9B481E9A94F2C45B81940 /* MCFsr.swift in Sources */,
+				A925F786709C42C6EE93BA02 /* MCTvController.swift in Sources */,
+				2997CBA6344A8BD2050AC4CF /* MCTv.swift in Sources */,
+				2A434AF3E76DEA6646D4817D /* MCXboxStream.swift in Sources */,
+				9B2D7B96FFF6D0BC75450DD8 /* MCXboxRtc.swift in Sources */,
+				28A3CE35181FF671F40252BC /* MCXbox.swift in Sources */,
+				A0E4173BB0A836D8D394A952 /* MCPsn.swift in Sources */,
+				04B39A552A8E9EB23855BC8D /* MCPadTest.swift in Sources */,
+				6F8C454A346C790A2572F1DC /* MCFeel.swift in Sources */,
+				8DCB9B24D5B2D4F205B4525C /* MCPs5.swift in Sources */,
+				7C2CF29AB6580E4818130BFF /* MCPs5Session.m in Sources */,
+				0108EDC4BA9A23E2C3FC93C0 /* MCQuickMenu.swift in Sources */,
+				076CF9B2CB2707A0DAB6C0B2 /* MCBridge.m in Sources */,
+				13E705C48ED30EDB2CE108A2 /* MCTheme.swift in Sources */,
+				421AB7DB91BAA8CD389F1822 /* MCFocus.swift in Sources */,
+				F73F113939F6ABBC1668E2E7 /* MCStore.swift in Sources */,
+				224B02B6AEAA6F3CABC2DF69 /* MCSettings.swift in Sources */,
+				94DDCAD01A2BE13A9C98D249 /* MCHomeView.swift in Sources */,
+				BF51F93CA32CDAAB1DC41167 /* MCHomeController.swift in Sources */,
 				FB290D0719B2C406004C83CF /* Limelight.xcdatamodeld in Sources */,
 				9819CC22254F180F008A7C8E /* AbsoluteTouchHandler.m in Sources */,
 				9819CC14254F107A008A7C8E /* RelativeTouchHandler.m in Sources */,
@@ -1015,7 +1119,7 @@
 				);
 				MARKETING_VERSION = 9.0.2;
 				MTL_ENABLE_DEBUG_INFO = YES;
-				PRODUCT_BUNDLE_IDENTIFIER = "com.moonlight-stream.Moonlight";
+				PRODUCT_BUNDLE_IDENTIFIER = me.mooncast.appletv;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = appletvos;
 				SWIFT_OBJC_BRIDGING_HEADER = "Limelight/Input/Moonlight-Bridging-Header.h";
@@ -1071,7 +1175,7 @@
 				);
 				MARKETING_VERSION = 9.0.2;
 				MTL_ENABLE_DEBUG_INFO = NO;
-				PRODUCT_BUNDLE_IDENTIFIER = "com.moonlight-stream.Moonlight";
+				PRODUCT_BUNDLE_IDENTIFIER = me.mooncast.appletv;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = appletvos;
 				SWIFT_COMPILATION_MODE = wholemodule;
@@ -1113,7 +1217,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
-				DEVELOPMENT_TEAM = DM46QST4M7;
+				DEVELOPMENT_TEAM = V257624DPQ;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
@@ -1172,7 +1276,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = YES;
-				DEVELOPMENT_TEAM = DM46QST4M7;
+				DEVELOPMENT_TEAM = V257624DPQ;
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
@@ -1202,6 +1306,12 @@
 		FB290D2119B2C406004C83CF /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-lchiaki-all",
+					"-lz",
+				);
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
@@ -1215,6 +1325,7 @@
 					"$(PROJECT_DIR)/moonlight-common/moonlight-common-c/src",
 					"$(SDKROOT)/usr/include/libxml2/**",
 					"$(PROJECT_DIR)/libs/**",
+					"$(PROJECT_DIR)/chiaki/include",
 				);
 				INFOPLIST_FILE = "Limelight/Limelight-Info.plist";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.games";
@@ -1228,6 +1339,7 @@
 					"$(PROJECT_DIR)/libs/opus/lib/iOS",
 					"$(PROJECT_DIR)/libs/SDL2/lib/iOS",
 					"$(PROJECT_DIR)/libs/FFmpeg/lib/iOS",
+					"$(PROJECT_DIR)/chiaki/lib/iOS",
 				);
 				"LIBRARY_SEARCH_PATHS[sdk=iphonesimulator*]" = (
 					"$(inherited)",
@@ -1236,7 +1348,7 @@
 					"$(PROJECT_DIR)/libs/FFmpeg/lib/iOS-Sim",
 				);
 				MARKETING_VERSION = 9.0.2;
-				PRODUCT_BUNDLE_IDENTIFIER = "com.moonlight-stream.Moonlight";
+				PRODUCT_BUNDLE_IDENTIFIER = me.mooncast.ios;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE = "";
 				SKIP_INSTALL = NO;
@@ -1252,6 +1364,11 @@
 		FB290D2219B2C406004C83CF /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-lchiaki-all",
+					"-lz",
+				);
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
@@ -1265,6 +1382,7 @@
 					"$(PROJECT_DIR)/moonlight-common/moonlight-common-c/src",
 					"$(SDKROOT)/usr/include/libxml2/**",
 					"$(PROJECT_DIR)/libs/**",
+					"$(PROJECT_DIR)/chiaki/include",
 				);
 				INFOPLIST_FILE = "Limelight/Limelight-Info.plist";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.games";
@@ -1278,6 +1396,7 @@
 					"$(PROJECT_DIR)/libs/opus/lib/iOS",
 					"$(PROJECT_DIR)/libs/SDL2/lib/iOS",
 					"$(PROJECT_DIR)/libs/FFmpeg/lib/iOS",
+					"$(PROJECT_DIR)/chiaki/lib/iOS",
 				);
 				"LIBRARY_SEARCH_PATHS[sdk=iphonesimulator*]" = (
 					"$(inherited)",
@@ -1286,7 +1405,7 @@
 					"$(PROJECT_DIR)/libs/FFmpeg/lib/iOS-Sim",
 				);
 				MARKETING_VERSION = 9.0.2;
-				PRODUCT_BUNDLE_IDENTIFIER = "com.moonlight-stream.Moonlight";
+				PRODUCT_BUNDLE_IDENTIFIER = me.mooncast.ios;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE = "";
 				SKIP_INSTALL = NO;
@@ -1341,6 +1460,14 @@
 				minimumVersion = 3.1.5004;
 			};
 		};
+		6440DADD41D88467AC3DFD9F /* XCRemoteSwiftPackageReference "WebRTC" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/stasel/WebRTC.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 155.0.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -1353,6 +1480,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = F74BEF9A2C1A705600224667 /* XCRemoteSwiftPackageReference "OpenSSL-Package" */;
 			productName = OpenSSL;
+		};
+		5184E03983AD4884D4905CFA /* WebRTC */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 6440DADD41D88467AC3DFD9F /* XCRemoteSwiftPackageReference "WebRTC" */;
+			productName = WebRTC;
 		};
 /* End XCSwiftPackageProductDependency section */
 

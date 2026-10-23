@@ -321,8 +321,31 @@ static const double MOUSE_SPEED_DIVISOR = 1.25;
     return (_multiController ? _controllerNumbers : 1) | (_oscEnabled ? 1 : 0);
 }
 
+static BOOL mcPaused = NO;
+
+-(void) mcSetPaused:(BOOL)paused
+{
+    mcPaused = paused;
+    [_controllerStreamLock lock];
+    for (Controller* controller in [_controllers allValues]) {
+        @synchronized(controller) {
+            // the menu combo (or A that closed it) must not reach the game held down
+            controller.lastButtonFlags = 0;
+            controller.lastLeftTrigger = 0;
+            controller.lastRightTrigger = 0;
+            controller.lastLeftStickX = controller.lastLeftStickY = 0;
+            controller.lastRightStickX = controller.lastRightStickY = 0;
+            LiSendMultiControllerEvent(_multiController ? controller.playerIndex : 0, [self getActiveGamepadMask], 0, 0, 0, 0, 0, 0, 0);
+        }
+    }
+    [_controllerStreamLock unlock];
+}
+
 -(void) updateFinished:(Controller*)controller
 {
+    if (mcPaused) {
+        return;
+    }
     BOOL exitRequested = NO;
     
     [_controllerStreamLock lock];
