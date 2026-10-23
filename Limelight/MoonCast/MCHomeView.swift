@@ -117,6 +117,7 @@ struct MCRoot: View {
         switch env["MC_ACTION"] ?? "" {
         case "network": DispatchQueue.main.asyncAfter(deadline: .now() + 3) { store.networkTest() }
         case "padtest": padTest = true
+        case "licence": licence = MCLicences.parts[0]
         case "playwhere": DispatchQueue.main.asyncAfter(deadline: .now() + 2) { playWhere() }
         default: break
         }
