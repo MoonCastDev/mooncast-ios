@@ -21,6 +21,6 @@ What the handheld app (MoonCastDev/moonlight-android, `app/src/handheld`) does, 
 | Settings | Picture: resolution (Native default), fps, bitrate, codec, HDR, frame pacing, stats | Done |
 | Settings | Sound, Controls (touch default, on-screen pad, players, swap, mouse), Theme, About | Done |
 | Settings | Screen size, rotate, menu sounds, controller test, deadzone, motion | Done except deadzone and motion (Moonlight iOS has neither yet) |
-| TV | Play on a MoonCast TV, handheld as the TV's controller | To do |
+| TV | Play on a MoonCast TV, handheld as the TV's controller | Built (untested); no identity transfer yet |
 | Other | Opt-in usage check-in (TelemetryDeck) | To do |
 | Other | Obtainium updates | Not possible on iPadOS (TestFlight instead) |

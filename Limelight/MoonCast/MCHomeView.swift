@@ -59,6 +59,15 @@ struct MCRoot: View {
                         .padding(.horizontal, m.px(m.edge))
                 }
                 if padTest { MCPadTestView(m: m, p: p) { padTest = false } }
+                if let s = store.tvSession {
+                    MCTvControllerView(s: s, m: m, p: p, playHere: {
+                        let g = s.game
+                        s.end(quit: false)
+                        store.tvSession = nil
+                        // a moment for the PC / PS5 / Xbox to let the TV's session go
+                        DispatchQueue.main.asyncAfter(deadline: .now() + (g.ps != nil ? 3 : 1)) { store.play(g, here: true) }
+                    }, close: { store.tvSession = nil })
+                }
                 if let d = store.dialog { dialogView(d, m, p) }
                 if let b = store.busy { busyView(b, m, p) }
             }
@@ -156,12 +165,14 @@ struct MCRoot: View {
                 Image("MoonCastLogo").resizable().scaledToFit().frame(width: m.px(84), height: m.px(84))
                 HStack(spacing: m.px(14)) {
                     RoundedRectangle(cornerRadius: m.px(5)).stroke(p.ink, lineWidth: m.px(3)).frame(width: m.px(32), height: m.px(22))
-                    Text("Playing on this \(UIDevice.current.userInterfaceIdiom == .pad ? "iPad" : "iPhone")")
-                        .mcFont(26, m).foregroundColor(p.ink)
+                    Text(MCTvFinder.target.map { "Playing on \($0.name)" + (MCTvFinder.isHere($0) ? "" : " (not found)") }
+                         ?? "Playing on this \(UIDevice.current.userInterfaceIdiom == .pad ? "iPad" : "iPhone")")
+                        .mcFont(26, m).foregroundColor(p.ink).lineLimit(1)
                 }
                 .padding(.horizontal, m.px(30))
                 .frame(height: m.px(84))
                 .background(Capsule().fill(p.panel))
+                .onTapGesture { playWhere() }
             } else {
                 Button { go(.home) } label: {
                     Image(systemName: "chevron.left").font(.system(size: m.px(36), weight: .bold)).foregroundColor(p.ink)
@@ -303,6 +314,7 @@ struct MCRoot: View {
     private func roundButtons(_ m: MCMetrics, _ p: MCPalette) -> some View {
         let items: [(String, String, Color, () -> Void)] = [
             ("Consoles", "square.stack.3d.up.fill", MCPalette.cyan, { go(.consoles) }),
+            ("Play on TV", "tv", MCPalette.amber, { playWhere() }),
             ("Controllers", "gamecontroller.fill", MCPalette.blue, { store.controllersDialog() }),
             ("Network", "wifi", MCPalette.green, { store.networkTest() }),
             ("Settings", "gearshape.fill", p.sub, { go(.settings) }),
@@ -581,6 +593,33 @@ struct MCRoot: View {
         var lines = [h.activeAddress.map { "Address: \($0)" }, h.externalAddress.map { "Away: \($0)" }].compactMap { $0 }
         if lines.count == 2 && h.externalAddress == h.activeAddress { lines.removeLast() }
         store.dialog = MCDialog(title: h.name, message: lines.isEmpty ? nil : lines.joined(separator: "\n"), opts: opts)
+    }
+
+    // MARK: Play on TV: where games go (this iPad or a MoonCast TV)
+
+    private func playWhere() {
+        store.busy = "Looking for MoonCast TVs on this Wi-Fi…"
+        Task { @MainActor in
+            let tvs = await MCTvFinder.sweep()
+            store.busy = nil
+            settingsRev += 1
+            let device = UIDevice.current.userInterfaceIdiom == .pad ? "iPad" : "iPhone"
+            let cur = MCTvFinder.target
+            var opts: [MCDialog.Opt] = [.init(title: "This \(device)", sub: "Games play here", picked: cur == nil) {
+                MCTvFinder.target = nil; settingsRev += 1
+            }]
+            for tv in tvs {
+                let here = MCTvFinder.isHere(tv)
+                opts.append(.init(title: tv.name + (cur?.id == tv.id ? "  ✓" : ""),
+                                  sub: here ? "On this Wi-Fi · this \(device) becomes its controller" : "Not on this network",
+                                  picked: cur?.id == tv.id) {
+                    MCTvFinder.target = tv; settingsRev += 1
+                })
+            }
+            store.dialog = MCDialog(title: "Where to play",
+                                    message: tvs.isEmpty ? "No MoonCast TV answered. Open MoonCast on the TV, on the same Wi-Fi as this \(device)." : nil,
+                                    opts: opts + [.init(title: "Cancel") {}])
+        }
     }
 
     // MARK: Xbox (Microsoft's device-code sign-in, as on the handheld)
@@ -878,6 +917,10 @@ struct MCRoot: View {
             toggle("s:rotate", "Screen turns with the device", "Off keeps it on its side", rotate, m, p) {
                 rotate.toggle()
                 MCLaunch.updateOrientation()
+            }
+            let dim = UserDefaults.standard.object(forKey: "hh_dim_on_tv") as? Bool ?? true
+            toggle("s:dim", "Dim the screen on a TV", "While this iPad is the controller for a TV", dim, m, p) {
+                UserDefaults.standard.set(!dim, forKey: "hh_dim_on_tv")
             }
             let touch = ["off", "mouse", "touch"]
             let curTouch = UserDefaults.standard.string(forKey: "mc_touch_default") ?? "off"

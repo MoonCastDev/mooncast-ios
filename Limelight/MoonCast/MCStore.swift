@@ -48,6 +48,8 @@ final class MCStore: NSObject, ObservableObject, DiscoveryCallback, PairCallback
     @Published private(set) var revision = 0
     @Published var dialog: MCDialog?
     @Published var busy: String?
+    /// A game playing on a MoonCast TV with this iPad as its controller.
+    @Published var tvSession: MCTvSession?
 
     /// Set by the home's controller: starts Moonlight's stream screen.
     var onStream: ((StreamConfiguration) -> Void)?
@@ -192,7 +194,12 @@ final class MCStore: NSObject, ObservableObject, DiscoveryCallback, PairCallback
 
     // MARK: playing
 
-    func play(_ g: MCGame) {
+    func play(_ g: MCGame, here: Bool = false) {
+        // Play on TV chosen: the game goes to that TV and this iPad becomes its controller
+        if !here, let tv = MCTvFinder.target {
+            tvSession = MCTvSession(tv: tv, game: g)
+            return
+        }
         if let c = g.ps {
             onPs5Stream?(c)
             return

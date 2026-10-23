@@ -154,6 +154,8 @@
 		9B2D7B96FFF6D0BC75450DD8 /* MCXboxRtc.swift in Sources */ = {isa = PBXBuildFile; fileRef = 64A55B101505CFC0701F88D9 /* MCXboxRtc.swift */; };
 		2A434AF3E76DEA6646D4817D /* MCXboxStream.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97F44F00C12D794774E377EA /* MCXboxStream.swift */; };
 		B0CBBD6C805E5E5A6C67CEB1 /* WebRTC in Frameworks */ = {isa = PBXBuildFile; productRef = 5184E03983AD4884D4905CFA /* WebRTC */; };
+		2997CBA6344A8BD2050AC4CF /* MCTv.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD5C666DAE3D3251F12AD3F3 /* MCTv.swift */; };
+		A925F786709C42C6EE93BA02 /* MCTvController.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE6AB40699F67EF014C813A6 /* MCTvController.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -357,6 +359,8 @@
 		014BF2FDB8E42F297D71F8FE /* MCXbox.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCXbox.swift; sourceTree = "<group>"; };
 		64A55B101505CFC0701F88D9 /* MCXboxRtc.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCXboxRtc.swift; sourceTree = "<group>"; };
 		97F44F00C12D794774E377EA /* MCXboxStream.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCXboxStream.swift; sourceTree = "<group>"; };
+		FD5C666DAE3D3251F12AD3F3 /* MCTv.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCTv.swift; sourceTree = "<group>"; };
+		AE6AB40699F67EF014C813A6 /* MCTvController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCTvController.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -727,6 +731,8 @@
 		5E34F220FEBEF6D9522FF9ED /* MoonCast */ = {
 			isa = PBXGroup;
 			children = (
+				AE6AB40699F67EF014C813A6 /* MCTvController.swift */,
+				FD5C666DAE3D3251F12AD3F3 /* MCTv.swift */,
 				97F44F00C12D794774E377EA /* MCXboxStream.swift */,
 				64A55B101505CFC0701F88D9 /* MCXboxRtc.swift */,
 				014BF2FDB8E42F297D71F8FE /* MCXbox.swift */,
@@ -953,6 +959,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A925F786709C42C6EE93BA02 /* MCTvController.swift in Sources */,
+				2997CBA6344A8BD2050AC4CF /* MCTv.swift in Sources */,
 				2A434AF3E76DEA6646D4817D /* MCXboxStream.swift in Sources */,
 				9B2D7B96FFF6D0BC75450DD8 /* MCXboxRtc.swift in Sources */,
 				28A3CE35181FF671F40252BC /* MCXbox.swift in Sources */,
