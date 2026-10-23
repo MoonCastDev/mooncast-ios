@@ -10,9 +10,26 @@ import SwiftUI
 final class MCLaunch: NSObject {
     /// The home in a navigation controller: Moonlight's stream screen pops back to it.
     @objc static func makeRoot() -> UIViewController {
-        let nav = UINavigationController(rootViewController: MCHomeController())
+        let nav = MCNav(rootViewController: MCHomeController())
         nav.setNavigationBarHidden(true, animated: false)
         return nav
+    }
+
+    /// Settings → Screen turns with the device changed: ask the window to apply it.
+    static func updateOrientation() {
+        guard let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+              let root = scene.windows.first?.rootViewController else { return }
+        root.setNeedsUpdateOfSupportedInterfaceOrientations()
+        if !(UserDefaults.standard.object(forKey: "hh_rotate") as? Bool ?? true) {
+            scene.requestGeometryUpdate(.iOS(interfaceOrientations: .landscape)) { _ in }
+        }
+    }
+}
+
+/// The app's navigation: follows Settings → Screen turns with the device (off = on its side only).
+final class MCNav: UINavigationController {
+    override var supportedInterfaceOrientations: UIInterfaceOrientationMask {
+        (UserDefaults.standard.object(forKey: "hh_rotate") as? Bool ?? true) ? .all : .landscape
     }
 }
 

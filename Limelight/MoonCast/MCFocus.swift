@@ -67,14 +67,15 @@ final class MCFocus: ObservableObject {
         switch b {
         case .up, .down, .left, .right:
             if id == nil || frames[id!] == nil || scopes[id!] != scope { settle(); return }
-            if let next = nearest(from: id!, b) { id = next } else { _ = pageButton?(b) }
+            if let next = nearest(from: id!, b) { id = next; MCFeel.play(.move) } else { _ = pageButton?(b) }
         case .a:
-            if let id = id, scopes[id] == scope { actions[id]?() } else { settle() }
+            if let id = id, scopes[id] == scope { MCFeel.play(.select); actions[id]?() } else { settle() }
         case .x:
             // the page's own use of X (A to Z in All games) comes first, then the focused item's menu
             if pageButton?(b) == true { return }
             if let id = id, scopes[id] == scope, let m = menus[id] { m() }
         default:
+            if b == .b && scope != "test" { MCFeel.play(.back) }
             _ = pageButton?(b)
         }
     }

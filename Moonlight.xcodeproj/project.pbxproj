@@ -146,6 +146,8 @@
 		0108EDC4BA9A23E2C3FC93C0 /* MCQuickMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4774BAE4CE059F7BAA4BB2E /* MCQuickMenu.swift */; };
 		7C2CF29AB6580E4818130BFF /* MCPs5Session.m in Sources */ = {isa = PBXBuildFile; fileRef = 8B462D25E7FBB371CB431028 /* MCPs5Session.m */; };
 		8DCB9B24D5B2D4F205B4525C /* MCPs5.swift in Sources */ = {isa = PBXBuildFile; fileRef = 15C949123DBA4635E482F514 /* MCPs5.swift */; };
+		6F8C454A346C790A2572F1DC /* MCFeel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E45621189C52F81F9801A65B /* MCFeel.swift */; };
+		04B39A552A8E9EB23855BC8D /* MCPadTest.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7F40DE1E75BC32CDD569D5E /* MCPadTest.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -342,6 +344,8 @@
 		4348EB46A5E39557B8E2B52C /* MCPs5Session.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = MCPs5Session.h; sourceTree = "<group>"; };
 		8B462D25E7FBB371CB431028 /* MCPs5Session.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = MCPs5Session.m; sourceTree = "<group>"; };
 		15C949123DBA4635E482F514 /* MCPs5.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCPs5.swift; sourceTree = "<group>"; };
+		E45621189C52F81F9801A65B /* MCFeel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCFeel.swift; sourceTree = "<group>"; };
+		E7F40DE1E75BC32CDD569D5E /* MCPadTest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCPadTest.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -711,6 +715,8 @@
 		5E34F220FEBEF6D9522FF9ED /* MoonCast */ = {
 			isa = PBXGroup;
 			children = (
+				E7F40DE1E75BC32CDD569D5E /* MCPadTest.swift */,
+				E45621189C52F81F9801A65B /* MCFeel.swift */,
 				15C949123DBA4635E482F514 /* MCPs5.swift */,
 				8B462D25E7FBB371CB431028 /* MCPs5Session.m */,
 				4348EB46A5E39557B8E2B52C /* MCPs5Session.h */,
@@ -927,6 +933,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				04B39A552A8E9EB23855BC8D /* MCPadTest.swift in Sources */,
+				6F8C454A346C790A2572F1DC /* MCFeel.swift in Sources */,
 				8DCB9B24D5B2D4F205B4525C /* MCPs5.swift in Sources */,
 				7C2CF29AB6580E4818130BFF /* MCPs5Session.m in Sources */,
 				0108EDC4BA9A23E2C3FC93C0 /* MCQuickMenu.swift in Sources */,

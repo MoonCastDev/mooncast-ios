@@ -16,12 +16,15 @@ struct MCRoot: View {
     @State private var page: MCPage = .home
     @State private var gamesTab = "all"
     @State private var sortAz = false
-    @State private var group = "picture"
+    @State private var group = "ipad"
     @State private var settingsRev = 0
     @State private var pickingArt: String?
     @State private var photo: PhotosPickerItem?
     @State private var artRev = 0
     @State private var enterTick = 0
+    @State private var padTest = false
+    @AppStorage("hh_screen_size") private var screenSize = "auto"
+    @AppStorage("hh_rotate") private var rotate = true
 
     private let settings = MCSettings()
     /// Set by the controller: asks for text (a PC's address) with the system's keyboard dialog.
@@ -29,7 +32,7 @@ struct MCRoot: View {
 
     var body: some View {
         GeometryReader { geo in
-            let m = MCMetrics(size: geo.size)
+            let m = MCMetrics(size: geo.size, scale: screenSize == "compact" ? 1.12 : screenSize == "large" ? 1.25 : 1)
             let p = MCPalette(light: theme == "light")
             let _ = store.revision + artRev + settingsRev
             ZStack {
@@ -53,6 +56,7 @@ struct MCRoot: View {
                         .frame(height: m.px(110))
                         .padding(.horizontal, m.px(m.edge))
                 }
+                if padTest { MCPadTestView(m: m, p: p) { padTest = false } }
                 if let d = store.dialog { dialogView(d, m, p) }
                 if let b = store.busy { busyView(b, m, p) }
             }
@@ -298,9 +302,10 @@ struct MCRoot: View {
         let items: [(String, String, Color, () -> Void)] = [
             ("Consoles", "square.stack.3d.up.fill", MCPalette.cyan, { go(.consoles) }),
             ("Controllers", "gamecontroller.fill", MCPalette.blue, { store.controllersDialog() }),
+            ("Network", "wifi", MCPalette.green, { store.networkTest() }),
             ("Settings", "gearshape.fill", p.sub, { go(.settings) }),
         ]
-        return HStack(alignment: .top, spacing: m.px(110)) {
+        return HStack(alignment: .top, spacing: m.px(m.portrait ? 60 : 96)) {
             ForEach(items, id: \.0) { label, icon, color, run in
                 VStack(spacing: m.px(18)) {
                     Image(systemName: icon).font(.system(size: m.px(50), weight: .semibold)).foregroundColor(color)
@@ -552,6 +557,9 @@ struct MCRoot: View {
             }
             opts.append(.init(title: "Refresh the games") { store.fetchApps(h, force: true) })
         }
+        opts.append(.init(title: "Away address", sub: h.externalAddress.map { "Now \($0)" } ?? "To reach it from another network or a VPN") {
+            askText("Away address for \(h.name)", "IP address or name, empty to clear") { store.setAwayAddress(h, $0) }
+        })
         let hidden = store.hidden(h)
         if !hidden.isEmpty {
             opts.append(.init(title: "Hidden games", sub: "\(hidden.count) hidden") { hiddenGames(h) })
@@ -592,8 +600,19 @@ struct MCRoot: View {
         Text(t.uppercased()).mcFont(24, m, weight: .heavy).foregroundColor(p.sub).padding(.top, m.px(18)).padding(.leading, m.px(8))
     }
 
-    private func row(_ id: String, icon: String, color: Color, title: String, sub: String?, right: String?, _ m: MCMetrics, _ p: MCPalette,
-                     action: @escaping () -> Void) -> some View {
+    /// An icon for each setting, as the handheld's rows have.
+    static let icons: [String: String] = [
+        "s:res": "rectangle.expand.vertical", "s:fps": "speedometer", "s:rate": "gauge.with.dots.needle.67percent", "s:codec": "film",
+        "s:hdr": "sun.max", "s:pacing": "metronome", "s:stats": "chart.bar", "s:opt": "wand.and.stars",
+        "s:spk": "speaker.wave.2", "s:pcaudio": "hifispeaker", "s:feel": "music.note",
+        "s:size": "textformat.size", "s:rotate": "rotate.right", "s:touch": "hand.point.up.left", "s:osc": "gamecontroller",
+        "s:multi": "person.2", "s:swap": "arrow.left.arrow.right", "s:mouse": "computermouse",
+        "s:ps:res": "rectangle.expand.vertical", "s:ps:fps": "speedometer", "s:ps:rate": "gauge.with.dots.needle.67percent",
+        "s:ps:codec": "film", "s:ps:disc": "moon.zzz", "s:ps:swap": "arrow.left.arrow.right", "s:theme": "paintpalette",
+    ]
+
+    private func row(_ id: String, icon: String, color: Color, title: String, sub: String?, right: String?, switchOn: Bool? = nil,
+                     _ m: MCMetrics, _ p: MCPalette, action: @escaping () -> Void) -> some View {
         HStack(spacing: m.px(26)) {
             Group {
                 if icon.count <= 2 && icon.uppercased() == icon {
@@ -610,6 +629,14 @@ struct MCRoot: View {
             }
             Spacer(minLength: m.px(20))
             if let right = right { Text(right).mcFont(26, m).foregroundColor(p.sub) }
+            if let on = switchOn {
+                // the handheld's switch: 96 x 52, cyan when on
+                ZStack(alignment: on ? .trailing : .leading) {
+                    Capsule().fill(on ? p.ring : p.line).frame(width: m.px(96), height: m.px(52))
+                    Circle().fill(Color.white).frame(width: m.px(40), height: m.px(40)).padding(.horizontal, m.px(6))
+                }
+                .animation(.easeOut(duration: 0.15), value: on)
+            }
         }
         .padding(.horizontal, m.px(28))
         .frame(minHeight: max(m.px(112), 56))
@@ -621,7 +648,8 @@ struct MCRoot: View {
     // MARK: Settings
 
     private var groups: [(String, String)] {
-        [("picture", "Picture"), ("sound", "Sound"), ("controls", "Controls"), ("ps", "PlayStation"), ("theme", "Theme"), ("about", "About")]
+        [("ipad", UIDevice.current.userInterfaceIdiom == .pad ? "iPad" : "iPhone"), ("picture", "Picture"), ("sound", "Sound"), ("pads", "Controllers"),
+         ("ps", "PlayStation"), ("theme", "Theme"), ("about", "About")]
     }
 
     private func settingsPage(_ m: MCMetrics, _ p: MCPalette) -> some View {
@@ -692,7 +720,17 @@ struct MCRoot: View {
             toggle("s:pcaudio", "Also play sound on the PC", "Useful when someone's in the room with it", v.audioOnPC, m, p) {
                 settings.save { $0.audioOnPC.toggle() }
             }
-        case "controls":
+            toggle("s:feel", "Menu sounds", "Soft sounds as you move around the menus. Games aren't affected", MCFeel.enabled, m, p) {
+                UserDefaults.standard.set(!MCFeel.enabled, forKey: "hh_feel_sounds")
+            }
+        case "ipad":
+            let sizes = ["auto", "compact", "normal", "large"]
+            choice("s:size", "Screen size", "Auto fits this screen. Compact and Large make everything bigger", ["Auto", "Compact", "Normal", "Large"],
+                   sizes.firstIndex(of: screenSize) ?? 0, m, p) { i in screenSize = sizes[i] }
+            toggle("s:rotate", "Screen turns with the device", "Off keeps it on its side", rotate, m, p) {
+                rotate.toggle()
+                MCLaunch.updateOrientation()
+            }
             let touch = ["off", "mouse", "touch"]
             let curTouch = UserDefaults.standard.string(forKey: "mc_touch_default") ?? "off"
             choice("s:touch", "Touch screen", "In PC games. Mouse is a trackpad, Touch clicks where you tap. The Quick menu switches it while playing",
@@ -703,11 +741,19 @@ struct MCRoot: View {
             }
             choice("s:osc", "On-screen controller", "Auto shows it when no controller is connected", ["Off", "Auto", "Simple", "Full"],
                    min(v.onscreen, 3), m, p) { i in settings.save { $0.onscreen = i } }
+        case "pads":
+            row("s:padtest", icon: "gamecontroller", color: MCPalette.blue, title: "Test a controller",
+                sub: "See every button, stick and trigger live, and try the rumble", right: nil, m, p) { padTest = true }
+            row("s:padpair", icon: "plus.circle", color: MCPalette.green, title: "Pair a controller",
+                sub: "Put the pad in pairing mode, then pick it in the iPad's Settings → Bluetooth", right: nil, m, p) {
+                if let u = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(u) }
+            }
             toggle("s:multi", "More than one player", "On a PC each pad is its own player", v.multi, m, p) { settings.save { $0.multi.toggle() } }
             toggle("s:swap", "Swap A and B", "For Nintendo-style layouts", v.swapAB, m, p) { settings.save { $0.swapAB.toggle() } }
             toggle("s:mouse", "Mouse and trackpad", "Use a connected mouse or the Magic Keyboard's trackpad in PC games", v.btMouse, m, p) {
                 settings.save { $0.btMouse.toggle() }
             }
+            info("s:combo", "Quick menu", "Select + Start + LB + RB, or swipe from the left edge", m, p)
         case "ps":
             let d = UserDefaults.standard
             choice("s:ps:res", "Resolution", "The PS5 streams up to 1080p", ["720p", "1080p"], MCPs5Store.height >= 1080 ? 1 : 0, m, p) { i in
@@ -745,7 +791,7 @@ struct MCRoot: View {
     private func choice(_ id: String, _ title: String, _ sub: String, _ opts: [String], _ cur: Int, other: String? = nil,
                         _ m: MCMetrics, _ p: MCPalette, pick: @escaping (Int) -> Void) -> some View {
         let value = cur >= 0 && cur < opts.count ? opts[cur] : (other ?? "")
-        return row(id, icon: "slider.horizontal.3", color: p.sub, title: title, sub: sub, right: value, m, p) {
+        return row(id, icon: MCRoot.icons[id] ?? "slider.horizontal.3", color: p.sub, title: title, sub: sub, right: value, m, p) {
             store.dialog = MCDialog(title: title, message: sub, opts: opts.enumerated().map { i, o in
                 .init(title: o + (i == cur ? "  ✓" : ""), picked: i == cur) { pick(i); settingsRev += 1 }
             })
@@ -754,7 +800,7 @@ struct MCRoot: View {
 
     private func toggle(_ id: String, _ title: String, _ sub: String, _ on: Bool, _ m: MCMetrics, _ p: MCPalette,
                         flip: @escaping () -> Void) -> some View {
-        row(id, icon: on ? "checkmark.circle.fill" : "circle", color: on ? p.ring : p.sub, title: title, sub: sub, right: on ? "On" : "Off", m, p) {
+        row(id, icon: MCRoot.icons[id] ?? "switch.2", color: p.sub, title: title, sub: sub, right: nil, switchOn: on, m, p) {
             flip(); settingsRev += 1
         }
     }

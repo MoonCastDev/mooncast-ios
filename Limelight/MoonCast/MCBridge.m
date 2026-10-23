@@ -204,6 +204,15 @@
     return vc;
 }
 
++ (int) testNetworkPorts {
+    unsigned int r = LiTestClientConnectivity(CONN_TEST_SERVER, 443, ML_PORT_FLAG_ALL);
+    return r == ML_TEST_RESULT_INCONCLUSIVE ? -1 : (int)r;
+}
+
++ (void) saveHost:(TemporaryHost*)host {
+    [[[DataManager alloc] init] updateHost:host];
+}
+
 + (void) removeHost:(TemporaryHost*)host {
     [[[DataManager alloc] init] removeHost:host];
 }

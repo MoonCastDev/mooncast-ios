@@ -52,6 +52,12 @@ NS_ASSUME_NONNULL_BEGIN
 /// Moonlight's stream screen, set up to play this.
 + (UIViewController*) streamControllerWithConfig:(StreamConfiguration*)config;
 
+/// Moonlight's port check against its test server: 0 = nothing blocked, -1 = couldn't tell, else blocked ports.
++ (int) testNetworkPorts;
+
+/// Saves a changed host (its away address).
++ (void) saveHost:(TemporaryHost*)host;
+
 /// Removes a PC from this device.
 + (void) removeHost:(TemporaryHost*)host;
 

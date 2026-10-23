@@ -82,8 +82,18 @@ struct CoverArt: View {
 /// Design units: the Android layout is drawn for a 1080-high screen; one unit here is that share of this screen.
 struct MCMetrics {
     let size: CGSize
+    /// Settings → iPad → Screen size: Compact and Large make everything bigger (as on the handheld)
+    var scale: CGFloat = MCMetrics.screenScale
     var portrait: Bool { size.height > size.width }
-    var u: CGFloat { min(size.width, size.height) / 1080 }
+    var u: CGFloat { min(size.width, size.height) / 1080 * scale }
+
+    static var screenScale: CGFloat {
+        switch UserDefaults.standard.string(forKey: "hh_screen_size") ?? "auto" {
+        case "compact": return 1.12
+        case "large": return 1.25
+        default: return 1
+        }
+    }
     var designWidth: CGFloat { size.width / u }
     var designHeight: CGFloat { size.height / u }
     func px(_ v: CGFloat) -> CGFloat { v * u }

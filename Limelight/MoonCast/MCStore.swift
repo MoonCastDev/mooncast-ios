@@ -424,6 +424,60 @@ final class MCStore: NSObject, ObservableObject, DiscoveryCallback, PairCallback
 
     func receivedAsset(for app: TemporaryApp!) { bump() }
 
+    // MARK: network test
+
+    /// Delay to each PC (5 tries of its status page) and whether this network blocks streaming ports.
+    func networkTest() {
+        busy = "Testing the network…"
+        let pcs = hosts.filter { online($0) }
+        DispatchQueue.global(qos: .userInitiated).async {
+            var lines: [String] = []
+            for h in pcs {
+                guard let addr = h.activeAddress else { continue }
+                let host = addr.contains(":") && !addr.hasPrefix("[") && addr.split(separator: ":").count > 2 ? "[\(addr)]" : addr
+                var times: [Double] = []
+                for _ in 0..<5 {
+                    guard let url = URL(string: "http://\(host)\(host.contains("]") || !host.contains(":") ? ":47989" : "")/serverinfo") else { break }
+                    var req = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 2)
+                    req.httpMethod = "GET"
+                    let t0 = CFAbsoluteTimeGetCurrent()
+                    let sem = DispatchSemaphore(value: 0)
+                    var ok = false
+                    URLSession.shared.dataTask(with: req) { _, r, _ in ok = r != nil; sem.signal() }.resume()
+                    _ = sem.wait(timeout: .now() + 3)
+                    if ok { times.append((CFAbsoluteTimeGetCurrent() - t0) * 1000) }
+                }
+                if times.isEmpty {
+                    lines.append("\(h.name): no answer")
+                } else {
+                    let avg = times.reduce(0, +) / Double(times.count)
+                    let worst = times.max() ?? avg
+                    let verdict = avg < 10 ? "great" : avg < 30 ? "good" : avg < 60 ? "fair, may stutter" : "slow"
+                    lines.append(String(format: "%@: %.0f ms (worst %.0f), %@", h.name, avg, worst, verdict))
+                }
+            }
+            for c in MCPs5Store.list() {
+                lines.append("\(c.name): \(MCPs5Store.reachable(c.host) ? "reachable on this network" : "not answering (asleep or off)")")
+            }
+            let ports = MCBridge.testNetworkPorts()
+            lines.append(ports == 0 ? "This network lets streaming through" : ports < 0 ? "Couldn't check the network's ports"
+                                                                                       : "This network blocks some streaming ports (away play may fail)")
+            DispatchQueue.main.async {
+                self.busy = nil
+                self.dialog = MCDialog(title: "Network test", message: lines.isEmpty ? "No PC is online." : lines.joined(separator: "\n"),
+                                       opts: [.init(title: "OK") {}])
+            }
+        }
+    }
+
+    /// The address to reach a PC from away (another network or a VPN).
+    func setAwayAddress(_ h: TemporaryHost, _ address: String) {
+        let a = address.trimmingCharacters(in: .whitespaces)
+        h.externalAddress = a.isEmpty ? nil : a
+        MCBridge.save(h)
+        bump()
+    }
+
     // MARK: controllers
 
     func controllersDialog() {
