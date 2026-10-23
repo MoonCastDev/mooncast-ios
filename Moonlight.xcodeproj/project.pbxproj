@@ -144,6 +144,8 @@
 		94DDCAD01A2BE13A9C98D249 /* MCHomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77438C5E5B5F35CC0257CFE0 /* MCHomeView.swift */; };
 		BF51F93CA32CDAAB1DC41167 /* MCHomeController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 56B247B5645B17A2E36734ED /* MCHomeController.swift */; };
 		0108EDC4BA9A23E2C3FC93C0 /* MCQuickMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4774BAE4CE059F7BAA4BB2E /* MCQuickMenu.swift */; };
+		7C2CF29AB6580E4818130BFF /* MCPs5Session.m in Sources */ = {isa = PBXBuildFile; fileRef = 8B462D25E7FBB371CB431028 /* MCPs5Session.m */; };
+		8DCB9B24D5B2D4F205B4525C /* MCPs5.swift in Sources */ = {isa = PBXBuildFile; fileRef = 15C949123DBA4635E482F514 /* MCPs5.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -337,6 +339,9 @@
 		77438C5E5B5F35CC0257CFE0 /* MCHomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCHomeView.swift; sourceTree = "<group>"; };
 		56B247B5645B17A2E36734ED /* MCHomeController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCHomeController.swift; sourceTree = "<group>"; };
 		D4774BAE4CE059F7BAA4BB2E /* MCQuickMenu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCQuickMenu.swift; sourceTree = "<group>"; };
+		4348EB46A5E39557B8E2B52C /* MCPs5Session.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = MCPs5Session.h; sourceTree = "<group>"; };
+		8B462D25E7FBB371CB431028 /* MCPs5Session.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = MCPs5Session.m; sourceTree = "<group>"; };
+		15C949123DBA4635E482F514 /* MCPs5.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCPs5.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -706,6 +711,9 @@
 		5E34F220FEBEF6D9522FF9ED /* MoonCast */ = {
 			isa = PBXGroup;
 			children = (
+				15C949123DBA4635E482F514 /* MCPs5.swift */,
+				8B462D25E7FBB371CB431028 /* MCPs5Session.m */,
+				4348EB46A5E39557B8E2B52C /* MCPs5Session.h */,
 				D4774BAE4CE059F7BAA4BB2E /* MCQuickMenu.swift */,
 				DC760B029113ED63E4C78FAF /* MCBridge.h */,
 				9B2FA25D79B7D8917F22935B /* MCBridge.m */,
@@ -919,6 +927,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				8DCB9B24D5B2D4F205B4525C /* MCPs5.swift in Sources */,
+				7C2CF29AB6580E4818130BFF /* MCPs5Session.m in Sources */,
 				0108EDC4BA9A23E2C3FC93C0 /* MCQuickMenu.swift in Sources */,
 				076CF9B2CB2707A0DAB6C0B2 /* MCBridge.m in Sources */,
 				13E705C48ED30EDB2CE108A2 /* MCTheme.swift in Sources */,
@@ -1244,6 +1254,11 @@
 		FB290D2119B2C406004C83CF /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-lchiaki-all",
+					"-lz",
+				);
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
@@ -1258,6 +1273,7 @@
 					"$(PROJECT_DIR)/moonlight-common/moonlight-common-c/src",
 					"$(SDKROOT)/usr/include/libxml2/**",
 					"$(PROJECT_DIR)/libs/**",
+					"$(PROJECT_DIR)/chiaki/include",
 				);
 				INFOPLIST_FILE = "Limelight/Limelight-Info.plist";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.games";
@@ -1271,6 +1287,7 @@
 					"$(PROJECT_DIR)/libs/opus/lib/iOS",
 					"$(PROJECT_DIR)/libs/SDL2/lib/iOS",
 					"$(PROJECT_DIR)/libs/FFmpeg/lib/iOS",
+					"$(PROJECT_DIR)/chiaki/lib/iOS",
 				);
 				"LIBRARY_SEARCH_PATHS[sdk=iphonesimulator*]" = (
 					"$(inherited)",
@@ -1295,6 +1312,11 @@
 		FB290D2219B2C406004C83CF /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-lchiaki-all",
+					"-lz",
+				);
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
@@ -1308,6 +1330,7 @@
 					"$(PROJECT_DIR)/moonlight-common/moonlight-common-c/src",
 					"$(SDKROOT)/usr/include/libxml2/**",
 					"$(PROJECT_DIR)/libs/**",
+					"$(PROJECT_DIR)/chiaki/include",
 				);
 				INFOPLIST_FILE = "Limelight/Limelight-Info.plist";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.games";
@@ -1321,6 +1344,7 @@
 					"$(PROJECT_DIR)/libs/opus/lib/iOS",
 					"$(PROJECT_DIR)/libs/SDL2/lib/iOS",
 					"$(PROJECT_DIR)/libs/FFmpeg/lib/iOS",
+					"$(PROJECT_DIR)/chiaki/lib/iOS",
 				);
 				"LIBRARY_SEARCH_PATHS[sdk=iphonesimulator*]" = (
 					"$(inherited)",

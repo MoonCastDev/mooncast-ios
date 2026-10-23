@@ -87,13 +87,14 @@ final class MCQuickModel: ObservableObject {
         let fps = (d["fps"] as? NSNumber)?.floatValue
         let rtt = (d["rtt"] as? NSNumber)?.intValue ?? -1
         let loss = (d["loss"] as? NSNumber)?.floatValue
+        let lostFrames = (d["lostFrames"] as? NSNumber)?.intValue
         let mbps = (d["mbps"] as? NSNumber)?.floatValue ?? 0
         let codec = d["codec"] as? String ?? ""
         stats = [
             (fps.map { String(format: "%.0f", $0) } ?? "…", "fps"),
             (rtt >= 0 ? "\(rtt) ms" : "…", "delay"),
             (String(format: mbps < 10 ? "%.1f" : "%.0f", mbps), "Mbps"),
-            (loss.map { String(format: "%.1f%%", $0) } ?? "…", "lost"),
+            (lostFrames.map { "\($0)" } ?? loss.map { String(format: "%.1f%%", $0) } ?? "…", "lost"),
             (codec.isEmpty ? "…" : codec.replacingOccurrences(of: "HEVC", with: "H.265"), "codec"),
         ]
     }
@@ -122,6 +123,15 @@ struct MCQuickMenuView: View {
     private func items() -> [Item] {
         let a = model.actions
         let pads = GCController.controllers().count
+        if a.mcKind?() == "ps5" {
+            return [
+                Item(icon: "info.circle", label: "Streaming status", detail: a.mcStatsOn() ? "On" : "Off") { a.mcToggleStats(); model.rev += 1 },
+                Item(icon: "gamecontroller", label: "Controllers", detail: pads == 1 ? "1 connected" : "\(pads) connected") {},
+                Item(icon: "playstation.logo", label: "PS button", detail: "Pads without one: L2 + Start") { model.close(); a.mcPsButton?() },
+                Item(icon: "arrow.left", label: "Disconnect", detail: "Ask, rest mode or keep it on (Settings → PlayStation)") { model.close(); a.mcDisconnect() },
+                Item(icon: "moon.zzz", label: "Rest mode", detail: "Puts the PS5 to sleep", danger: true) { model.close(); a.mcRestMode?() },
+            ]
+        }
         return [
             Item(icon: "keyboard", label: "Keyboard", detail: "On-screen") { a.mcToggleKeyboard(); model.close() },
             Item(icon: "info.circle", label: "Streaming status", detail: a.mcStatsOn() ? "On" : "Off") { a.mcToggleStats(); model.rev += 1 },
@@ -174,7 +184,7 @@ struct MCQuickMenuView: View {
     private func panel(_ m: MCMetrics, _ p: MCPalette) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             Text(model.actions.mcTitle()).mcFont(36, m, weight: .heavy).foregroundColor(p.ink).lineLimit(2)
-            Text("Select + Start + LB + RB opens this menu").mcFont(24, m).foregroundColor(p.sub).lineLimit(2)
+            Text((model.actions.mcKind?() == "ps5" ? "PlayStation 5 · " : "") + "Select + Start + LB + RB opens this menu").mcFont(24, m).foregroundColor(p.sub).lineLimit(2)
                 .padding(.top, m.px(8))
             HStack(spacing: m.px(8)) {
                 ForEach(model.stats.indices, id: \.self) { i in

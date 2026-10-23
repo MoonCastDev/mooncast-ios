@@ -17,6 +17,7 @@ struct MCGame: Identifiable, Equatable {
     let running: Bool
     let host: TemporaryHost?
     let app: TemporaryApp?
+    var ps: MCPs5Console? = nil
     var id: String { key }
 
     static func == (a: MCGame, b: MCGame) -> Bool { a.key == b.key && a.title == b.title && a.running == b.running }
@@ -49,6 +50,8 @@ final class MCStore: NSObject, ObservableObject, DiscoveryCallback, PairCallback
 
     /// Set by the home's controller: starts Moonlight's stream screen.
     var onStream: ((StreamConfiguration) -> Void)?
+    /// Set by the home's controller: starts the PS5 stream screen.
+    var onPs5Stream: ((MCPs5Console) -> Void)?
 
     private var disc: DiscoveryManager!
     private var assets: AppAssetManager!
@@ -71,6 +74,7 @@ final class MCStore: NSObject, ObservableObject, DiscoveryCallback, PairCallback
         _ = IdManager.getUniqueId()
         clientCert = CryptoManager.readCertFromFile()
         hosts = MCBridge.savedHosts()
+        MCPs5Store.testAdd()
         // a handheld streams at its own screen size unless you chose one (Moonlight's default is 720p)
         if !UserDefaults.standard.bool(forKey: "mc_res_init") {
             UserDefaults.standard.set(true, forKey: "mc_res_init")
@@ -135,6 +139,9 @@ final class MCStore: NSObject, ObservableObject, DiscoveryCallback, PairCallback
     /// Every game: every PC game that isn't hidden.
     func allGames() -> [MCGame] {
         var out: [MCGame] = []
+        for c in MCPs5Store.list() {
+            out.append(MCGame(key: "ps:\(c.host)", title: c.name, src: "PS5", seed: "ps", running: false, host: nil, app: nil, ps: c))
+        }
         for h in hosts where paired(h) {
             let hide = hidden(h)
             for a in apps(h) where !hide.contains(a.id ?? "") {
@@ -154,6 +161,8 @@ final class MCStore: NSObject, ObservableObject, DiscoveryCallback, PairCallback
         func add(_ g: MCGame) { if !ordered.contains(where: { $0.key == g.key }) { ordered.append(g) } }
         all.filter { $0.running }.forEach(add)
         recent.prefix(5).forEach(add)
+        // consoles always keep their place on Home
+        all.filter { $0.ps != nil }.forEach(add)
         let kept = ordered.count
         recent.forEach(add)
         all.sorted { $0.title.lowercased() < $1.title.lowercased() }.forEach(add)
@@ -171,6 +180,10 @@ final class MCStore: NSObject, ObservableObject, DiscoveryCallback, PairCallback
     // MARK: playing
 
     func play(_ g: MCGame) {
+        if let c = g.ps {
+            onPs5Stream?(c)
+            return
+        }
         guard let h = g.host, let a = g.app else { return }
         if !online(h) {
             pcOffline(h)

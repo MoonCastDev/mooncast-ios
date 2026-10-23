@@ -24,6 +24,10 @@ final class MCHomeController: UIHostingController<MCRoot> {
         root.askText = { [weak self] title, placeholder, done in self?.ask(title, placeholder, done) }
         rootView = root
         MCStore.shared.onStream = { [weak self] cfg in self?.stream(cfg) }
+        MCStore.shared.onPs5Stream = { [weak self] c in
+            MCPad.shared.detach()
+            self?.navigationController?.pushViewController(MCPs5StreamController(console: c), animated: true)
+        }
         NotificationCenter.default.addObserver(self, selector: #selector(active), name: UIApplication.didBecomeActiveNotification, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(inactive), name: UIApplication.willResignActiveNotification, object: nil)
     }

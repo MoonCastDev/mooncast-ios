@@ -495,13 +495,20 @@ struct MCRoot: View {
                     ForEach(pcs, id: \.uuid) { h in
                         row("pc:\(h.uuid)", icon: "PC", color: MCPalette.cyan, title: h.name, sub: pcStatus(h), right: pcRight(h), m, p) { pcMenu(h) }
                     }
+                    let ps5s = MCPs5Store.list()
+                    if !ps5s.isEmpty {
+                        header("PlayStation", m, p)
+                        ForEach(ps5s, id: \.host) { c in
+                            row("ps:\(c.host)", icon: "PS", color: MCPalette.blue, title: c.name, sub: c.host, right: "Linked", m, p) { ps5Menu(c) }
+                        }
+                    }
                     header("Add", m, p)
                     row("add:pc", icon: "plus", color: MCPalette.green, title: "Add a PC by its address",
                         sub: "When it isn't found by itself (another network, a VPN)", right: nil, m, p) {
                         askText("Add a PC", "The PC's IP address or name") { store.addPc($0) }
                     }
-                    row("add:ps", icon: "PS", color: MCPalette.blue, title: "PlayStation 5", sub: "Coming to iPad in a later build", right: nil, m, p) {
-                        store.dialog = MCDialog(title: "PlayStation 5 on iPad", message: "PS5 Remote Play is on its way to the iPad app. For now it plays PCs.",
+                    row("add:ps", icon: "PS", color: MCPalette.blue, title: "Add a PlayStation 5", sub: "Sign in to PSN and link it with the console's 8-digit code", right: nil, m, p) {
+                        store.dialog = MCDialog(title: "Add a PlayStation 5", message: "Linking a new PS5 from the iPad comes in the next build. Consoles already linked on this iPad play now.",
                                                 opts: [.init(title: "OK") {}])
                     }
                     row("add:xb", icon: "XB", color: MCPalette.green, title: "Xbox", sub: "Coming to iPad in a later build", right: nil, m, p) {
@@ -558,6 +565,19 @@ struct MCRoot: View {
         store.dialog = MCDialog(title: h.name, message: lines.isEmpty ? nil : lines.joined(separator: "\n"), opts: opts)
     }
 
+    private func ps5Menu(_ c: MCPs5Console) {
+        store.dialog = MCDialog(title: c.name, message: "Address: \(c.host)", opts: [
+            .init(title: "Cancel", picked: true) {},
+            .init(title: "Play", sub: "Wakes it if it's in rest mode") { store.onPs5Stream?(c) },
+            .init(title: "Wake it up", sub: "From rest mode") { MCPs5Session.wakeHost(c.host, registKey: c.registKey) },
+            .init(title: "Remove this PS5", sub: "Link it again to bring it back", danger: true) {
+                confirm("Remove \(c.name)?", "You'll need the console's code to link it again.", yes: "Remove") {
+                    MCPs5Store.remove(c.host); settingsRev += 1
+                }
+            },
+        ])
+    }
+
     private func hiddenGames(_ h: TemporaryHost) {
         let ids = store.hidden(h)
         let names = Dictionary(store.apps(h).map { ($0.id ?? "", $0.name ?? "") }, uniquingKeysWith: { a, _ in a })
@@ -601,7 +621,7 @@ struct MCRoot: View {
     // MARK: Settings
 
     private var groups: [(String, String)] {
-        [("picture", "Picture"), ("sound", "Sound"), ("controls", "Controls"), ("theme", "Theme"), ("about", "About")]
+        [("picture", "Picture"), ("sound", "Sound"), ("controls", "Controls"), ("ps", "PlayStation"), ("theme", "Theme"), ("about", "About")]
     }
 
     private func settingsPage(_ m: MCMetrics, _ p: MCPalette) -> some View {
@@ -688,6 +708,29 @@ struct MCRoot: View {
             toggle("s:mouse", "Mouse and trackpad", "Use a connected mouse or the Magic Keyboard's trackpad in PC games", v.btMouse, m, p) {
                 settings.save { $0.btMouse.toggle() }
             }
+        case "ps":
+            let d = UserDefaults.standard
+            choice("s:ps:res", "Resolution", "The PS5 streams up to 1080p", ["720p", "1080p"], MCPs5Store.height >= 1080 ? 1 : 0, m, p) { i in
+                d.set(i == 1 ? 1080 : 720, forKey: "ps5_resolution") }
+            choice("s:ps:fps", "Frame rate", "60 fps is smoother; 30 fps lets a weak link keep up", ["30 fps", "60 fps"], MCPs5Store.fps >= 60 ? 1 : 0, m, p) { i in
+                d.set(i == 1 ? 60 : 30, forKey: "ps5_fps") }
+            let rates = [0, 10, 15, 20, 30]
+            choice("s:ps:rate", "Bitrate", "Auto: 30 Mbps at 1080p, 15 at 720p", rates.map { $0 == 0 ? "Auto" : "\($0) Mbps" },
+                   rates.firstIndex(of: MCPs5Store.bitrate) ?? 0, m, p) { i in d.set(rates[i], forKey: "ps5_bitrate") }
+            choice("s:ps:codec", "Video codec", "H.265 looks better at the same bitrate", ["H.264", "H.265"], MCPs5Store.h265 ? 1 : 0, m, p) { i in
+                d.set(i == 1, forKey: "ps5_h265") }
+            let disc = ["ask", "rest", "keep"]
+            choice("s:ps:disc", "When I disconnect", "What happens to the PS5 after you leave a game", ["Ask", "Rest mode", "Keep it on"],
+                   disc.firstIndex(of: MCPs5Store.onDisconnect) ?? 0, m, p) { i in d.set(disc[i], forKey: "ps5_on_disconnect") }
+            toggle("s:ps:swap", "Swap Cross and Circle", "For the Japanese layout", MCPs5Store.swapCrossCircle, m, p) {
+                d.set(!MCPs5Store.swapCrossCircle, forKey: "ps5_swap_cross_circle") }
+            row("s:ps:pin", icon: "lock", color: p.sub, title: "Console PIN", sub: "Signs in for you when the PS5 asks for its 4-digit login PIN",
+                right: MCPs5Store.loginPin.isEmpty ? "Not set" : "••••", m, p) {
+                askText("Console PIN", "4 digits, empty to turn it off") { v in
+                    UserDefaults.standard.set(v.filter(\.isNumber).prefix(4).description, forKey: "ps5_login_pin"); settingsRev += 1 }
+            }
+            info("s:ps:btn", "PS button", "L2 + Start on pads without one", m, p)
+            info("s:ps:touch", "Touchpad", "Select + Start", m, p)
         case "theme":
             choice("s:theme", "Theme", "Dark is charcoal with white type; Light is the reverse", ["Dark", "Light"],
                    theme == "light" ? 1 : 0, m, p) { i in theme = i == 1 ? "light" : "dark" }

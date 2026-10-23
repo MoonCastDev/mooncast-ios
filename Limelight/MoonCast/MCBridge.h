@@ -25,6 +25,11 @@ NS_ASSUME_NONNULL_BEGIN
 - (void) mcTaskManager;
 - (void) mcMenuOpen:(BOOL)open;
 - (void) mcDisconnect;
+@optional
+/// "pc" (default) or "ps5": which items the Quick menu shows
+- (NSString*) mcKind;
+- (void) mcPsButton;
+- (void) mcRestMode;
 @end
 
 @interface MCBridge : NSObject
