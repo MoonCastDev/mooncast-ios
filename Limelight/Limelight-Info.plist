@@ -57,7 +57,7 @@
 		<string>_nvstream._tcp</string>
 	</array>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>Moonlight uses the local network to connect to your gaming PC for streaming.</string>
+	<string>MoonCast uses the local network to find and stream from your gaming PC and PlayStation.</string>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>UILaunchStoryboardName</key>

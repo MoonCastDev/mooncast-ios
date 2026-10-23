@@ -52,6 +52,10 @@ final class MCStore: NSObject, ObservableObject, DiscoveryCallback, PairCallback
     var onStream: ((StreamConfiguration) -> Void)?
     /// Set by the home's controller: starts the PS5 stream screen.
     var onPs5Stream: ((MCPs5Console) -> Void)?
+    /// Each PS5's own answer to the Remote Play probe (on, rest mode, the game it runs), by address.
+    @Published private(set) var ps5Status: [String: MCPs5Probe.Status] = [:]
+    private var lastPs5Probe = Date.distantPast
+    private var probing = false
 
     private var disc: DiscoveryManager!
     private var assets: AppAssetManager!
@@ -140,7 +144,10 @@ final class MCStore: NSObject, ObservableObject, DiscoveryCallback, PairCallback
     func allGames() -> [MCGame] {
         var out: [MCGame] = []
         for c in MCPs5Store.list() {
-            out.append(MCGame(key: "ps:\(c.host)", title: c.name, src: "PS5", seed: "ps", running: false, host: nil, app: nil, ps: c))
+            // as on Android: the tile is named after the game the PS5 is running, and shows Running
+            let st = ps5Status[c.host]
+            out.append(MCGame(key: "ps:\(c.host)", title: st?.runningApp ?? c.name, src: "PS5", seed: "ps",
+                              running: st?.power == .on && st?.runningApp != nil, host: nil, app: nil, ps: c))
         }
         for h in hosts where paired(h) {
             let hide = hidden(h)
@@ -370,6 +377,7 @@ final class MCStore: NSObject, ObservableObject, DiscoveryCallback, PairCallback
         if state != lastState { lastState = state; bump() }
         testAutoPair()
         testAutoPlay()
+        probePs5s()
         for h in hosts where paired(h) && online(h) {
             let age = listFetched[h.uuid].map { -$0.timeIntervalSinceNow } ?? .infinity
             // a game started or quit on the PC, or the list is old: fetch it again
@@ -382,6 +390,23 @@ final class MCStore: NSObject, ObservableObject, DiscoveryCallback, PairCallback
     #if DEBUG
     private var autoPaired = false
     #endif
+
+    /// Every 10 s while the home is up: how each PS5 is (a UDP probe each, off the main thread).
+    func probePs5s(force: Bool = false) {
+        let consoles = MCPs5Store.list()
+        guard !consoles.isEmpty, !probing, force || -lastPs5Probe.timeIntervalSinceNow > 10 else { return }
+        probing = true
+        lastPs5Probe = Date()
+        DispatchQueue.global(qos: .utility).async {
+            var st: [String: MCPs5Probe.Status] = [:]
+            for c in consoles { st[c.host] = MCPs5Probe.probe(c.host) }
+            DispatchQueue.main.async {
+                self.probing = false
+                self.ps5Status = st
+                self.bump()
+            }
+        }
+    }
 
     #if DEBUG
     private var autoPlayed = false

@@ -29,6 +29,8 @@ struct MCRoot: View {
     private let settings = MCSettings()
     /// Set by the controller: asks for text (a PC's address) with the system's keyboard dialog.
     var askText: (String, String, @escaping (String) -> Void) -> Void = { _, _, _ in }
+    /// Set by the controller: Sony's sign-in page; true when signed in.
+    var signInPsn: (@escaping (Bool) -> Void) -> Void = { _ in }
 
     var body: some View {
         GeometryReader { geo in
@@ -504,7 +506,7 @@ struct MCRoot: View {
                     if !ps5s.isEmpty {
                         header("PlayStation", m, p)
                         ForEach(ps5s, id: \.host) { c in
-                            row("ps:\(c.host)", icon: "PS", color: MCPalette.blue, title: c.name, sub: c.host, right: "Linked", m, p) { ps5Menu(c) }
+                            row("ps:\(c.host)", icon: "PS", color: MCPalette.blue, title: c.name, sub: ps5Line(c), right: "Linked", m, p) { ps5Menu(c) }
                         }
                     }
                     header("Add", m, p)
@@ -513,8 +515,7 @@ struct MCRoot: View {
                         askText("Add a PC", "The PC's IP address or name") { store.addPc($0) }
                     }
                     row("add:ps", icon: "PS", color: MCPalette.blue, title: "Add a PlayStation 5", sub: "Sign in to PSN and link it with the console's 8-digit code", right: nil, m, p) {
-                        store.dialog = MCDialog(title: "Add a PlayStation 5", message: "Linking a new PS5 from the iPad comes in the next build. Consoles already linked on this iPad play now.",
-                                                opts: [.init(title: "OK") {}])
+                        linkPs5()
                     }
                     row("add:xb", icon: "XB", color: MCPalette.green, title: "Xbox", sub: "Coming to iPad in a later build", right: nil, m, p) {
                         store.dialog = MCDialog(title: "Xbox on iPad", message: "Xbox Remote Play is on its way to the iPad app. For now it plays PCs.",
@@ -571,6 +572,78 @@ struct MCRoot: View {
         var lines = [h.activeAddress.map { "Address: \($0)" }, h.externalAddress.map { "Away: \($0)" }].compactMap { $0 }
         if lines.count == 2 && h.externalAddress == h.activeAddress { lines.removeLast() }
         store.dialog = MCDialog(title: h.name, message: lines.isEmpty ? nil : lines.joined(separator: "\n"), opts: opts)
+    }
+
+    private func ps5Line(_ c: MCPs5Console) -> String {
+        guard let st = store.ps5Status[c.host] else { return "\(c.host) · checking…" }
+        switch st.power {
+        case .on: return st.runningApp.map { "On · playing \($0)" } ?? "On"
+        case .rest: return "Rest mode · starts when you play"
+        case .notFound: return "Not on this network (\(c.host))"
+        }
+    }
+
+    // MARK: linking a PS5 (Ps5 registration on the handheld): PSN sign-in once -> pick the PS5 -> its 8-digit code
+
+    private func linkPs5() {
+        guard MCPsn.signedIn else {
+            store.dialog = MCDialog(title: "Sign in to PlayStation Network",
+                                    message: "Once, to link your PS5 to this iPad. Your password goes to Sony only; MoonCast keeps a sign-in token in the iPad's Keychain.",
+                                    opts: [.init(title: "Cancel", picked: true) {},
+                                           .init(title: "Sign in") { signInPsn { ok in
+                                               if ok { linkPs5() } else {
+                                                   store.dialog = MCDialog(title: "Not signed in", message: "The sign-in didn't finish. Try again.", opts: [.init(title: "OK") {}])
+                                               } } }])
+            return
+        }
+        store.busy = "Looking for PlayStations on this network…"
+        DispatchQueue.global(qos: .userInitiated).async {
+            let found = MCPs5Probe.discover()
+            DispatchQueue.main.async {
+                store.busy = nil
+                var opts: [MCDialog.Opt] = [.init(title: "Cancel", picked: found.isEmpty) {}]
+                for (i, f) in found.enumerated() {
+                    opts.append(.init(title: f.name, sub: "\(f.host) · \(f.on ? "On" : "Rest mode")", picked: i == 0) { enterCode(f.host, f.name) })
+                }
+                opts.append(.init(title: "Enter its address", sub: "When it isn't found") {
+                    askText("The PS5's address", "IP address, like 192.168.1.20") { a in
+                        let h = a.trimmingCharacters(in: .whitespaces)
+                        if !h.isEmpty { enterCode(h, "the PS5") }
+                    }
+                })
+                store.dialog = MCDialog(title: "Which PlayStation?",
+                                        message: found.isEmpty ? "None answered. Make sure it's on or in rest mode (not fully off) and on this network."
+                                                               : "Pick yours. Then on it open Settings → System → Remote Play → Link Device to see the code.",
+                                        opts: opts)
+            }
+        }
+    }
+
+    private func enterCode(_ host: String, _ name: String) {
+        askText("Type the code from \(name)", "8 digits") { raw in
+            let code = raw.filter(\.isNumber)
+            guard code.count == 8, let pin = UInt32(code), let acc = MCPsn.accountId, let accData = Data(base64Encoded: acc) else {
+                store.dialog = MCDialog(title: "The code has 8 digits", message: "On the PS5: Settings → System → Remote Play → Link Device.",
+                                        opts: [.init(title: "Try again", picked: true) { enterCode(host, name) }, .init(title: "Cancel") {}])
+                return
+            }
+            store.busy = "Linking with \(name)…"
+            MCPs5Session.registerHost(host, accountId: accData, pin: pin) { r in
+                store.busy = nil
+                guard let r = r, let key = r["registKey"] as? String, let morning = r["morning"] as? String else {
+                    store.dialog = MCDialog(title: "That didn't work",
+                                            message: "Check the code (it changes every few minutes) and that the PS5 still shows Link Device.",
+                                            opts: [.init(title: "Try again", picked: true) { enterCode(host, name) }, .init(title: "Cancel") {}])
+                    return
+                }
+                let nick = (r["nickname"] as? String).flatMap { $0.isEmpty ? nil : $0 } ?? name
+                MCPs5Store.add(MCPs5Console(name: nick, host: host, registKey: key, morning: morning))
+                store.probePs5s(force: true)
+                settingsRev += 1
+                store.dialog = MCDialog(title: "\(nick) added", message: "It's on Home now. Press it to play; it wakes from rest mode by itself.",
+                                        opts: [.init(title: "OK") {}])
+            }
+        }
     }
 
     private func ps5Menu(_ c: MCPs5Console) {
@@ -756,6 +829,22 @@ struct MCRoot: View {
             info("s:combo", "Quick menu", "Select + Start + LB + RB, or swipe from the left edge", m, p)
         case "ps":
             let d = UserDefaults.standard
+            if MCPsn.signedIn {
+                row("s:ps:psn", icon: "person.crop.circle", color: MCPalette.blue, title: "PlayStation Network",
+                    sub: "Signed in" + (MCPsn.onlineId.flatMap { $0.isEmpty ? nil : " as \($0)" } ?? ""), right: "Sign out", m, p) {
+                    confirm("Sign out of PlayStation Network?", "You'll sign in again to link another PS5. Linked consoles keep working at home.", yes: "Sign out") {
+                        MCPsn.signOut(); settingsRev += 1
+                    }
+                }
+            } else {
+                row("s:ps:psn", icon: "person.crop.circle", color: MCPalette.blue, title: "PlayStation Network",
+                    sub: "Sign in once to link a PS5 to this iPad", right: "Sign in", m, p) {
+                    signInPsn { _ in settingsRev += 1 }
+                }
+            }
+            row("s:ps:add", icon: "plus.circle", color: MCPalette.blue, title: "Add a PlayStation 5", sub: "Link it with the 8-digit code on its screen", right: nil, m, p) {
+                linkPs5()
+            }
             choice("s:ps:res", "Resolution", "The PS5 streams up to 1080p", ["720p", "1080p"], MCPs5Store.height >= 1080 ? 1 : 0, m, p) { i in
                 d.set(i == 1 ? 1080 : 720, forKey: "ps5_resolution") }
             choice("s:ps:fps", "Frame rate", "60 fps is smoother; 30 fps lets a weak link keep up", ["30 fps", "60 fps"], MCPs5Store.fps >= 60 ? 1 : 0, m, p) { i in

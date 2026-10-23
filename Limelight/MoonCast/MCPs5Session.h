@@ -43,6 +43,11 @@ NS_ASSUME_NONNULL_BEGIN
 /// fps (shown), rtt ms, Mbps received, frames lost (since start).
 - (NSDictionary*) stats;
 
+/// Links a PS5 ("Link Device"): its address, the PSN account id (8 bytes) and the 8-digit code on its screen.
+/// Calls back on the main thread with registKey, morning (hex) and nickname, or nil when it failed. Up to 30 s.
++ (void) registerHost:(NSString*)host accountId:(NSData*)accountId pin:(uint32_t)pin
+           completion:(void (^)(NSDictionary* _Nullable result))completion;
+
 /// Sends the wake-up packet: the credential is the registKey's ASCII hex before its zero padding.
 + (void) wakeHost:(NSString*)host registKey:(NSString*)registKeyHex;
 

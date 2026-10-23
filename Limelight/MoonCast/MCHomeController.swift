@@ -39,6 +39,13 @@ final class MCHomeController: UIHostingController<MCRoot> {
         super.init(rootView: MCRoot())
         var root = MCRoot()
         root.askText = { [weak self] title, placeholder, done in self?.ask(title, placeholder, done) }
+        root.signInPsn = { [weak self] done in
+            let vc = MCPsnSignInController()
+            vc.done = done
+            let nav = UINavigationController(rootViewController: vc)
+            nav.modalPresentationStyle = .formSheet
+            self?.present(nav, animated: true)
+        }
         rootView = root
         MCStore.shared.onStream = { [weak self] cfg in self?.stream(cfg) }
         MCStore.shared.onPs5Stream = { [weak self] c in
@@ -82,14 +89,15 @@ final class MCHomeController: UIHostingController<MCRoot> {
 
     private func ask(_ title: String, _ placeholder: String, _ done: @escaping (String) -> Void) {
         let a = UIAlertController(title: title, message: nil, preferredStyle: .alert)
+        let digits = placeholder.contains("digits")
         a.addTextField { t in
             t.placeholder = placeholder
-            t.keyboardType = .URL
+            t.keyboardType = digits ? .numberPad : .URL
             t.autocapitalizationType = .none
             t.autocorrectionType = .no
         }
         a.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-        a.addAction(UIAlertAction(title: "Add", style: .default) { _ in done(a.textFields?.first?.text ?? "") })
+        a.addAction(UIAlertAction(title: digits ? "OK" : "Add", style: .default) { _ in done(a.textFields?.first?.text ?? "") })
         present(a, animated: true)
     }
 }

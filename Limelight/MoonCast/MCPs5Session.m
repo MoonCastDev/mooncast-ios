@@ -11,6 +11,7 @@
 #include <chiaki/opusdecoder.h>
 #include <chiaki/discovery.h>
 #include <chiaki/log.h>
+#include <chiaki/regist.h>
 
 static NSData* MCHex(NSString* hex) {
     NSMutableData* d = [NSMutableData data];
@@ -118,6 +119,35 @@ static bool MCVideo(uint8_t* buf, size_t size, int32_t lost, bool recovered, voi
 static void MCAudioSettings(uint32_t channels, uint32_t rate, void* user);
 static void MCAudioFrame(int16_t* buf, size_t samples, void* user);
 
+static NSString* MCHexOf(const uint8_t* b, size_t n) {
+    NSMutableString* s = [NSMutableString stringWithCapacity:n * 2];
+    for (size_t i = 0; i < n; i++) [s appendFormat:@"%02x", b[i]];
+    return s;
+}
+
+@interface MCPs5Regist : NSObject {
+@public
+    ChiakiLog log;
+    ChiakiRegist regist;
+    char* host;
+    dispatch_semaphore_t done;
+    NSDictionary* result;
+}
+@end
+@implementation MCPs5Regist
+@end
+
+static void MCRegistCb(ChiakiRegistEvent* e, void* user) {
+    MCPs5Regist* r = (__bridge MCPs5Regist*)user;
+    if (e->type == CHIAKI_REGIST_EVENT_TYPE_FINISHED_SUCCESS && e->registered_host) {
+        ChiakiRegisteredHost* h = e->registered_host;
+        r->result = @{ @"registKey": MCHexOf((const uint8_t*)h->rp_regist_key, sizeof(h->rp_regist_key)),
+                       @"morning": MCHexOf(h->rp_key, sizeof(h->rp_key)),
+                       @"nickname": [NSString stringWithUTF8String:h->server_nickname] ?: @"" };
+    }
+    dispatch_semaphore_signal(r->done);
+}
+
 @implementation MCPs5Session
 
 - (instancetype) initWithHost:(NSString*)host registKey:(NSString*)registKeyHex morning:(NSString*)morningHex
@@ -224,6 +254,33 @@ static void MCAudioFrame(int16_t* buf, size_t samples, void* user);
     }
     return @{ @"fps": @(_fps), @"mbps": @(_mbps), @"rtt": @(_started ? (int)(_session.rtt_us / 1000) : -1),
               @"lost": @(_lost), @"codec": _h265 ? @"H.265" : @"H.264" };
+}
+
++ (void) registerHost:(NSString*)host accountId:(NSData*)accountId pin:(uint32_t)pin
+           completion:(void (^)(NSDictionary* _Nullable result))completion {
+    dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+        MCPs5Regist* r = [[MCPs5Regist alloc] init];
+        chiaki_log_init(&r->log, CHIAKI_LOG_ALL & ~CHIAKI_LOG_VERBOSE, MCChiakiLog, NULL);
+        r->host = strdup(host.UTF8String);
+        r->done = dispatch_semaphore_create(0);
+        ChiakiRegistInfo info;
+        memset(&info, 0, sizeof(info));
+        info.target = CHIAKI_TARGET_PS5_1;
+        info.host = r->host;
+        info.broadcast = false;
+        memcpy(info.psn_account_id, accountId.bytes, MIN(accountId.length, (NSUInteger)CHIAKI_PSN_ACCOUNT_ID_SIZE));
+        info.pin = pin;
+        NSDictionary* out = nil;
+        if (chiaki_regist_start(&r->regist, &r->log, &info, MCRegistCb, (__bridge void*)r) == CHIAKI_ERR_SUCCESS) {
+            if (dispatch_semaphore_wait(r->done, dispatch_time(DISPATCH_TIME_NOW, 30 * NSEC_PER_SEC)) != 0) {
+                chiaki_regist_stop(&r->regist);
+            }
+            chiaki_regist_fini(&r->regist);
+            out = r->result;
+        }
+        free(r->host);
+        dispatch_async(dispatch_get_main_queue(), ^{ completion(out); });
+    });
 }
 
 + (void) wakeHost:(NSString*)host registKey:(NSString*)registKeyHex {

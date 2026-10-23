@@ -12,7 +12,7 @@ What the handheld app (MoonCastDev/moonlight-android, `app/src/handheld`) does, 
 | Games | All games grid, tabs per source (L/R), A to Z or Recent (X) | Done (PC tabs) |
 | Games | Game menu: Start/Resume, Quit, Change picture, Hide, Add to home screen | Done except Add to home screen (iPadOS can't pin; Siri Shortcuts later) |
 | Consoles | PCs: pair with PIN, wake, quit, hidden games, remove, add by address, away address | Done |
-| Consoles | PS5: register, PSN sign-in, wake, play at home and away | Play at home + wake built (untested); registration and away to do |
+| Consoles | PS5: register, PSN sign-in, wake, play at home and away | Play at home, wake, PSN sign-in, linking with the 8-digit code and live status built (untested); away to do |
 | Consoles | Xbox: sign-in, consoles list, play | To do (WebRTC + xCloud/xHome protocol) |
 | Stream | Moonlight PC stream | Done (Moonlight's own) |
 | Stream | Quick menu: stats, Keyboard, Streaming status, Touch Off/Mouse/Touch, Controllers, Task Manager, Disconnect, Quit | Done, tested on a stream (2420x1668 60 fps H.265) |
