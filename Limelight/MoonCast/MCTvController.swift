@@ -32,12 +32,18 @@ final class MCTvSession: ObservableObject {
             if let err = await MCTvSender.send(tv, game, padKey: padKey) { error = err; state = "Didn't start"; return }
             MCRecents.touch(game.key)
             state = "Starting on \(tv.name)…"
+            let sentAt = Date()
             while !closed {
                 try? await Task.sleep(nanoseconds: 2_000_000_000)
                 if let (st, err) = await MCTvSender.status(tv) {
                     switch st {
-                    case "playing", "streaming": state = "Playing on \(tv.name)"
-                    case "connecting", "starting": state = "Starting on \(tv.name)…"
+                    case "playing", "streaming": state = "Playing on \(tv.name)"; error = nil
+                    case "connecting", "starting":
+                        state = "Starting on \(tv.name)…"
+                        // Android TV won't let MoonCast take the screen from another app: say what to do
+                        if -sentAt.timeIntervalSinceNow > 15 && links == 0 {
+                            error = "Open MoonCast on \(tv.name). The TV took the game but can't show it while another app (YouTube, Netflix…) is in front."
+                        }
                     case "failed", "error": state = "Stopped"; if !err.isEmpty { error = err }
                     case "idle", "home": if state.hasPrefix("Playing") { state = "Ended on \(tv.name)" }
                     default: break

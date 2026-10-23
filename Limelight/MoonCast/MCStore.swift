@@ -84,6 +84,7 @@ final class MCStore: NSObject, ObservableObject, DiscoveryCallback, PairCallback
         clientCert = CryptoManager.readCertFromFile()
         hosts = MCBridge.savedHosts()
         MCPs5Store.testAdd()
+        Task { await MCTvFinder.testTarget() }
         #if DEBUG
         // test runs: MC_SET="key=value;key=value" sets settings (numbers and true/false as such)
         for kv in (ProcessInfo.processInfo.environment["MC_SET"] ?? "").split(separator: ";") {
@@ -450,6 +451,8 @@ final class MCStore: NSObject, ObservableObject, DiscoveryCallback, PairCallback
     /// Test runs only: MC_PLAY=<game name> starts that game once its PC is online.
     private func testAutoPlay() {
         #if DEBUG
+        // with MC_TV, wait until that TV is the target
+        if ProcessInfo.processInfo.environment["MC_TV"] != nil && MCTvFinder.target == nil { return }
         guard !autoPlayed, let want = ProcessInfo.processInfo.environment["MC_PLAY"], !want.isEmpty,
               let g = allGames().first(where: { $0.title.caseInsensitiveCompare(want) == .orderedSame || $0.ps?.name == want || $0.xb?.name == want }),
               g.host.map(online) ?? true else { return }

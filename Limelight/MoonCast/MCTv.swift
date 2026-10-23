@@ -101,6 +101,15 @@ enum MCTvFinder {
         return known
     }
 
+    /// Test runs only: MC_TV=<address> makes that MoonCast TV the target before anything plays.
+    static func testTarget() async {
+        #if DEBUG
+        guard let ip = ProcessInfo.processInfo.environment["MC_TV"], let tv = await ask(ip) else { return }
+        merge([tv], wholeNetwork: false)
+        target = tv
+        #endif
+    }
+
     private static func merge(_ found: [MCTvBox], wholeNetwork: Bool) {
         var byId: [String: MCTvBox] = [:]
         known.forEach { byId[$0.id] = $0 }
