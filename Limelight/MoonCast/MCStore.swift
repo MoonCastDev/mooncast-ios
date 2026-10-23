@@ -84,6 +84,16 @@ final class MCStore: NSObject, ObservableObject, DiscoveryCallback, PairCallback
         clientCert = CryptoManager.readCertFromFile()
         hosts = MCBridge.savedHosts()
         MCPs5Store.testAdd()
+        #if DEBUG
+        // test runs: MC_SET="key=value;key=value" sets settings (numbers and true/false as such)
+        for kv in (ProcessInfo.processInfo.environment["MC_SET"] ?? "").split(separator: ";") {
+            let p = kv.split(separator: "=", maxSplits: 1).map(String.init)
+            guard p.count == 2 else { continue }
+            if let i = Int(p[1]) { UserDefaults.standard.set(i, forKey: p[0]) }
+            else if p[1] == "true" || p[1] == "false" { UserDefaults.standard.set(p[1] == "true", forKey: p[0]) }
+            else { UserDefaults.standard.set(p[1], forKey: p[0]) }
+        }
+        #endif
         // a handheld streams at its own screen size unless you chose one (Moonlight's default is 720p)
         if !UserDefaults.standard.bool(forKey: "mc_res_init") {
             UserDefaults.standard.set(true, forKey: "mc_res_init")
@@ -433,7 +443,8 @@ final class MCStore: NSObject, ObservableObject, DiscoveryCallback, PairCallback
     private func testAutoPlay() {
         #if DEBUG
         guard !autoPlayed, let want = ProcessInfo.processInfo.environment["MC_PLAY"], !want.isEmpty,
-              let g = allGames().first(where: { $0.title.caseInsensitiveCompare(want) == .orderedSame }), let h = g.host, online(h) else { return }
+              let g = allGames().first(where: { $0.title.caseInsensitiveCompare(want) == .orderedSame || $0.ps?.name == want || $0.xb?.name == want }),
+              g.host.map(online) ?? true else { return }
         autoPlayed = true
         play(g)
         #endif

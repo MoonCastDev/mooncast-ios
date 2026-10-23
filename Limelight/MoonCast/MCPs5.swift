@@ -150,8 +150,9 @@ final class MCPs5StreamController: UIViewController, MCPs5SessionDelegate, MCQui
     /// Wakes the console, then connects; while it comes out of rest mode the first tries fail, so up to 8 tries
     /// 3 s apart, as on Android.
     private func connect() {
-        MCPs5Session.wakeHost(console.host, registKey: console.registKey)
-        DispatchQueue.main.asyncAfter(deadline: .now() + (tries == 0 ? 1.5 : 3)) { [weak self] in self?.attempt() }
+        // the route is decided first (a console that is waking up stops answering the probe for a few seconds), then
+        // the wake-up goes out
+        attempt()
     }
 
     private func attempt() {
@@ -162,15 +163,17 @@ final class MCPs5StreamController: UIViewController, MCPs5SessionDelegate, MCQui
             remoteDecided = true
             setStatus("Looking for \(console.name)…")
             let host = console.host, name = console.name
+            let key = console.registKey
             Task.detached {
-                let home = MCPs5Probe.probe(host).power != .notFound
+                var home = false
+                for _ in 0..<3 where !home { home = MCPs5Probe.probe(host).power != .notFound }
                 let r = home ? nil : await MCPsn.remoteFor(name)
+                // wake it now (from rest mode it needs a few seconds before the first connect)
+                MCPs5Session.wakeHost(host, registKey: key)
+                try? await Task.sleep(nanoseconds: 1_500_000_000)
                 await MainActor.run {
+                    // no answer and no PSN: still try this network (the probe can miss), and say so only if that fails
                     self.remote = r
-                    if !home && r == nil && !MCPsn.signedIn {
-                        self.failed("\(name) isn't on this network. To play it away from home, sign in to PlayStation Network in Settings → PlayStation.")
-                        return
-                    }
                     self.attempt()
                 }
             }
@@ -221,6 +224,12 @@ final class MCPs5StreamController: UIViewController, MCPs5SessionDelegate, MCQui
         connected = true
         setStatus(nil)
         MCRecents.touch("ps:\(console.host)")
+        #if DEBUG
+        // test runs: MC_PS5_REST=<seconds> ends the session cleanly (rest mode) so the console isn't left with a stale one
+        if let t = ProcessInfo.processInfo.environment["MC_PS5_REST"].flatMap(Double.init) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + t) { [weak self] in self?.mcRestMode() }
+        }
+        #endif
     }
 
     func ps5Quit(_ reason: String) {
@@ -231,7 +240,9 @@ final class MCPs5StreamController: UIViewController, MCPs5SessionDelegate, MCQui
             return
         }
         if reason.isEmpty { leave(); return }
-        failed(connected ? "The PS5 ended the session: \(reason)" : "Couldn't connect to \(console.name): \(reason)")
+        failed(connected ? "The PS5 ended the session: \(reason)"
+               : !MCPsn.signedIn ? "Couldn't reach \(console.name) on this network (\(reason)). Away from home, sign in to PlayStation Network in Settings → PlayStation."
+               : "Couldn't connect to \(console.name): \(reason)")
     }
 
     private func failed(_ msg: String) {

@@ -111,6 +111,13 @@ struct MCRoot: View {
         let env = ProcessInfo.processInfo.environment
         if let t = env["MC_THEME"] { theme = t }
         if let g = env["MC_GROUP"] { group = g }
+        // MC_ACTION opens one thing: network, padtest, playwhere
+        switch env["MC_ACTION"] ?? "" {
+        case "network": DispatchQueue.main.asyncAfter(deadline: .now() + 3) { store.networkTest() }
+        case "padtest": padTest = true
+        case "playwhere": DispatchQueue.main.asyncAfter(deadline: .now() + 2) { playWhere() }
+        default: break
+        }
         if let pg = env["MC_PAGE"], let target = [MCPage.home, .games, .consoles, .settings].first(where: { $0.rawValue.lowercased().hasPrefix(pg.lowercased()) || (pg == "games" && $0 == .games) }) {
             go(target)
         }
