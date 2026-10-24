@@ -160,7 +160,7 @@ struct MCQuickMenuView: View {
         if model.page.hasPrefix("confirm:"), let w = words[String(model.page.dropFirst(8))] {
             let k = String(model.page.dropFirst(8))
             return [Item(icon: "xmark", label: "Cancel", detail: nil) { model.page = "power" },
-                    Item(icon: w.1, label: w.0 + " the PC", detail: "Windows: MoonCast types shutdown in Start for you", danger: true) {
+                    Item(icon: w.1, label: w.0 + " the PC", detail: "Windows: MoonCast types it into Run for you", danger: true) {
                         model.close()
                         a.mcPower?(k)
                     }]
