@@ -256,7 +256,8 @@ struct MCRoot: View {
 
     /// The colour of the focused game, washed over the background.
     private func wash(_ m: MCMetrics, _ p: MCPalette) -> some View {
-        let c = focusedGame().map { g -> Color in MCArt.tint(g.key) ?? Covers.tint(g.seed) }
+        // Settings → Theme → Background: Static keeps the theme's plain colour
+        let c = UserDefaults.standard.string(forKey: "hh_background") == "static" ? nil : focusedGame().map { g -> Color in MCArt.tint(g.key) ?? Covers.tint(g.seed) }
         return GeometryReader { g in
             if let c = c {
                 RadialGradient(colors: [c.opacity(0.26), c.opacity(0)], center: UnitPoint(x: 0.3, y: 0.4),
@@ -840,7 +841,7 @@ struct MCRoot: View {
         "s:multi": "person.2", "s:swap": "arrow.left.arrow.right", "s:mouse": "computermouse",
         "s:ps:res": "rectangle.expand.vertical", "s:ps:fps": "speedometer", "s:ps:rate": "gauge.with.dots.needle.67percent",
         "s:ps:codec": "film", "s:ps:disc": "moon.zzz", "s:ps:swap": "arrow.left.arrow.right", "s:theme": "paintpalette",
-        "s:profile": "house", "s:444": "circle.grid.cross", "s:range": "circle.lefthalf.filled", "s:shape": "aspectratio", "s:osctrans": "square.on.square.dashed",
+        "s:profile": "house", "s:bg": "circle.lefthalf.striped.horizontal", "s:444": "circle.grid.cross", "s:range": "circle.lefthalf.filled", "s:shape": "aspectratio", "s:osctrans": "square.on.square.dashed",
         "s:dz": "smallcircle.filled.circle", "s:motion": "gyroscope", "s:xb:dz": "smallcircle.filled.circle",
         "s:ps:awayres": "rectangle.expand.vertical", "s:ps:awayrate": "gauge.with.dots.needle.67percent",
         "s:xb:res": "rectangle.expand.vertical", "s:xb:rate": "gauge.with.dots.needle.67percent", "s:xb:rumble": "waveform",
@@ -987,7 +988,7 @@ struct MCRoot: View {
                 UserDefaults.standard.set(!UserDefaults.standard.bool(forKey: "mc_ultra_low_latency"), forKey: "mc_ultra_low_latency")
             }
             let levels = ["off", "lite", "detailed"]
-            choice("s:stats", "Stats while playing", "Lite: frame rate and delay, small at the top. Detailed: every number in a panel at the top left. For PC, PS5 and Xbox",
+            choice("s:stats", "Stats while playing", "Lite: the main numbers in a row at the top. Detailed: every number in a panel at the top left. For PC, PS5 and Xbox",
                    ["Off", "Lite", "Detailed"], levels.firstIndex(of: MCStatsLevel.current) ?? 0, m, p) { i in MCStatsLevel.set(levels[i]) }
             toggle("s:opt", "Let the PC set game settings", "Sunshine and GeForce change the game's resolution to match", v.optimize, m, p) {
                 settings.save { $0.optimize.toggle() }
@@ -1128,6 +1129,10 @@ struct MCRoot: View {
             let themes = ["dark", "light", "oled"]
             choice("s:theme", "Theme", "Dark is charcoal with white type, Light the reverse. OLED is true black: deeper, and easier on an OLED screen's battery",
                    ["Dark", "Light", "OLED"], themes.firstIndex(of: theme) ?? 0, m, p) { i in theme = themes[i] }
+            let bgs = ["game", "static"]
+            choice("s:bg", "Background", "Follows the game tints it with the selected game's colour. Static keeps the theme's own colour",
+                   ["Follows the game", "Static"], bgs.firstIndex(of: UserDefaults.standard.string(forKey: "hh_background") ?? "game") ?? 0, m, p) { i in
+                UserDefaults.standard.set(bgs[i], forKey: "hh_background") }
         default:
             let ver = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ""
             let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? ""
