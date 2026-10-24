@@ -192,6 +192,8 @@ enum MCTvSender {
         if let a = g.app {
             j["appId"] = a.id ?? ""
             j["appName"] = a.name ?? g.title
+            // which PC: a TV that knows several plays it on this one, not on whichever it lists first
+            if let h = g.host { j["pcUuid"] = h.uuid; j["pcName"] = h.name }
             // A TV with no pairing gets this iPad's identity, sealed to the TV's key, for this session only. Ask the
             // TV again first: its key changes each time its app starts, so a remembered one can be stale.
             let live = await MCTvFinder.ask(tv.ip) ?? tv
