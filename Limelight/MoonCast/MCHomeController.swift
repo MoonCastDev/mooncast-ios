@@ -99,6 +99,13 @@ final class MCHomeController: UIHostingController<MCRoot> {
         super.init(rootView: MCRoot())
         var root = MCRoot()
         root.askText = { [weak self] title, placeholder, done in self?.ask(title, placeholder, done) }
+        root.openXboxLink = { [weak self] code in
+            let vc = MCXboxLinkController()
+            vc.code = code
+            let nav = UINavigationController(rootViewController: vc)
+            nav.modalPresentationStyle = .formSheet
+            self?.present(nav, animated: true)
+        }
         root.signInPsn = { [weak self] done in
             let vc = MCPsnSignInController()
             vc.done = done
