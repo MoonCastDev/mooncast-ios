@@ -36,7 +36,7 @@ struct MCRoot: View {
     var body: some View {
         GeometryReader { geo in
             let m = MCMetrics(size: geo.size, scale: screenSize == "compact" ? 1.12 : screenSize == "large" ? 1.25 : 1)
-            let p = MCPalette(light: theme == "light")
+            let p = MCPalette(theme: theme)
             let _ = store.revision + artRev + settingsRev
             ZStack {
                 p.bg.ignoresSafeArea()
@@ -1122,8 +1122,9 @@ struct MCRoot: View {
             choice("s:xb:dz", "Stick deadzone", "Raise it if a worn stick drifts", xdz.map { $0 == 0 ? "Off" : "\($0)%" },
                    xdz.firstIndex(of: d.object(forKey: "xbox_deadzone") as? Int ?? 8) ?? 3, m, p) { i in d.set(xdz[i], forKey: "xbox_deadzone") }
         case "theme":
-            choice("s:theme", "Theme", "Dark is charcoal with white type; Light is the reverse", ["Dark", "Light"],
-                   theme == "light" ? 1 : 0, m, p) { i in theme = i == 1 ? "light" : "dark" }
+            let themes = ["dark", "light", "oled"]
+            choice("s:theme", "Theme", "Dark is charcoal with white type, Light the reverse. OLED is true black: deeper, and easier on an OLED screen's battery",
+                   ["Dark", "Light", "OLED"], themes.firstIndex(of: theme) ?? 0, m, p) { i in theme = themes[i] }
         default:
             let ver = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ""
             let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? ""

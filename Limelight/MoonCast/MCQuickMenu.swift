@@ -214,7 +214,7 @@ struct MCQuickMenuView: View {
         GeometryReader { geo in
             let upright = geo.size.height > geo.size.width
             let m = MCMetrics(size: geo.size)
-            let p = MCPalette(light: theme == "light")
+            let p = MCPalette(theme: theme)
             let _ = model.rev
             ZStack(alignment: upright ? .bottom : .trailing) {
                 Color.black.opacity(0.5).ignoresSafeArea().onTapGesture { model.close() }
