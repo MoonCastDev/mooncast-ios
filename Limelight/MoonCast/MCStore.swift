@@ -236,6 +236,17 @@ final class MCStore: NSObject, ObservableObject, DiscoveryCallback, PairCallback
             return
         }
         let current = apps(h).first { $0.id == h.currentGame && h.currentGame != "0" }
+        // After Power → Hibernate, Sunshine has forgotten the game, though Windows kept it: starting the game's app
+        // again would run its command (Steam brings Big Picture over the game). The Desktop shows what was left.
+        if current == nil, MCPower.hibernated(h) == a.id, let desk = apps(h).first(where: { ($0.name ?? "").lowercased() == "desktop" }) {
+            dialog = MCDialog(title: "Resuming \(g.title)", message: "\(h.name) was hibernated while playing it, so MoonCast opens its Desktop: the game is where you left it.",
+                              opts: [.init(title: "OK", picked: true) { [weak self] in
+                                         MCPower.clearHibernated(h)
+                                         self?.stream(MCGame(key: g.key, title: g.title, src: g.src, seed: g.seed, running: true, host: h, app: desk))
+                                     }])
+            return
+        }
+        if current != nil { MCPower.clearHibernated(h) }
         if let cur = current, cur.id != a.id {
             dialog = MCDialog(title: "Quit \(cur.name ?? "the game") and start \(a.name ?? "this one")?",
                               message: "\(h.name) is playing \(cur.name ?? "another game"). Anything not saved in it is lost.",
@@ -274,8 +285,13 @@ final class MCStore: NSObject, ObservableObject, DiscoveryCallback, PairCallback
 
     /// The Quick menu's Quit game: the stream screen is closing, quit on the PC it played from.
     func quitGame(atAddress address: String) {
-        guard let h = hosts.first(where: { $0.activeAddress == address || $0.address == address || $0.localAddress == address }) else { return }
+        guard let h = host(atAddress: address) else { return }
         quit(h)
+    }
+
+    /// The PC a stream was started on, by the address it used.
+    func host(atAddress address: String) -> TemporaryHost? {
+        hosts.first { $0.activeAddress == address || $0.address == address || $0.localAddress == address || $0.externalAddress == address }
     }
 
     private func pcOffline(_ h: TemporaryHost) {

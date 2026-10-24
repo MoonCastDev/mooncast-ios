@@ -407,6 +407,12 @@
     dispatch_async(dispatch_get_main_queue(), ^{
         // Allow the display to go to sleep now
         [UIApplication sharedApplication].idleTimerDisabled = NO;
+
+        // MoonCast: the PC was just told to hibernate, restart or shut down: that's why it went, not an error
+        if ([MCPower consumeTermination]) {
+            [self returnToMainFrame];
+            return;
+        }
         
         NSString* title;
         NSString* message;
@@ -706,6 +712,29 @@
         LiSendKeyboardEvent(0x1B, KEY_ACTION_UP, MODIFIER_CTRL | MODIFIER_SHIFT);
         LiSendKeyboardEvent(0x10, KEY_ACTION_UP, MODIFIER_CTRL);
         LiSendKeyboardEvent(0x11, KEY_ACTION_UP, 0);
+    });
+}
+
+- (void) mcPower:(NSString*)what {
+    // Start opens with Ctrl + Esc (games often block the Windows key), the command is typed as text (the same on any
+    // keyboard layout) and Enter runs it once Start's search has found it
+    NSString* cmd = [MCPower commandFor:what];
+    [MCPower startedWithWhat:what address:self.streamConfig.host ?: @"" appId:self.streamConfig.appID ?: @"" leave:^{
+        [self returnToMainFrame];
+    }];
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+        LiSendKeyboardEvent(0x11, KEY_ACTION_DOWN, MODIFIER_CTRL);
+        LiSendKeyboardEvent(0x1B, KEY_ACTION_DOWN, MODIFIER_CTRL);
+        usleep(80 * 1000);
+        LiSendKeyboardEvent(0x1B, KEY_ACTION_UP, MODIFIER_CTRL);
+        LiSendKeyboardEvent(0x11, KEY_ACTION_UP, 0);
+        usleep(1500 * 1000);
+        const char* text = cmd.UTF8String;
+        LiSendUtf8TextEvent(text, (unsigned int)strlen(text));
+        usleep(2000 * 1000);
+        LiSendKeyboardEvent(0x0D, KEY_ACTION_DOWN, 0);
+        usleep(80 * 1000);
+        LiSendKeyboardEvent(0x0D, KEY_ACTION_UP, 0);
     });
 }
 
