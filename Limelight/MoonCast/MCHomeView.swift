@@ -1129,8 +1129,8 @@ struct MCRoot: View {
                 d.set(i == 1 ? 1080 : 720, forKey: "ps5_resolution") }
             choice("s:ps:fps", "Frame rate", "60 fps is smoother; 30 fps lets a weak link keep up", ["30 fps", "60 fps"], MCPs5Store.fps >= 60 ? 1 : 0, m, p) { i in
                 d.set(i == 1 ? 60 : 30, forKey: "ps5_fps") }
-            let rates = [0, 10, 15, 20, 30]
-            choice("s:ps:rate", "Bitrate", "Auto: 30 Mbps at 1080p, 15 at 720p", rates.map { $0 == 0 ? "Auto" : "\($0) Mbps" } + ["Custom…"],
+            let rates = [0, 10, 15, 20, 30, 50, 80, 100]
+            choice("s:ps:rate", "Bitrate", "Auto: 30 Mbps at 1080p, 15 at 720p. 80–100 Mbps needs a strong 5 GHz or 6 GHz Wi-Fi", rates.map { $0 == 0 ? "Auto" : "\($0) Mbps" } + ["Custom…"],
                    rates.firstIndex(of: MCPs5Store.bitrate) ?? -1, other: "\(MCPs5Store.bitrate) Mbps", m, p) { i in
                 if i == rates.count { customPs5Rate("ps5_bitrate") } else { d.set(rates[i], forKey: "ps5_bitrate") } }
             choice("s:ps:codec", "Video codec", "HEVC looks better at the same bitrate", ["H.264", "HEVC"], MCPs5Store.h265 ? 1 : 0, m, p) { i in
@@ -1206,11 +1206,11 @@ struct MCRoot: View {
         }
     }
 
-    /// Settings → PlayStation → Bitrate → Custom: 2 to 50 Mbps.
+    /// Settings → PlayStation → Bitrate → Custom: 2 to 100 Mbps (the PS5 takes up to 100, as PXPlay uses).
     private func customPs5Rate(_ key: String) {
-        askText("Custom bitrate", "2 to 50 Mbps") { t in
+        askText("Custom bitrate", "2 to 100 Mbps") { t in
             guard let n = Double(t.replacingOccurrences(of: ",", with: ".").trimmingCharacters(in: .whitespaces)) else { return }
-            UserDefaults.standard.set(Int(max(2, min(50, n)).rounded()), forKey: key)
+            UserDefaults.standard.set(Int(max(2, min(100, n)).rounded()), forKey: key)
             settingsRev += 1
         }
     }
