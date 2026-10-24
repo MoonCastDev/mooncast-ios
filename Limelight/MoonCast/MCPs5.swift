@@ -91,7 +91,7 @@ final class MCPs5StreamController: UIViewController, MCPs5SessionDelegate, MCQui
     private var closed = false
     private var tries = 0
     private var menuOpen = false
-    private var statsOn = UserDefaults.standard.bool(forKey: "ps5_stats")
+    private var statsOn: Bool { MCStatsLevel.current != "off" }
     private var comboFired = false
     private var remote: (String, String, Data)?
     private var fsr: MCFsrView?
@@ -368,7 +368,11 @@ final class MCPs5StreamController: UIViewController, MCPs5SessionDelegate, MCQui
 
     private func updateCorner() {
         guard statsOn, connected, session != nil else { corner?.isHidden = true; return }
-        corner?.show(stats: mcStats())
+        corner?.level = MCStatsLevel.current
+        var d = mcStats()
+        d["size"] = "\(MCPs5Store.height >= 1080 ? 1920 : MCPs5Store.height >= 720 ? 1280 : 960)x\(MCPs5Store.height)"
+        d["targetFps"] = MCPs5Store.fps
+        corner?.show(stats: d)
         if let c = corner { view.bringSubviewToFront(c) }
     }
 
@@ -382,8 +386,7 @@ final class MCPs5StreamController: UIViewController, MCPs5SessionDelegate, MCQui
     func mcHostAddress() -> String { console.host }
     func mcStatsOn() -> Bool { statsOn }
     func mcToggleStats() {
-        statsOn.toggle()
-        UserDefaults.standard.set(statsOn, forKey: "ps5_stats")
+        MCStatsLevel.cycle()
         updateCorner()
     }
     func mcTouchMode() -> Int32 { 0 }

@@ -266,6 +266,7 @@
         if (self->_mcPill == nil) {
             self->_mcPill = [MCStatsPill attachTo:self.view];
         }
+        self->_mcPill.level = MCStatsLevel.current;
         [self->_mcPill showWithStats:stats];
         [self.view bringSubviewToFront:self->_mcPill];
     });
@@ -396,7 +397,7 @@
         
         [self->_controllerSupport connectionEstablished];
         
-        if (self->_settings.statsOverlay) {
+        if (![MCStatsLevel.current isEqualToString:@"off"]) {
             self->_statsUpdateTimer = [NSTimer scheduledTimerWithTimeInterval:1.0f
                                                                        target:self
                                                                      selector:@selector(updateStatsOverlay)
@@ -683,6 +684,7 @@
     NSMutableDictionary* d = [[_streamMan mcStats] mutableCopy] ?: [NSMutableDictionary dictionary];
     d[@"mbps"] = @(self.streamConfig.bitRate / 1000.0f);
     d[@"size"] = [NSString stringWithFormat:@"%dx%d", self.streamConfig.width, self.streamConfig.height];
+    d[@"targetFps"] = @(self.streamConfig.frameRate);
     return d;
 }
 
@@ -693,14 +695,17 @@
 - (BOOL) mcStatsOn { return _statsUpdateTimer != nil; }
 
 - (void) mcToggleStats {
-    if (_statsUpdateTimer != nil) {
+    // Off → Lite → Detailed → Off
+    NSString* level = [MCStatsLevel cycle];
+    if ([level isEqualToString:@"off"]) {
         [_statsUpdateTimer invalidate];
         _statsUpdateTimer = nil;
         [_mcPill setHidden:YES];
     }
-    else {
+    else if (_statsUpdateTimer == nil) {
         _statsUpdateTimer = [NSTimer scheduledTimerWithTimeInterval:1.0 target:self selector:@selector(updateStatsOverlay) userInfo:nil repeats:YES];
     }
+    [self updateStatsOverlay];
 }
 
 - (int) mcTouchMode { return [_streamView mcTouchMode]; }
