@@ -26,10 +26,57 @@ final class MCLaunch: NSObject {
     }
 }
 
-/// The app's navigation: follows Settings → Screen turns with the device (off = on its side only).
-final class MCNav: UINavigationController {
+/// The app's navigation. The home follows Settings → Screen turns with the device (off = on its side only);
+/// games always play on their side, as on the handheld, so starting one turns the screen and leaving it lets the
+/// home turn back.
+final class MCNav: UINavigationController, UINavigationControllerDelegate {
+    /// While a game is about to open from an upright home: on its side only
+    private var turning = false
+    /// The home was upright when a game turned the screen: go back upright after it
+    private var wasUpright = false
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        delegate = self
+        UIDevice.current.beginGeneratingDeviceOrientationNotifications()
+    }
+
+    private var onHome: Bool { topViewController is MCHomeController }
+    private var homeTurns: Bool { UserDefaults.standard.object(forKey: "hh_rotate") as? Bool ?? true }
+
     override var supportedInterfaceOrientations: UIInterfaceOrientationMask {
-        (UserDefaults.standard.object(forKey: "hh_rotate") as? Bool ?? true) ? .all : .landscape
+        onHome && homeTurns && !turning ? (UIDevice.current.userInterfaceIdiom == .pad ? .all : .allButUpsideDown) : .landscape
+    }
+
+    /// Opens a game's player: turns the screen on its side first, so the player is laid out for it from the start
+    /// (a PC stream laid out upright kept an upright-sized picture in a corner after the turn).
+    func pushGame(_ vc: UIViewController) {
+        guard let scene = view.window?.windowScene, !scene.interfaceOrientation.isLandscape else {
+            pushViewController(vc, animated: true)
+            return
+        }
+        turning = true
+        wasUpright = true
+        setNeedsUpdateOfSupportedInterfaceOrientations()
+        scene.requestGeometryUpdate(.iOS(interfaceOrientations: .landscape)) { _ in }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            self.pushViewController(vc, animated: true)
+            self.turning = false
+        }
+    }
+
+    func navigationController(_ nav: UINavigationController, didShow vc: UIViewController, animated: Bool) {
+        setNeedsUpdateOfSupportedInterfaceOrientations()
+        // back home from a game: upright again if the home was upright before it, unless the device is now
+        // clearly held on its side (lying flat on a table it reports face up, not upright)
+        guard vc is MCHomeController, wasUpright else { return }
+        wasUpright = false
+        // a moment later: iOS still holds the game's on-its-side-only rule while the home appears
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
+            guard let self = self, self.homeTurns, let scene = self.view.window?.windowScene, scene.interfaceOrientation.isLandscape,
+                  !UIDevice.current.orientation.isLandscape else { return }
+            scene.requestGeometryUpdate(.iOS(interfaceOrientations: .portrait)) { e in NSLog("MoonCast: back upright failed: \(e)") }
+        }
     }
 }
 
@@ -52,13 +99,13 @@ final class MCHomeController: UIHostingController<MCRoot> {
             MCStore.shared.playing = MCStore.shared.allGames().first { $0.xb?.id == c.id }
             MCUsage.used("xbox")
             MCPad.shared.detach()
-            self?.navigationController?.pushViewController(MCXboxStreamController(console: c), animated: true)
+            (self?.navigationController as? MCNav)?.pushGame(MCXboxStreamController(console: c))
         }
         MCStore.shared.onPs5Stream = { [weak self] c in
             MCStore.shared.playing = MCStore.shared.allGames().first { $0.ps?.host == c.host }
             MCUsage.used("ps5")
             MCPad.shared.detach()
-            self?.navigationController?.pushViewController(MCPs5StreamController(console: c), animated: true)
+            (self?.navigationController as? MCNav)?.pushGame(MCPs5StreamController(console: c))
         }
         NotificationCenter.default.addObserver(self, selector: #selector(active), name: UIApplication.didBecomeActiveNotification, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(inactive), name: UIApplication.willResignActiveNotification, object: nil)
@@ -92,7 +139,7 @@ final class MCHomeController: UIHostingController<MCRoot> {
     private func stream(_ cfg: StreamConfiguration) {
         let vc = MCBridge.streamController(withConfig: cfg)
         MCPad.shared.detach()
-        navigationController?.pushViewController(vc, animated: true)
+        (navigationController as? MCNav)?.pushGame(vc)
     }
 
     private func ask(_ title: String, _ placeholder: String, _ done: @escaping (String) -> Void) {
