@@ -69,6 +69,16 @@ final class MCQuickMenu: NSObject {
 final class MCQuickModel: ObservableObject {
     let actions: MCQuickActions
     var onClose: () -> Void = {}
+    /// What an item just did, shown in place of its subtitle for a moment (the menu stays open)
+    @Published var flashes: [String: String] = [:]
+
+    func flash(_ label: String, _ text: String) {
+        flashes[label] = text
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
+            if self?.flashes[label] == text { self?.flashes[label] = nil }
+        }
+    }
+
     /// "main", "power" (Hibernate, Restart, Shut down) or "confirm:<what>"
     @Published var page = "main" {
         didSet { MCFocus.shared.id = "qm:0" }
@@ -175,7 +185,7 @@ struct MCQuickMenuView: View {
         let move = moveToTv(a)
         if a.mcKind?() == "xbox" {
             return [
-                Item(icon: "xbox.logo", label: "Xbox button", detail: "Opens the guide") { model.close(); a.mcPsButton?() },
+                Item(icon: "xbox.logo", label: "Xbox button", detail: "Opens the guide") { a.mcPsButton?(); model.flash("Xbox button", "Pressed") },
                 Item(icon: "info.circle", label: "Streaming status", detail: a.mcStatsOn() ? "On" : "Off") { a.mcToggleStats(); model.rev += 1 },
                 Item(icon: "gamecontroller", label: "Controllers", detail: pads == 1 ? "1 connected" : "\(pads) connected") {},
             ] + move + [
@@ -187,7 +197,7 @@ struct MCQuickMenuView: View {
             return [
                 Item(icon: "info.circle", label: "Streaming status", detail: a.mcStatsOn() ? "On" : "Off") { a.mcToggleStats(); model.rev += 1 },
                 Item(icon: "gamecontroller", label: "Controllers", detail: pads == 1 ? "1 connected" : "\(pads) connected") {},
-                Item(icon: "playstation.logo", label: "PS button", detail: "Pads without one: L2 + Start") { model.close(); a.mcPsButton?() },
+                Item(icon: "playstation.logo", label: "PS button", detail: "Pads without one: L2 + Start") { a.mcPsButton?(); model.flash("PS button", "Pressed") },
             ] + move + [
                 Item(icon: "arrow.left", label: "Disconnect", detail: "Ask, rest mode or keep it on (Settings → PlayStation)") { model.close(); a.mcDisconnect() },
                 Item(icon: "moon.zzz", label: "Rest mode", detail: "Puts the PS5 to sleep", danger: true) { model.close(); a.mcRestMode?() },
@@ -197,7 +207,7 @@ struct MCQuickMenuView: View {
             Item(icon: "keyboard", label: "Keyboard", detail: "On-screen") { a.mcToggleKeyboard(); model.close() },
             Item(icon: "info.circle", label: "Streaming status", detail: a.mcStatsOn() ? "On" : "Off") { a.mcToggleStats(); model.rev += 1 },
             Item(icon: "gamecontroller", label: "Controllers", detail: pads == 1 ? "1 connected" : "\(pads) connected") {},
-            Item(icon: "list.bullet.rectangle", label: "Task Manager", detail: "Windows: Ctrl + Shift + Esc") { a.mcTaskManager(); model.close() },
+            Item(icon: "list.bullet.rectangle", label: "Task Manager", detail: "Windows: Ctrl + Shift + Esc") { a.mcTaskManager(); model.flash("Task Manager", "Opened on the PC") },
             Item(icon: "power", label: "Power", detail: "Hibernate, restart or shut down the PC") { model.page = "power" },
         ] + move + [
             Item(icon: "arrow.left", label: "Disconnect", detail: "The game keeps running") { model.close(); a.mcDisconnect() },
@@ -273,7 +283,11 @@ struct MCQuickMenuView: View {
                                     .background(RoundedRectangle(cornerRadius: m.px(12)).fill(it.danger ? MCPalette.red : Color(hex: 0x5B6170)))
                                 VStack(alignment: .leading, spacing: m.px(4)) {
                                     Text(it.label).mcFont(28, m, weight: .heavy).foregroundColor(it.danger ? MCPalette.red : p.ink)
-                                    if let d = it.detail { Text(d).mcFont(21, m, weight: .semibold).foregroundColor(p.sub) }
+                                    if let f = model.flashes[it.label] {
+                                        Text(f).mcFont(21, m, weight: .semibold).foregroundColor(p.ring)
+                                    } else if let d = it.detail {
+                                        Text(d).mcFont(21, m, weight: .semibold).foregroundColor(p.sub)
+                                    }
                                 }
                                 Spacer()
                             }
