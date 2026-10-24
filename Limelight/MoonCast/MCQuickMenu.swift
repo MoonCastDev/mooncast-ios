@@ -151,7 +151,9 @@ struct MCQuickMenuView: View {
         return [Item(icon: "tv", label: "Move to \(tv.name)", detail: "This \(MCDevice.name) becomes its controller") {
             model.close()
             if let keep = a.mcLeaveKeepOn { keep() } else { a.mcDisconnect() }
-            DispatchQueue.main.asyncAfter(deadline: .now() + (kind == "ps5" ? 3 : kind == "xbox" ? 1 : 0.5)) {
+            // the PC, PS5 or Xbox must have let this session go before the TV starts, or the TV waits for ever
+            // (a PC after 0.5 s still had the iPad's session: the TV's start never went on)
+            DispatchQueue.main.asyncAfter(deadline: .now() + (kind == "xbox" ? 1 : 3)) {
                 MCStore.shared.tvSession = MCTvSession(tv: tv, game: g)
             }
         }]
