@@ -306,7 +306,33 @@ final class MCStore: NSObject, ObservableObject, DiscoveryCallback, PairCallback
 
     func wake(_ h: TemporaryHost) {
         DispatchQueue.global().async { WakeOnLanManager.wake(h) }
-        dialog = MCDialog(title: "Wake-up sent", message: "\(h.name) may take a moment to come up.", opts: [.init(title: "OK") {}])
+        dialog = MCDialog(title: "Waking \(h.name)…", message: "It shows as online as soon as it answers, usually within a minute.", opts: [.init(title: "OK") {}])
+        watchWake(h, since: Date())
+    }
+
+    /// After a wake: ask the PC itself every 2 s for up to 2 minutes, instead of waiting for discovery to notice it,
+    /// sending the wake-up again about every 6 s (a single packet sent while a PC was still going into hibernation
+    /// was lost, so it only woke after the app was restarted and Wake pressed again), and say when it's back.
+    private func watchWake(_ h: TemporaryHost, since: Date) {
+        DispatchQueue.global(qos: .utility).async {
+            let up = MCBridge.refreshServerInfo(h, discovery: self.disc) == nil
+            DispatchQueue.main.async {
+                if up {
+                    h.state = State.online
+                    self.bump()
+                    if self.dialog?.title.hasPrefix("Waking") == true {
+                        self.dialog = MCDialog(title: "\(h.name) is awake", message: nil, opts: [.init(title: "OK") {}])
+                    }
+                    if self.paired(h) { self.fetchApps(h, force: true) }
+                    return
+                }
+                guard -since.timeIntervalSinceNow < 120 else { return }
+                // one packet can come too early (a PC still going into hibernation isn't listening yet): send again
+                // every few seconds while waiting
+                if Int(-since.timeIntervalSinceNow) % 6 < 2 { DispatchQueue.global().async { WakeOnLanManager.wake(h) } }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2) { self.watchWake(h, since: since) }
+            }
+        }
     }
 
     func remove(_ h: TemporaryHost) {
