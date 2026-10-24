@@ -102,7 +102,7 @@ extern int ff_isom_write_av1c(AVIOContext *pb, const uint8_t *buf, int size,
     self->videoFormat = videoFormat;
     self->frameRate = frameRate;
     // FSR for 8-bit streams clearly smaller than the screen (HDR keeps the display layer)
-    if (!(videoFormat & VIDEO_FORMAT_MASK_10BIT) && [MCFsr wantedWithVideoHeight:videoHeight]) {
+    if (!(videoFormat & (VIDEO_FORMAT_MASK_10BIT | VIDEO_FORMAT_MASK_YUV444)) && [MCFsr wantedWithVideoHeight:videoHeight]) {
         void (^make)(void) = ^{
             MCFsrView* v = [[MCFsrView alloc] initWithFrame:self->displayLayer.frame sharpness:MCFsr.sharpness];
             if (!v.ready) return;

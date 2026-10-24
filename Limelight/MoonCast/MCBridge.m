@@ -132,6 +132,14 @@
         VTIsHardwareDecodeSupported(kCMVideoCodecType_AV1) && (AVPlayer.availableHDRModes & AVPlayerHDRModeHDR10) != 0) {
         config.supportedVideoFormats |= VIDEO_FORMAT_AV1_MAIN10;
     }
+
+    // MoonCast: Settings → Picture → YUV 4:4:4 (HEVC): full colour detail, used when the PC offers HEVC 4:4:4
+    if ([[NSUserDefaults standardUserDefaults] boolForKey:@"mc_yuv444"] && (config.supportedVideoFormats & VIDEO_FORMAT_H265)) {
+        config.supportedVideoFormats |= VIDEO_FORMAT_H265_REXT8_444;
+        if (config.supportedVideoFormats & VIDEO_FORMAT_H265_MAIN10) {
+            config.supportedVideoFormats |= VIDEO_FORMAT_H265_REXT10_444;
+        }
+    }
     return config;
 }
 
