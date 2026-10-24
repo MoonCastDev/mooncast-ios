@@ -141,7 +141,7 @@ final class MCStatsPill: UIView {
                     String(format: "%.1f / %.1f / %.1f ms", mn, h, mx) } } ?? String(format: "%.1f ms", h)))
             }
             if let lf = lostFrames { rows.append(("Lost", String(format: "%.0f frames", lf))) }
-            else if let l = loss { rows.append(("Dropped by network", String(format: "%.2f%%", l))) }
+            else if let l = loss { rows.append(("Network loss", String(format: "%.2f%%", l))) }
         }
         isHidden = false
         let flat = [level, "\(health)"] + rows.map { $0.0 + "|" + $0.1 }
