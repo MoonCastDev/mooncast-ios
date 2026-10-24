@@ -1009,8 +1009,8 @@ struct MCRoot: View {
                 UserDefaults.standard.set(!dim, forKey: "hh_dim_on_tv")
             }
             let touch = ["off", "mouse", "touch"]
-            let curTouch = UserDefaults.standard.string(forKey: "mc_touch_default") ?? "off"
-            choice("s:touch", "Touch screen", "In PC games. Mouse is a trackpad, Touch clicks where you tap. The Quick menu switches it while playing",
+            let curTouch = UserDefaults.standard.string(forKey: "mc_touch_default") ?? "touch"
+            choice("s:touch", "Touch screen", "In PC games. Touch clicks where you tap, Mouse makes the screen a trackpad, Off ignores the screen",
                    ["Off", "Mouse", "Touch"], touch.firstIndex(of: curTouch) ?? 0, m, p) { i in
                 UserDefaults.standard.set(touch[i], forKey: "mc_touch_default")
                 // Moonlight's own setting: Touch also allows pinch to zoom and turns the on-screen controller off

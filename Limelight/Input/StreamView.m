@@ -69,8 +69,8 @@ static const double X1_MOUSE_SPEED_DIVISOR = 2.5;
     self->touchHandler = [[RelativeTouchHandler alloc] initWithView:self];
 #else
     // iOS uses RelativeTouchHandler or AbsoluteTouchHandler depending on user preference
-    // MoonCast: Settings → Controls → Touch screen (Off, Mouse, Touch); Off by default, as on the handheld
-    NSString* touchPref = [[NSUserDefaults standardUserDefaults] stringForKey:@"mc_touch_default"] ?: @"off";
+    // MoonCast: Settings → iPad → Touch screen (Off, Mouse, Touch); Touch unless changed there
+    NSString* touchPref = [[NSUserDefaults standardUserDefaults] stringForKey:@"mc_touch_default"] ?: @"touch";
     [self mcSetTouchMode:[touchPref isEqualToString:@"touch"] ? 2 : [touchPref isEqualToString:@"mouse"] ? 1 : 0];
     
     onScreenControls = [[OnScreenControls alloc] initWithView:self controllerSup:controllerSupport streamConfig:streamConfig];
