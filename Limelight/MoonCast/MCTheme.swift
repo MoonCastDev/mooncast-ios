@@ -12,13 +12,21 @@ extension Color {
     }
 }
 
-/// The two themes, as on Android (Settings → Theme).
+/// The themes, as on Android (Settings → Theme): Dark, Light, and OLED (true black, for OLED screens: black pixels
+/// are off, so it saves power and looks deeper).
 struct MCPalette {
     let light: Bool
-    var bg: Color { Color(hex: light ? 0xEBEBEB : 0x2B2D31) }
-    var panel: Color { Color(hex: light ? 0xFFFFFF : 0x36393F) }
-    var tile: Color { Color(hex: light ? 0xDADCE0 : 0x3E4249) }
-    var line: Color { Color(hex: light ? 0xCDCFD4 : 0x474B53) }
+    var oled = false
+
+    init(theme: String) {
+        light = theme == "light"
+        oled = theme == "oled"
+    }
+
+    var bg: Color { Color(hex: light ? 0xEBEBEB : oled ? 0x000000 : 0x2B2D31) }
+    var panel: Color { Color(hex: light ? 0xFFFFFF : oled ? 0x141518 : 0x36393F) }
+    var tile: Color { Color(hex: light ? 0xDADCE0 : oled ? 0x1C1D21 : 0x3E4249) }
+    var line: Color { Color(hex: light ? 0xCDCFD4 : oled ? 0x2A2C31 : 0x474B53) }
     var ink: Color { Color(hex: light ? 0x2D2D2D : 0xFFFFFF) }
     var sub: Color { Color(hex: light ? 0x6E727A : 0xB5BAC3) }
     var label: Color { Color(hex: light ? 0x3A3D42 : 0xD9DCE1) }
