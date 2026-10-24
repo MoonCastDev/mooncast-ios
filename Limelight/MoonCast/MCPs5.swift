@@ -222,6 +222,7 @@ final class MCPs5StreamController: UIViewController, MCPs5SessionDelegate, MCQui
         connected = true
         setStatus(nil)
         MCRecents.touch("ps:\(console.host)")
+        MCQuickMenu.runTestSteps(in: self)
         #if DEBUG
         // test runs: MC_PS5_REST=<seconds> ends the session cleanly (rest mode) so the console isn't left with a stale one
         if let t = ProcessInfo.processInfo.environment["MC_PS5_REST"].flatMap(Double.init) {

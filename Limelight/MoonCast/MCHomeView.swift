@@ -122,6 +122,23 @@ struct MCRoot: View {
         case "playwhere": DispatchQueue.main.asyncAfter(deadline: .now() + 2) { playWhere() }
         default: break
         }
+        // MC_STEPS="4:id=rb:Settings;6:id=set:picture;8:dlg=1": at N seconds press an item by its focus id, or pick
+        // option N of the open dialog, so whole flows can be walked through from a script
+        for step in (env["MC_STEPS"] ?? "").split(separator: ";") {
+            let parts = step.split(separator: ":", maxSplits: 1)
+            guard parts.count == 2, let t = Double(parts[0]) else { continue }
+            let what = String(parts[1])
+            DispatchQueue.main.asyncAfter(deadline: .now() + t) {
+                // "first" is the page's first item
+                func key(_ k: Substring) -> String { k == "first" ? (focus.preferred["page"] ?? "") : String(k) }
+                if what.hasPrefix("id=") { focus.actions[key(what.dropFirst(3))]?() }
+                else if what.hasPrefix("menu=") { focus.menus[key(what.dropFirst(5))]?() }
+                else if what.hasPrefix("dlg="), let i = Int(what.dropFirst(4)), let d = store.dialog, i < d.opts.count {
+                    store.dialog = nil
+                    d.opts[i].run()
+                }
+            }
+        }
         if let pg = env["MC_PAGE"], let target = [MCPage.home, .games, .consoles, .settings].first(where: { $0.rawValue.lowercased().hasPrefix(pg.lowercased()) || (pg == "games" && $0 == .games) }) {
             go(target)
         }
@@ -727,7 +744,7 @@ struct MCRoot: View {
     private func linkPs5() {
         guard MCPsn.signedIn else {
             store.dialog = MCDialog(title: "Sign in to PlayStation Network",
-                                    message: "Once, to link your PS5 to this \(MCDevice.name). Your password goes to Sony only; MoonCast keeps a sign-in token in the iPad's Keychain.",
+                                    message: "Once, to link your PS5 to this \(MCDevice.name). Your password goes to Sony only; MoonCast keeps a sign-in token in the \(MCDevice.name)'s Keychain.",
                                     opts: [.init(title: "Cancel", picked: true) {},
                                            .init(title: "Sign in") { signInPsn { ok in
                                                if ok { linkPs5() } else {

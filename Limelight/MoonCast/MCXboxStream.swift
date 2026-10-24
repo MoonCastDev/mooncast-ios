@@ -120,6 +120,7 @@ final class MCXboxStreamController: UIViewController, MCXboxRtc.Listener, MCQuic
         connected = true
         setStatus(nil)
         MCRecents.touch("xb:\(console.id)")
+        MCQuickMenu.runTestSteps(in: self)
     }
 
     func xboxFailed(_ reason: String) {
