@@ -15,6 +15,8 @@ final class MCXboxStreamController: UIViewController, MCXboxRtc.Listener, MCQuic
     private let status = UILabel()
     private let spinner = UIActivityIndicatorView(style: .large)
     private var corner: MCStatsPill?
+    /// Until when the Quick menu's Xbox button press is being sent
+    private var buttonPulse = Date.distantPast
     private var timer: Timer?
     private var connected = false
     private var closed = false
@@ -167,7 +169,8 @@ final class MCXboxStreamController: UIViewController, MCXboxRtc.Listener, MCQuic
     private func padsChanged() {
         guard let r = rtc else { return }
         let pads = GCController.controllers().compactMap { $0.extendedGamepad }
-        if menuOpen { r.pads = []; return }
+        // with the Quick menu open the pad is the menu's; a press of the menu's Xbox button goes through
+        if menuOpen { if Date() > buttonPulse { r.pads = [] }; return }
         if let g = pads.first, (g.buttonOptions?.isPressed ?? false) && g.buttonMenu.isPressed && g.leftShoulder.isPressed && g.rightShoulder.isPressed {
             if !comboFired { comboFired = true; DispatchQueue.main.async { self.openMenu() } }
             r.pads = []
@@ -225,6 +228,7 @@ final class MCXboxStreamController: UIViewController, MCXboxRtc.Listener, MCQuic
     func mcPsButton() {
         guard let r = rtc else { return }
         var f = MCXboxRtc.PadFrame(); f.nexus = true
+        buttonPulse = Date().addingTimeInterval(0.3)
         r.pads = [f]
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { r.pads = [MCXboxRtc.PadFrame()] }
     }
