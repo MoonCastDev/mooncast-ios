@@ -158,8 +158,11 @@
     }
     uint32_t rtt = 0, variance = 0;
     BOOL haveRtt = LiGetEstimatedRttInfo(&rtt, &variance);
+    float host = stats.framesWithHostProcessingLatency != 0
+        ? (float)stats.totalHostProcessingLatency / stats.framesWithHostProcessingLatency / 10.f : -1;
     return @{ @"fps": @(stats.totalFrames / interval),
               @"rtt": haveRtt ? @(rtt) : @(-1),
+              @"host": @(host),
               @"loss": @(stats.totalFrames > 0 ? 100.0f * stats.networkDroppedFrames / stats.totalFrames : 0),
               @"codec": [_connection getActiveCodecName] ?: @"" };
 }

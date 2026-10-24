@@ -42,6 +42,7 @@
     UITapGestureRecognizer *_menuDoubleTapGestureRecognizer;
     UITapGestureRecognizer *_playPauseTapGestureRecognizer;
     UITextView *_overlayView;
+    MCStatsPill *_mcPill;
     UILabel *_stageLabel;
     UILabel *_tipLabel;
     UIActivityIndicatorView *_spinner;
@@ -256,10 +257,17 @@
 #endif
 
 - (void)updateStatsOverlay {
-    NSString* overlayText = [self->_streamMan getStatsOverlayText];
-    
+    // MoonCast: the stats card (MCStatsPill) instead of Moonlight's lines of text
+    NSDictionary* stats = [self mcStats];
     dispatch_async(dispatch_get_main_queue(), ^{
-        [self updateOverlayText:overlayText];
+        if (self->_statsUpdateTimer == nil) {
+            return;
+        }
+        if (self->_mcPill == nil) {
+            self->_mcPill = [MCStatsPill attachTo:self.view];
+        }
+        [self->_mcPill showWithStats:stats];
+        [self.view bringSubviewToFront:self->_mcPill];
     });
 }
 
@@ -688,11 +696,10 @@
     if (_statsUpdateTimer != nil) {
         [_statsUpdateTimer invalidate];
         _statsUpdateTimer = nil;
-        [_overlayView setHidden:YES];
+        [_mcPill setHidden:YES];
     }
     else {
         _statsUpdateTimer = [NSTimer scheduledTimerWithTimeInterval:1.0 target:self selector:@selector(updateStatsOverlay) userInfo:nil repeats:YES];
-        [_overlayView setHidden:NO];
     }
 }
 

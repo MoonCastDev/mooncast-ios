@@ -85,7 +85,7 @@ final class MCPs5StreamController: UIViewController, MCPs5SessionDelegate, MCQui
     private var session: MCPs5Session?
     private let status = UILabel()
     private let spinner = UIActivityIndicatorView(style: .large)
-    private let corner = UILabel()
+    private var corner: MCStatsPill?
     private var cornerTimer: Timer?
     private var connected = false
     private var closed = false
@@ -116,11 +116,8 @@ final class MCPs5StreamController: UIViewController, MCPs5SessionDelegate, MCQui
         status.numberOfLines = 0
         spinner.color = .white
         spinner.startAnimating()
-        corner.textColor = UIColor(white: 0.93, alpha: 1)
-        corner.font = .systemFont(ofSize: 13, weight: .semibold)
-        corner.backgroundColor = UIColor(white: 0, alpha: 0.6)
-        corner.isHidden = true
-        [status, spinner, corner].forEach { view.addSubview($0) }
+        [status, spinner].forEach { view.addSubview($0) }
+        corner = MCStatsPill.attach(to: view)
         let swipe = UIScreenEdgePanGestureRecognizer(target: self, action: #selector(edgeSwiped(_:)))
         swipe.edges = .left
         view.addGestureRecognizer(swipe)
@@ -370,15 +367,9 @@ final class MCPs5StreamController: UIViewController, MCPs5SessionDelegate, MCQui
     }
 
     private func updateCorner() {
-        guard statsOn, connected, let d = session?.stats() else { corner.isHidden = true; return }
-        let fps = (d["fps"] as? NSNumber)?.intValue ?? 0
-        let rtt = (d["rtt"] as? NSNumber)?.intValue ?? -1
-        let mbps = (d["mbps"] as? NSNumber)?.doubleValue ?? 0
-        let lost = (d["lost"] as? NSNumber)?.intValue ?? 0
-        corner.text = String(format: "  %d fps   %@   %.1f Mbps   %d lost  ", fps, rtt >= 0 ? "\(rtt) ms" : "…", mbps, lost)
-        corner.sizeToFit()
-        corner.frame.origin = CGPoint(x: 12, y: 12)
-        corner.isHidden = false
+        guard statsOn, connected, session != nil else { corner?.isHidden = true; return }
+        corner?.show(stats: mcStats())
+        if let c = corner { view.bringSubviewToFront(c) }
     }
 
     func mcStats() -> [AnyHashable: Any] {
