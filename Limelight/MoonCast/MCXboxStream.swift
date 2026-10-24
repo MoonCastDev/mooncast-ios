@@ -159,7 +159,7 @@ final class MCXboxStreamController: UIViewController, MCXboxRtc.Listener, MCQuic
             var d: [AnyHashable: Any] = ["fps": s.fps, "rtt": s.rttMs, "mbps": s.mbps, "loss": s.lossPct, "codec": "H.264"]
             if s.width > 0 { d["size"] = "\(s.width)x\(s.height)" }
             self.corner?.show(stats: d)
-            if let c = self.corner { self.view.bringSubviewToFront(c) }
+            if let c = self.corner, !MCQuickMenu.isOpen { self.view.bringSubviewToFront(c) }
         }
     }
 

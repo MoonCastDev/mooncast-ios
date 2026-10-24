@@ -268,7 +268,9 @@
         }
         self->_mcPill.level = MCStatsLevel.current;
         [self->_mcPill showWithStats:stats];
-        [self.view bringSubviewToFront:self->_mcPill];
+        if (!MCQuickMenu.isOpen) {
+            [self.view bringSubviewToFront:self->_mcPill];
+        }
     });
 }
 
