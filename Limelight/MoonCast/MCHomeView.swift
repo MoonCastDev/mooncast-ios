@@ -839,7 +839,7 @@ struct MCRoot: View {
         "s:multi": "person.2", "s:swap": "arrow.left.arrow.right", "s:mouse": "computermouse",
         "s:ps:res": "rectangle.expand.vertical", "s:ps:fps": "speedometer", "s:ps:rate": "gauge.with.dots.needle.67percent",
         "s:ps:codec": "film", "s:ps:disc": "moon.zzz", "s:ps:swap": "arrow.left.arrow.right", "s:theme": "paintpalette",
-        "s:profile": "house", "s:range": "circle.lefthalf.filled", "s:shape": "aspectratio", "s:osctrans": "square.on.square.dashed",
+        "s:profile": "house", "s:444": "circle.grid.cross", "s:range": "circle.lefthalf.filled", "s:shape": "aspectratio", "s:osctrans": "square.on.square.dashed",
         "s:dz": "smallcircle.filled.circle", "s:motion": "gyroscope", "s:xb:dz": "smallcircle.filled.circle",
         "s:ps:awayres": "rectangle.expand.vertical", "s:ps:awayrate": "gauge.with.dots.needle.67percent",
         "s:xb:res": "rectangle.expand.vertical", "s:xb:rate": "gauge.with.dots.needle.67percent", "s:xb:rumble": "waveform",
@@ -960,6 +960,9 @@ struct MCRoot: View {
             }
             choice("s:codec", "Video codec", "H.265 and AV1 look better at the same bitrate", ["Auto", "H.264", "H.265", "AV1"],
                    Int(v.codec), m, p) { i in settings.save { $0.codec = UInt32(i) } }
+            toggle("s:444", "YUV 4:4:4 (HEVC)", "Full colour detail: sharper text and coloured edges. Needs HEVC and a PC whose Sunshine offers 4:4:4; not with Super resolution",
+                   UserDefaults.standard.bool(forKey: "mc_yuv444"), m, p) {
+                UserDefaults.standard.set(!UserDefaults.standard.bool(forKey: "mc_yuv444"), forKey: "mc_yuv444") }
             let fsrOn = UserDefaults.standard.string(forKey: "mc_super_resolution") == "fsr1"
             choice("s:fsr", "Super resolution", "AMD FSR 1.0 sharpens a lower resolution up to this screen. For PC, PS5 and Xbox; not with HDR",
                    ["Off", "FSR 1.0"], fsrOn ? 1 : 0, m, p) { i in UserDefaults.standard.set(i == 1 ? "fsr1" : "off", forKey: "mc_super_resolution") }
