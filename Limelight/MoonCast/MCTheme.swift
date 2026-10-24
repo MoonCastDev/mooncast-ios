@@ -12,6 +12,11 @@ extension Color {
     }
 }
 
+/// "iPad" or "iPhone", for the words on screen ("this iPad", "Playing on this iPhone").
+enum MCDevice {
+    static var name: String { UIDevice.current.userInterfaceIdiom == .pad ? "iPad" : "iPhone" }
+}
+
 /// The themes, as on Android (Settings → Theme): Dark, Light, and OLED (true black, for OLED screens: black pixels
 /// are off, so it saves power and looks deeper).
 struct MCPalette {
@@ -96,10 +101,13 @@ struct MCMetrics {
     var u: CGFloat { min(size.width, size.height) / 1080 * scale }
 
     static var screenScale: CGFloat {
+        // a phone's short side is about half an iPad's: Auto draws everything larger there so text stays readable
+        let phone: CGFloat = UIDevice.current.userInterfaceIdiom == .phone ? 1.4 : 1
         switch UserDefaults.standard.string(forKey: "hh_screen_size") ?? "auto" {
-        case "compact": return 1.12
-        case "large": return 1.25
-        default: return 1
+        case "compact": return 1.12 * phone
+        case "large": return 1.25 * phone
+        case "normal": return 1
+        default: return phone
         }
     }
     var designWidth: CGFloat { size.width / u }

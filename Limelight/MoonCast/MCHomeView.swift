@@ -35,7 +35,8 @@ struct MCRoot: View {
 
     var body: some View {
         GeometryReader { geo in
-            let m = MCMetrics(size: geo.size, scale: screenSize == "compact" ? 1.12 : screenSize == "large" ? 1.25 : 1)
+            let _ = screenSize
+            let m = MCMetrics(size: geo.size)
             let p = MCPalette(theme: theme)
             let _ = store.revision + artRev + settingsRev
             ZStack {
@@ -189,7 +190,7 @@ struct MCRoot: View {
                 HStack(spacing: m.px(14)) {
                     RoundedRectangle(cornerRadius: m.px(5)).stroke(p.ink, lineWidth: m.px(3)).frame(width: m.px(32), height: m.px(22))
                     Text(MCTvFinder.target.map { "Playing on \($0.name)" + (MCTvFinder.isHere($0) ? "" : " (not found)") }
-                         ?? "Playing on this \(UIDevice.current.userInterfaceIdiom == .pad ? "iPad" : "iPhone")")
+                         ?? "Playing on this \(MCDevice.name)")
                         .mcFont(26, m).foregroundColor(p.ink).lineLimit(1)
                 }
                 .padding(.horizontal, m.px(30))
@@ -610,7 +611,7 @@ struct MCRoot: View {
             opts.append(.init(title: "Hidden games", sub: "\(hidden.count) hidden") { hiddenGames(h) })
         }
         opts.append(.init(title: "Remove this PC", sub: "Pair again to bring it back", danger: true) {
-            confirm("Remove \(h.name)?", "Its games leave this iPad until you pair again.", yes: "Remove") { store.remove(h) }
+            confirm("Remove \(h.name)?", "Its games leave this \(MCDevice.name) until you pair again.", yes: "Remove") { store.remove(h) }
         })
         opts.insert(.init(title: "Cancel", picked: !opts.contains { $0.picked }) {}, at: 0)
         var lines = [h.activeAddress.map { "Address: \($0)" }, h.externalAddress.map { "Away: \($0)" }].compactMap { $0 }
@@ -626,7 +627,7 @@ struct MCRoot: View {
             let tvs = await MCTvFinder.sweep()
             store.busy = nil
             settingsRev += 1
-            let device = UIDevice.current.userInterfaceIdiom == .pad ? "iPad" : "iPhone"
+            let device = MCDevice.name
             let cur = MCTvFinder.target
             var opts: [MCDialog.Opt] = [.init(title: "This \(device)", sub: "Games play here", picked: cur == nil) {
                 MCTvFinder.target = nil; settingsRev += 1
@@ -725,7 +726,7 @@ struct MCRoot: View {
     private func linkPs5() {
         guard MCPsn.signedIn else {
             store.dialog = MCDialog(title: "Sign in to PlayStation Network",
-                                    message: "Once, to link your PS5 to this iPad. Your password goes to Sony only; MoonCast keeps a sign-in token in the iPad's Keychain.",
+                                    message: "Once, to link your PS5 to this \(MCDevice.name). Your password goes to Sony only; MoonCast keeps a sign-in token in the iPad's Keychain.",
                                     opts: [.init(title: "Cancel", picked: true) {},
                                            .init(title: "Sign in") { signInPsn { ok in
                                                if ok { linkPs5() } else {
@@ -883,7 +884,7 @@ struct MCRoot: View {
     // MARK: Settings
 
     private var groups: [(String, String)] {
-        [("ipad", UIDevice.current.userInterfaceIdiom == .pad ? "iPad" : "iPhone"), ("picture", "Picture"), ("sound", "Sound"), ("pads", "Controllers"),
+        [("ipad", MCDevice.name), ("picture", "Picture"), ("sound", "Sound"), ("pads", "Controllers"),
          ("ps", "PlayStation"), ("xbox", "Xbox"), ("theme", "Theme"), ("about", "About")]
     }
 
@@ -1010,7 +1011,7 @@ struct MCRoot: View {
                 MCLaunch.updateOrientation()
             }
             let dim = UserDefaults.standard.object(forKey: "hh_dim_on_tv") as? Bool ?? true
-            toggle("s:dim", "Dim the screen on a TV", "While this iPad is the controller for a TV", dim, m, p) {
+            toggle("s:dim", "Dim the screen on a TV", "While this \(MCDevice.name) is the controller for a TV", dim, m, p) {
                 UserDefaults.standard.set(!dim, forKey: "hh_dim_on_tv")
             }
             let touch = ["off", "mouse", "touch"]
@@ -1033,7 +1034,7 @@ struct MCRoot: View {
             row("s:padtest", icon: "gamecontroller", color: MCPalette.blue, title: "Test a controller",
                 sub: "See every button, stick and trigger live, and try the rumble", right: nil, m, p) { padTest = true }
             row("s:padpair", icon: "plus.circle", color: MCPalette.green, title: "Pair a controller",
-                sub: "Put the pad in pairing mode, then pick it in the iPad's Settings → Bluetooth", right: nil, m, p) {
+                sub: "Put the pad in pairing mode, then pick it in the \(MCDevice.name)'s Settings → Bluetooth", right: nil, m, p) {
                 if let u = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(u) }
             }
             toggle("s:multi", "More than one player", "On a PC each pad is its own player", v.multi, m, p) { settings.save { $0.multi.toggle() } }
@@ -1060,7 +1061,7 @@ struct MCRoot: View {
                 }
             } else {
                 row("s:ps:psn", icon: "person.crop.circle", color: MCPalette.blue, title: "PlayStation Network",
-                    sub: "Sign in once to link a PS5 to this iPad", right: "Sign in", m, p) {
+                    sub: "Sign in once to link a PS5 to this \(MCDevice.name)", right: "Sign in", m, p) {
                     signInPsn { _ in settingsRev += 1 }
                 }
             }
@@ -1101,7 +1102,7 @@ struct MCRoot: View {
             if MCXbox.signedIn {
                 row("s:xb:acct", icon: "person.crop.circle", color: MCPalette.green, title: "Xbox network",
                     sub: "Signed in" + (MCXbox.gamertag.map { " as \($0)" } ?? ""), right: "Sign out", m, p) {
-                    confirm("Sign out of Xbox?", "Your Xbox consoles leave this iPad until you sign in again.", yes: "Sign out") {
+                    confirm("Sign out of Xbox?", "Your Xbox consoles leave this \(MCDevice.name) until you sign in again.", yes: "Sign out") {
                         MCXbox.signOut(); settingsRev += 1
                     }
                 }
@@ -1130,7 +1131,7 @@ struct MCRoot: View {
         default:
             let ver = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ""
             let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? ""
-            info("s:ver", "MoonCast for iPad", "Version \(ver) (\(build))", m, p)
+            info("s:ver", "MoonCast for \(MCDevice.name)", "Version \(ver) (\(build))", m, p)
             row("s:lic", icon: "doc.text", color: p.sub, title: "Open-source licences",
                 sub: "The \(MCLicences.parts.count) projects MoonCast is built on, and their licences", right: nil, m, p) { licences() }
             row("s:src", icon: "chevron.left.forwardslash.chevron.right", color: p.sub, title: "Source code",

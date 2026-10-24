@@ -113,7 +113,7 @@ struct MCLicenceView: View {
 }
 
 /// The anonymous usage check-in, opt-in (Usage.kt). At most once a day when the home opens, and only after a yes:
-/// the app version, "ipad", the iPadOS version and device model, and whether PC, PS5 or Xbox was played since the
+/// the app version, "ipad" or "iphone", the system version and device model, and whether PC, PS5 or Xbox was played since the
 /// last check-in. Never names, addresses, games, accounts or sign-ins. The install is a random ID, sent hashed.
 /// Only official builds carry an app ID (MC_TELEMETRY_APP_ID at build time): self-built copies never ask or send.
 /// Debug builds send in test mode, which TelemetryDeck keeps out of the real numbers.
@@ -123,7 +123,7 @@ enum MCUsage {
     private static let d = UserDefaults.standard
 
     static let question = "Help improve MoonCast?"
-    static let explain = "Send an anonymous check-in once a day: the app version, the device model and iPadOS version, " +
+    static let explain = "Send an anonymous check-in once a day: the app version, the device model and system version, " +
         "and whether you played PC, PS5 or Xbox. Never names, games, accounts or addresses. You can change this in Settings, About."
 
     private static var appId: String { (Bundle.main.object(forInfoDictionaryKey: "MCTelemetryAppID") as? String ?? "").trimmingCharacters(in: .whitespaces) }
@@ -151,18 +151,19 @@ enum MCUsage {
         let today = f.string(from: Date())
         if d.string(forKey: lastKey) == today { return }
         let id = d.string(forKey: idKey) ?? { let n = UUID().uuidString; d.set(n, forKey: idKey); return n }()
-        var model = "iPad"
+        let pad = UIDevice.current.userInterfaceIdiom == .pad
+        var model = pad ? "iPad" : "iPhone"
         var sys = utsname()
         if uname(&sys) == 0 {
             model = withUnsafeBytes(of: &sys.machine) { String(decoding: $0.prefix { $0 != 0 }, as: UTF8.self) }
         }
         var payload: [String: String] = [
             "TelemetryDeck.AppInfo.version": Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "",
-            "TelemetryDeck.Device.platform": "iPadOS",
-            "TelemetryDeck.Device.operatingSystem": "iPadOS",
+            "TelemetryDeck.Device.platform": pad ? "iPadOS" : "iOS",
+            "TelemetryDeck.Device.operatingSystem": pad ? "iPadOS" : "iOS",
             "TelemetryDeck.Device.systemVersion": UIDevice.current.systemVersion,
             "TelemetryDeck.Device.modelName": model,
-            "MoonCast.app": "ipad",
+            "MoonCast.app": pad ? "ipad" : "iphone",
         ]
         for k in ["pc", "ps5", "xbox"] { payload["MoonCast.used.\(k)"] = d.bool(forKey: usedKey + k) ? "true" : "false" }
         var test = false

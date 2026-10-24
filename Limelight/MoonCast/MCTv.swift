@@ -185,7 +185,7 @@ enum MCTvSender {
 
     /// Nil when the TV took the game, else what went wrong (the TV's own words when it said).
     static func send(_ tv: MCTvBox, _ g: MCGame, padKey: String) async -> String? {
-        if tv.ip.isEmpty { return "\(tv.name) isn't on this network. Open MoonCast on it, on the same Wi-Fi as this iPad." }
+        if tv.ip.isEmpty { return "\(tv.name) isn't on this network. Open MoonCast on it, on the same Wi-Fi as this \(MCDevice.name)." }
         if g.xb != nil && !tv.canXbox { return "Update MoonCast on \(tv.name) to send it an Xbox game." }
         var j: [String: Any] = ["deviceName": UIDevice.current.name, "padKey": padKey]
         if let ip = MCTvFinder.myIp { j["phoneIp"] = ip }
@@ -211,7 +211,7 @@ enum MCTvSender {
             j["xboxId"] = x.id; j["xboxName"] = x.name
         }
         guard let (code, body) = await post(tv, "/play", j, timeout: 20) else {
-            return "\(tv.name) didn't answer. Check MoonCast is open on it and it's on the same Wi-Fi as this iPad."
+            return "\(tv.name) didn't answer. Check MoonCast is open on it and it's on the same Wi-Fi as this \(MCDevice.name)."
         }
         if code == 200 { return nil }
         let err = body["error"] as? String ?? ""
