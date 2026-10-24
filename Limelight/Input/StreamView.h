@@ -28,6 +28,8 @@
      interactionDelegate:(id<UserInteractionDelegate>)interactionDelegate
                   config:(StreamConfiguration*)streamConfig;
 - (void) showOnScreenControls;
+/// MoonCast: the view changed size: place the on-screen controller again
+- (void) mcRelayout;
 
 // MoonCast: 0 = touch off, 1 = mouse (trackpad), 2 = touch (clicks where you tap)
 - (void) mcSetTouchMode:(int)mode;

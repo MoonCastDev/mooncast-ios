@@ -20,6 +20,8 @@
 - (void)start;
 - (void)stop;
 - (void)setHdrMode:(BOOL)enabled;
+/// MoonCast: the view changed size (an iPad turned mid-game): fit the picture again
+- (void)mcRelayout;
 
 - (int)submitDecodeBuffer:(unsigned char *)data length:(int)length bufferType:(int)bufferType decodeUnit:(PDECODE_UNIT)du;
 

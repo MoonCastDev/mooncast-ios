@@ -27,6 +27,8 @@ typedef NS_ENUM(NSInteger, OnScreenControlsLevel) {
 
 - (id) initWithView:(UIView*)view controllerSup:(ControllerSupport*)controllerSupport streamConfig:(StreamConfiguration*)streamConfig;
 - (BOOL) handleTouchDownEvent:(NSSet*)touches;
+/// MoonCast: the view changed size (an iPad turned mid-game): place the controls again
+- (void) mcRelayout;
 - (BOOL) handleTouchUpEvent:(NSSet*)touches;
 - (BOOL) handleTouchMovedEvent:(NSSet*)touches;
 - (void) setLevel:(OnScreenControlsLevel)level;

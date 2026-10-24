@@ -26,9 +26,9 @@ final class MCLaunch: NSObject {
     }
 }
 
-/// The app's navigation. The home follows Settings → Screen turns with the device (off = on its side only);
-/// games always play on their side, as on the handheld, so starting one turns the screen and leaving it lets the
-/// home turn back.
+/// The app's navigation. The home follows Settings → Screen turns with the device (off = on its side only).
+/// iPhone: games always play on their side, as on the handheld, so starting one turns the screen and leaving it
+/// turns back. iPad: a game stays in the orientation it started in.
 final class MCNav: UINavigationController, UINavigationControllerDelegate {
     /// While a game is about to open from an upright home: on its side only
     private var turning = false
@@ -44,13 +44,25 @@ final class MCNav: UINavigationController, UINavigationControllerDelegate {
     private var onHome: Bool { topViewController is MCHomeController }
     private var homeTurns: Bool { UserDefaults.standard.object(forKey: "hh_rotate") as? Bool ?? true }
 
+    /// iPad: a game keeps the orientation it started in (iPadOS 26 doesn't turn an iPad's screen on request; asking
+    /// put the game in a window instead), and Moonlight's player is laid out once, for that orientation
+    private var gameMask: UIInterfaceOrientationMask = .landscape
+    private var pad: Bool { UIDevice.current.userInterfaceIdiom == .pad }
+
     override var supportedInterfaceOrientations: UIInterfaceOrientationMask {
-        onHome && homeTurns && !turning ? (UIDevice.current.userInterfaceIdiom == .pad ? .all : .allButUpsideDown) : .landscape
+        if onHome && !turning { return homeTurns ? (pad ? .all : .allButUpsideDown) : .landscape }
+        return pad ? .all : .landscape
     }
 
     /// Opens a game's player: turns the screen on its side first, so the player is laid out for it from the start
     /// (a PC stream laid out upright kept an upright-sized picture in a corner after the turn).
     func pushGame(_ vc: UIViewController) {
+        if pad, let o = view.window?.windowScene?.interfaceOrientation {
+            gameMask = o == .portrait ? .portrait : o == .portraitUpsideDown ? .portraitUpsideDown
+                : o == .landscapeLeft ? .landscapeLeft : o == .landscapeRight ? .landscapeRight : .landscape
+            pushViewController(vc, animated: true)
+            return
+        }
         guard let scene = view.window?.windowScene, !scene.interfaceOrientation.isLandscape else {
             pushViewController(vc, animated: true)
             return
@@ -66,6 +78,7 @@ final class MCNav: UINavigationController, UINavigationControllerDelegate {
     }
 
     func navigationController(_ nav: UINavigationController, didShow vc: UIViewController, animated: Bool) {
+        if pad { return }
         setNeedsUpdateOfSupportedInterfaceOrientations()
         // back home from a game: upright again if the home was upright before it, unless the device is now
         // clearly held on its side (lying flat on a table it reports face up, not upright)

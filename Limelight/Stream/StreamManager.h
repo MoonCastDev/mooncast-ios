@@ -19,5 +19,7 @@
 
 // MoonCast Quick menu: fps, rttMs, lossPct, codec (empty before the first frames)
 - (NSDictionary*) mcStats;
+/// MoonCast: the view changed size: fit the picture again
+- (void) mcRelayout;
 
 @end

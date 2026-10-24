@@ -187,6 +187,12 @@ static const double X1_MOUSE_SPEED_DIVISOR = 2.5;
     }
 }
 
+- (void) mcRelayout {
+#if !TARGET_OS_TV
+    [onScreenControls mcRelayout];
+#endif
+}
+
 - (void) showOnScreenControls {
 #if !TARGET_OS_TV
     [onScreenControls show];

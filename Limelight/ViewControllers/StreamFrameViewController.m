@@ -47,6 +47,7 @@
     UILabel *_tipLabel;
     UIActivityIndicatorView *_spinner;
     StreamView *_streamView;
+    CGSize _mcLastSize;
     UIScrollView *_scrollView;
     BOOL _userIsInteracting;
     CGSize _keyboardSize;
@@ -111,6 +112,7 @@
     _inactivityTimer = nil;
     
     _streamView = [[StreamView alloc] initWithFrame:self.view.frame];
+    _streamView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;   // MoonCast: follows a turn
     [_streamView setupStreamView:_controllerSupport interactionDelegate:self config:self.streamConfig];
     
 #if TARGET_OS_TV
@@ -192,6 +194,7 @@
     // Only enable scroll and zoom in absolute touch mode
     if (_settings.absoluteTouchMode) {
         _scrollView = [[UIScrollView alloc] initWithFrame:self.view.frame];
+        _scrollView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
 #if !TARGET_OS_TV
         [_scrollView.panGestureRecognizer setMinimumNumberOfTouches:2];
 #endif
@@ -727,6 +730,20 @@
         LiSendKeyboardEvent(0x10, KEY_ACTION_UP, MODIFIER_CTRL);
         LiSendKeyboardEvent(0x11, KEY_ACTION_UP, 0);
     });
+}
+
+// MoonCast: an iPad turned mid-game (games keep the orientation they started in only on the iPhone): fit the
+// picture and the on-screen controller to the new size
+- (void)viewDidLayoutSubviews {
+    [super viewDidLayoutSubviews];
+    if (!CGSizeEqualToSize(_mcLastSize, self.view.bounds.size)) {
+        BOOL first = CGSizeEqualToSize(_mcLastSize, CGSizeZero);
+        _mcLastSize = self.view.bounds.size;
+        if (!first) {
+            [_streamMan mcRelayout];
+            [_streamView mcRelayout];
+        }
+    }
 }
 
 - (void) mcPower:(NSString*)what {

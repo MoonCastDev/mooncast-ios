@@ -171,6 +171,14 @@ int DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
     }
 }
 
+- (void)mcRelayout
+{
+    CGSize videoSize = [MCPictureShape sizeIn:_view.bounds.size aspect:_streamAspectRatio];
+    displayLayer.position = CGPointMake(CGRectGetMidX(_view.bounds), CGRectGetMidY(_view.bounds));
+    displayLayer.bounds = CGRectMake(0, 0, videoSize.width, videoSize.height);
+    mcFsr.frame = displayLayer.frame;
+}
+
 - (void)stop
 {
     mcFrameThreadRunning = NO;
