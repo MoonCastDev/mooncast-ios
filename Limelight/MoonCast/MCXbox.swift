@@ -5,6 +5,8 @@
 //
 
 import Foundation
+import WebKit
+import UIKit
 
 enum MCXbox {
     private static let clientId = "1f907974-e22b-4810-a9de-d9647380c97e"
@@ -17,6 +19,8 @@ enum MCXbox {
     struct StreamAuth { let baseUri: String; let gsToken: String; let connectToken: String }
 
     struct HttpError: Error { let code: Int; let body: String }
+    /// The Microsoft account signed in but Xbox network turned it away (no Xbox profile, a child account…).
+    struct NotAllowed: LocalizedError { let errorDescription: String? }
 
     private static let d = UserDefaults.standard
     static var signedIn: Bool { MCKeychain.get("xbox_refresh") != nil }
@@ -66,7 +70,21 @@ enum MCXbox {
             let j = try await request(msToken, "POST", form([("grant_type", "urn:ietf:params:oauth:grant-type:device_code"),
                                                              ("client_id", clientId), ("device_code", dc.deviceCode)]), formHeaders)
             saveUserToken(j)
-            _ = try? await webAuth()   // fetches the gamertag
+            // Xbox network must take the account (it fetches the gamertag too). An account it turns away isn't kept,
+            // so signing in again can pick another one; a network hiccup keeps it.
+            do { _ = try await webAuth() } catch let e as HttpError where e.code == 401 || e.code == 403 {
+                let xerr = ((try? JSONSerialization.jsonObject(with: Data(e.body.utf8))) as? [String: Any])?["XErr"] as? NSNumber
+                signOut()
+                throw NotAllowed(errorDescription: {
+                    switch xerr?.int64Value {
+                    case 2148916233: return "This Microsoft account has no Xbox profile. Sign in with the account you use on your Xbox."
+                    case 2148916235: return "Xbox network isn't available in this account's country."
+                    case 2148916236, 2148916237: return "This account needs age verification on xbox.com first."
+                    case 2148916238: return "This is a child account. An adult in its family has to add it to a family group on xbox.com first."
+                    default: return "Xbox network didn't accept this account. Sign in with the account you use on your Xbox."
+                    }
+                }())
+            } catch { }
             return true
         } catch let e as HttpError {
             let err = ((try? JSONSerialization.jsonObject(with: Data(e.body.utf8))) as? [String: Any])?["error"] as? String ?? ""
@@ -199,4 +217,30 @@ enum MCXbox {
         let k = (min(mag, 1) - dz) / (1 - dz) / mag
         return (max(-1, min(1, x * k)), max(-1, min(1, y * k)))
     }
+}
+
+
+/// Microsoft's device-code page (microsoft.com/link) inside MoonCast, with the code filled in. A fresh, private web
+/// session every time: Safari stayed signed in to the last Microsoft account, so signing in again couldn't pick another.
+final class MCXboxLinkController: UIViewController {
+    var code = ""
+    private let web = WKWebView(frame: .zero, configuration: {
+        let c = WKWebViewConfiguration()
+        c.websiteDataStore = .nonPersistent()
+        return c
+    }())
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        title = "Xbox sign-in"
+        view.backgroundColor = .systemBackground
+        web.frame = view.bounds
+        web.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        view.addSubview(web)
+        navigationItem.rightBarButtonItem = UIBarButtonItem(barButtonSystemItem: .done, target: self, action: #selector(close))
+        let otc = code.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? code
+        if let u = URL(string: "https://www.microsoft.com/link?otc=\(otc)") { web.load(URLRequest(url: u)) }
+    }
+
+    @objc private func close() { dismiss(animated: true) }
 }

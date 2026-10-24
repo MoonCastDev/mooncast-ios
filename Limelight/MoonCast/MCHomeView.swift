@@ -32,6 +32,8 @@ struct MCRoot: View {
     var askText: (String, String, @escaping (String) -> Void) -> Void = { _, _, _ in }
     /// Set by the controller: Sony's sign-in page; true when signed in.
     var signInPsn: (@escaping (Bool) -> Void) -> Void = { _ in }
+    /// Set by the controller: Microsoft's code page inside MoonCast, in a fresh private session (so any account can be picked).
+    var openXboxLink: (String) -> Void = { _ in }
 
     var body: some View {
         GeometryReader { geo in
@@ -685,7 +687,7 @@ struct MCRoot: View {
                                         big: dc.userCode,
                                         opts: [.init(title: "Open the page", picked: true) {
                                                    UIPasteboard.general.string = dc.userCode
-                                                   if let u = URL(string: dc.url) { UIApplication.shared.open(u) }
+                                                   openXboxLink(dc.userCode)
                                                    // the dialog closes on a press: put it back while we wait
                                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { if waiting { xboxWaiting(dc) } }
                                                },
@@ -703,7 +705,9 @@ struct MCRoot: View {
                 }
             } catch {
                 store.busy = nil
-                store.dialog = MCDialog(title: "Xbox sign-in didn't finish", message: error.localizedDescription, opts: [.init(title: "OK") {}])
+                settingsRev += 1
+                store.dialog = MCDialog(title: error is MCXbox.NotAllowed ? "Not an Xbox account" : "Xbox sign-in didn't finish",
+                                        message: error.localizedDescription, opts: [.init(title: "OK") {}])
             }
         }
     }
@@ -1154,7 +1158,7 @@ struct MCRoot: View {
             let d = UserDefaults.standard
             if MCXbox.signedIn {
                 row("s:xb:acct", icon: "person.crop.circle", color: MCPalette.green, title: "Xbox network",
-                    sub: "Signed in" + (MCXbox.gamertag.map { " as \($0)" } ?? ""), right: "Sign out", m, p) {
+                    sub: MCXbox.gamertag.map { "Signed in as \($0)" } ?? "Signed in, no Xbox profile. Sign out and use your Xbox account", right: "Sign out", m, p) {
                     confirm("Sign out of Xbox?", "Your Xbox consoles leave this \(MCDevice.name) until you sign in again.", yes: "Sign out") {
                         MCXbox.signOut(); settingsRev += 1
                     }
