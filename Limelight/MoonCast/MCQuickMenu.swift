@@ -186,7 +186,7 @@ struct MCQuickMenuView: View {
         if a.mcKind?() == "xbox" {
             return [
                 Item(icon: "xbox.logo", label: "Xbox button", detail: "Opens the guide") { a.mcPsButton?(); model.flash("Xbox button", "Pressed") },
-                Item(icon: "info.circle", label: "Streaming status", detail: a.mcStatsOn() ? "On" : "Off") { a.mcToggleStats(); model.rev += 1 },
+                Item(icon: "info.circle", label: "Streaming status", detail: MCStatsLevel.label(MCStatsLevel.current) + " · Off, Lite, Detailed") { a.mcToggleStats(); model.rev += 1 },
                 Item(icon: "gamecontroller", label: "Controllers", detail: pads == 1 ? "1 connected" : "\(pads) connected") {},
             ] + move + [
                 Item(icon: "arrow.left", label: "Disconnect", detail: "The game keeps running") { model.close(); a.mcDisconnect() },
@@ -195,7 +195,7 @@ struct MCQuickMenuView: View {
         }
         if a.mcKind?() == "ps5" {
             return [
-                Item(icon: "info.circle", label: "Streaming status", detail: a.mcStatsOn() ? "On" : "Off") { a.mcToggleStats(); model.rev += 1 },
+                Item(icon: "info.circle", label: "Streaming status", detail: MCStatsLevel.label(MCStatsLevel.current) + " · Off, Lite, Detailed") { a.mcToggleStats(); model.rev += 1 },
                 Item(icon: "gamecontroller", label: "Controllers", detail: pads == 1 ? "1 connected" : "\(pads) connected") {},
                 Item(icon: "playstation.logo", label: "PS button", detail: "Pads without one: L2 + Start") { a.mcPsButton?(); model.flash("PS button", "Pressed") },
             ] + move + [
@@ -205,7 +205,7 @@ struct MCQuickMenuView: View {
         }
         return [
             Item(icon: "keyboard", label: "Keyboard", detail: "On-screen") { a.mcToggleKeyboard(); model.close() },
-            Item(icon: "info.circle", label: "Streaming status", detail: a.mcStatsOn() ? "On" : "Off") { a.mcToggleStats(); model.rev += 1 },
+            Item(icon: "info.circle", label: "Streaming status", detail: MCStatsLevel.label(MCStatsLevel.current) + " · Off, Lite, Detailed") { a.mcToggleStats(); model.rev += 1 },
             Item(icon: "gamecontroller", label: "Controllers", detail: pads == 1 ? "1 connected" : "\(pads) connected") {},
             Item(icon: "list.bullet.rectangle", label: "Task Manager", detail: "Windows: Ctrl + Shift + Esc") { a.mcTaskManager(); model.flash("Task Manager", "Opened on the PC") },
             Item(icon: "power", label: "Power", detail: "Hibernate, restart or shut down the PC") { model.page = "power" },

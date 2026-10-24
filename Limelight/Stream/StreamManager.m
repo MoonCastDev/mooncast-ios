@@ -163,6 +163,9 @@
     return @{ @"fps": @(stats.totalFrames / interval),
               @"rtt": haveRtt ? @(rtt) : @(-1),
               @"host": @(host),
+              @"hostMin": @(stats.framesWithHostProcessingLatency != 0 ? stats.minHostProcessingLatency / 10.f : -1),
+              @"hostMax": @(stats.framesWithHostProcessingLatency != 0 ? stats.maxHostProcessingLatency / 10.f : -1),
+              @"rttVar": haveRtt ? @(variance) : @(-1),
               @"loss": @(stats.totalFrames > 0 ? 100.0f * stats.networkDroppedFrames / stats.totalFrames : 0),
               @"codec": [_connection getActiveCodecName] ?: @"" };
 }

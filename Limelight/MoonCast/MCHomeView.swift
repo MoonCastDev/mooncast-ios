@@ -985,7 +985,9 @@ struct MCRoot: View {
                    UserDefaults.standard.bool(forKey: "mc_ultra_low_latency"), m, p) {
                 UserDefaults.standard.set(!UserDefaults.standard.bool(forKey: "mc_ultra_low_latency"), forKey: "mc_ultra_low_latency")
             }
-            toggle("s:stats", "Stats while playing", "Frame rate, delay and lost frames in a corner", v.stats, m, p) { settings.save { $0.stats.toggle() } }
+            let levels = ["off", "lite", "detailed"]
+            choice("s:stats", "Stats while playing", "Lite: frame rate and delay, small at the top. Detailed: every number in a panel at the top left. For PC, PS5 and Xbox",
+                   ["Off", "Lite", "Detailed"], levels.firstIndex(of: MCStatsLevel.current) ?? 0, m, p) { i in MCStatsLevel.set(levels[i]) }
             toggle("s:opt", "Let the PC set game settings", "Sunshine and GeForce change the game's resolution to match", v.optimize, m, p) {
                 settings.save { $0.optimize.toggle() }
             }

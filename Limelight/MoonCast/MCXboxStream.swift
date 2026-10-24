@@ -23,7 +23,7 @@ final class MCXboxStreamController: UIViewController, MCXboxRtc.Listener, MCQuic
     private var tries = 0
     private var menuOpen = false
     private var comboFired = false
-    private var statsOn = UserDefaults.standard.bool(forKey: "xbox_stats")
+    private var statsOn: Bool { MCStatsLevel.current != "off" }
     private var last = MCXboxRtc.Stats()
     private var fsr: MCFsrView?
     private var fsrRenderer: MCFsrRtcRenderer?
@@ -155,7 +155,10 @@ final class MCXboxStreamController: UIViewController, MCXboxRtc.Listener, MCQuic
             guard let self = self else { return }
             self.last = s
             guard self.statsOn, self.connected else { self.corner?.isHidden = true; return }
-            self.corner?.show(fps: s.fps, rttMs: s.rttMs, mbps: s.mbps, lost: s.lossPct, lostIsCount: false, hostMs: -1, codec: "H.264")
+            self.corner?.level = MCStatsLevel.current
+            var d: [AnyHashable: Any] = ["fps": s.fps, "rtt": s.rttMs, "mbps": s.mbps, "loss": s.lossPct, "codec": "H.264"]
+            if s.width > 0 { d["size"] = "\(s.width)x\(s.height)" }
+            self.corner?.show(stats: d)
             if let c = self.corner { self.view.bringSubviewToFront(c) }
         }
     }
@@ -215,7 +218,7 @@ final class MCXboxStreamController: UIViewController, MCXboxRtc.Listener, MCQuic
     func mcTitle() -> String { console.name }
     func mcHostAddress() -> String { console.id }
     func mcStatsOn() -> Bool { statsOn }
-    func mcToggleStats() { statsOn.toggle(); UserDefaults.standard.set(statsOn, forKey: "xbox_stats"); tick() }
+    func mcToggleStats() { MCStatsLevel.cycle(); tick() }
     func mcTouchMode() -> Int32 { 0 }
     func mcSetTouchMode(_ mode: Int32) {}
     func mcToggleKeyboard() {}
