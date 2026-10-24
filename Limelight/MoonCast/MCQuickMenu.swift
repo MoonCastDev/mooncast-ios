@@ -1,8 +1,8 @@
 //
 //  MCQuickMenu.swift
 //  MoonCast: the Quick menu over a PC stream (QuickMenu.kt's Switch look): the game, live numbers, then Keyboard,
-//  Streaming status, Touch screen, Controllers, Task Manager, Disconnect and Quit game. Select + Start + LB + RB or
-//  a swipe from the left edge opens it; B or a tap outside goes back to the game.
+//  Streaming status, Controllers, Task Manager, Disconnect and Quit game (Touch screen is in Settings). Select + Start +
+//  LB + RB or a swipe from the left edge opens it; B or a tap outside goes back to the game.
 //
 
 import SwiftUI
@@ -118,8 +118,6 @@ struct MCQuickMenuView: View {
         let run: () -> Void
     }
 
-    private static let touchLabels = ["Off", "Mouse", "Touch"]
-
     /// Move to <TV>: the stream here ends (the game keeps running), the TV plays it and this iPad becomes its
     /// controller, after a moment for the PC, PS5 or Xbox to let this session go (MoveToTv.kt).
     private func moveToTv(_ a: MCQuickActions) -> [Item] {
@@ -162,9 +160,6 @@ struct MCQuickMenuView: View {
         return [
             Item(icon: "keyboard", label: "Keyboard", detail: "On-screen") { a.mcToggleKeyboard(); model.close() },
             Item(icon: "info.circle", label: "Streaming status", detail: a.mcStatsOn() ? "On" : "Off") { a.mcToggleStats(); model.rev += 1 },
-            Item(icon: "hand.point.up.left", label: "Touch screen", detail: Self.touchLabels[Int(a.mcTouchMode()) % 3]) {
-                a.mcSetTouchMode((a.mcTouchMode() + 1) % 3); model.rev += 1
-            },
             Item(icon: "gamecontroller", label: "Controllers", detail: pads == 1 ? "1 connected" : "\(pads) connected") {},
             Item(icon: "list.bullet.rectangle", label: "Task Manager", detail: "Windows: Ctrl + Shift + Esc") { a.mcTaskManager(); model.close() },
         ] + move + [
