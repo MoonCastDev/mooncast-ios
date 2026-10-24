@@ -14,7 +14,7 @@ final class MCXboxStreamController: UIViewController, MCXboxRtc.Listener, MCQuic
     private let video = RTCMTLVideoView()
     private let status = UILabel()
     private let spinner = UIActivityIndicatorView(style: .large)
-    private let corner = UILabel()
+    private var corner: MCStatsPill?
     private var timer: Timer?
     private var connected = false
     private var closed = false
@@ -61,11 +61,8 @@ final class MCXboxStreamController: UIViewController, MCXboxRtc.Listener, MCQuic
         status.numberOfLines = 0
         spinner.color = .white
         spinner.startAnimating()
-        corner.textColor = UIColor(white: 0.93, alpha: 1)
-        corner.font = .systemFont(ofSize: 13, weight: .semibold)
-        corner.backgroundColor = UIColor(white: 0, alpha: 0.6)
-        corner.isHidden = true
-        [status, spinner, corner].forEach { view.addSubview($0) }
+        [status, spinner].forEach { view.addSubview($0) }
+        corner = MCStatsPill.attach(to: view)
         let swipe = UIScreenEdgePanGestureRecognizer(target: self, action: #selector(edgeSwiped(_:)))
         swipe.edges = .left
         view.addGestureRecognizer(swipe)
@@ -155,12 +152,9 @@ final class MCXboxStreamController: UIViewController, MCXboxRtc.Listener, MCQuic
         rtc?.stats { [weak self] s in
             guard let self = self else { return }
             self.last = s
-            guard self.statsOn, self.connected else { self.corner.isHidden = true; return }
-            self.corner.text = String(format: "  %.0f fps   %@   %.1f Mbps   %.1f%% lost  ", max(0, s.fps),
-                                      s.rttMs >= 0 ? String(format: "%.0f ms", s.rttMs) : "…", max(0, s.mbps), max(0, s.lossPct))
-            self.corner.sizeToFit()
-            self.corner.frame.origin = CGPoint(x: 12, y: 12)
-            self.corner.isHidden = false
+            guard self.statsOn, self.connected else { self.corner?.isHidden = true; return }
+            self.corner?.show(fps: s.fps, rttMs: s.rttMs, mbps: s.mbps, lost: s.lossPct, lostIsCount: false, hostMs: -1, codec: "H.264")
+            if let c = self.corner { self.view.bringSubviewToFront(c) }
         }
     }
 
