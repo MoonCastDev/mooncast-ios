@@ -359,7 +359,7 @@ static void MCRegistCb(ChiakiRegistEvent* e, void* user) {
         _frames = 0; _bytes = 0; _statsStart = now;
     }
     return @{ @"fps": @(_fps), @"mbps": @(_mbps), @"rtt": @(_started ? (int)(_session.rtt_us / 1000) : -1),
-              @"lost": @(_lost), @"codec": _h265 ? @"H.265" : @"H.264" };
+              @"lost": @(_lost), @"codec": _h265 ? @"HEVC" : @"H.264" };
 }
 
 + (void) registerHost:(NSString*)host accountId:(NSData*)accountId pin:(uint32_t)pin

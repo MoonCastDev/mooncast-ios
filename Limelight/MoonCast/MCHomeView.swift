@@ -958,7 +958,7 @@ struct MCRoot: View {
                 }
                 settings.save { $0.bitrate = i == 0 ? auto : rates[i - 1] }
             }
-            choice("s:codec", "Video codec", "H.265 and AV1 look better at the same bitrate", ["Auto", "H.264", "H.265", "AV1"],
+            choice("s:codec", "Video codec", "HEVC and AV1 look better at the same bitrate", ["Auto", "H.264", "HEVC", "AV1"],
                    Int(v.codec), m, p) { i in settings.save { $0.codec = UInt32(i) } }
             toggle("s:444", "YUV 4:4:4 (HEVC)", "Full colour detail: sharper text and coloured edges. Needs HEVC and a PC whose Sunshine offers 4:4:4; not with Super resolution",
                    UserDefaults.standard.bool(forKey: "mc_yuv444"), m, p) {
@@ -1073,7 +1073,7 @@ struct MCRoot: View {
             choice("s:ps:rate", "Bitrate", "Auto: 30 Mbps at 1080p, 15 at 720p", rates.map { $0 == 0 ? "Auto" : "\($0) Mbps" } + ["Custom…"],
                    rates.firstIndex(of: MCPs5Store.bitrate) ?? -1, other: "\(MCPs5Store.bitrate) Mbps", m, p) { i in
                 if i == rates.count { customPs5Rate("ps5_bitrate") } else { d.set(rates[i], forKey: "ps5_bitrate") } }
-            choice("s:ps:codec", "Video codec", "H.265 looks better at the same bitrate", ["H.264", "H.265"], MCPs5Store.h265 ? 1 : 0, m, p) { i in
+            choice("s:ps:codec", "Video codec", "HEVC looks better at the same bitrate", ["H.264", "HEVC"], MCPs5Store.h265 ? 1 : 0, m, p) { i in
                 d.set(i == 1, forKey: "ps5_h265") }
             let disc = ["ask", "rest", "keep"]
             choice("s:ps:disc", "When I disconnect", "What happens to the PS5 after you leave a game", ["Ask", "Rest mode", "Keep it on"],

@@ -100,8 +100,15 @@ final class MCQuickModel: ObservableObject {
             (rtt >= 0 ? "\(rtt) ms" : "…", "delay"),
             (String(format: mbps < 10 ? "%.1f" : "%.0f", mbps), "Mbps"),
             (lostFrames.map { "\($0)" } ?? loss.map { String(format: "%.1f%%", $0) } ?? "…", "lost"),
-            (codec.isEmpty ? "…" : codec.replacingOccurrences(of: "HEVC", with: "H.265"), "codec"),
+            (codec.isEmpty ? "…" : MCQuickModel.shortCodec(codec), "codec"),
         ]
+    }
+
+    /// "HEVC Main 10 SDR (4:4:4)" → "HEVC 10-bit 4:4:4": short enough for a stat tile.
+    static func shortCodec(_ c: String) -> String {
+        c.replacingOccurrences(of: " Main 10 SDR", with: " 10-bit").replacingOccurrences(of: " Main 10 HDR", with: " HDR")
+            .replacingOccurrences(of: " 10-bit SDR", with: " 10-bit").replacingOccurrences(of: " 10-bit HDR", with: " HDR")
+            .replacingOccurrences(of: " (4:4:4)", with: " 4:4:4")
     }
 
     func close() {
