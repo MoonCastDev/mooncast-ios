@@ -1,8 +1,8 @@
 //
 //  MCStatsPill.swift
 //  MoonCast: Settings → Picture → Stats while playing, the same overlay for PC, PS5 and Xbox, at two levels:
-//  Lite, a small capsule centred at the top (health dot, fps, delay), and Detailed, a frosted panel in the top-left
-//  corner with every number the player has. Updated once a second; it only lays out again when a value changes.
+//  Lite, a frosted capsule of chips centred at the top (health dot, fps, delay, Mbps, lost, decode or host time,
+//  codec), and Detailed, a frosted panel in the top-left corner with every number the player has. Updated once a second; it only lays out again when a value changes.
 //
 
 import UIKit
@@ -127,8 +127,15 @@ final class MCStatsPill: UIView {
         let fpsText = String(format: "%.0f", fps) + (num("targetFps").map { String(format: " / %.0f", $0) } ?? "")
         var rows: [(String, String)] = []
         if level == "lite" {
-            rows = [("fps", String(format: "%.0f fps", fps))]
-            if let r = rtt { rows.append(("rtt", String(format: "%.0f ms", r))) }
+            // the chip card: big value, small label
+            rows = [("FPS", String(format: "%.0f", fps))]
+            if let r = rtt { rows.append(("DELAY", String(format: "%.0f ms", r))) }
+            if let m = num("mbps") { rows.append(("MBPS", String(format: m < 10 ? "%.1f" : "%.0f", m))) }
+            if let lf = lostFrames { rows.append(("LOST", String(format: "%.0f", lf))) }
+            else if let l = loss { rows.append(("LOST", String(format: "%.1f%%", l))) }
+            if let dec = num("decode") { rows.append(("DECODE", String(format: "%.1f ms", dec))) }
+            else if let h = num("host") { rows.append(("HOST", String(format: "%.1f ms", h))) }
+            if let c = d["codec"] as? String, !c.isEmpty { rows.append(("CODEC", MCQuickModel.shortCodec(c))) }
         } else {
             if let s = d["size"] as? String, !s.isEmpty { rows.append(("Video", s.replacingOccurrences(of: "x", with: " × "))) }
             rows.append(("Frame rate", fpsText + " fps"))
@@ -151,9 +158,14 @@ final class MCStatsPill: UIView {
         if level == "lite" {
             stack.axis = .horizontal
             stack.alignment = .center
-            stack.spacing = 12
+            stack.spacing = 14
             stack.addArrangedSubview(Self.dot(health))
-            rows.forEach { stack.addArrangedSubview(Self.text($0.1, 15, .heavy)) }
+            for (l, v) in rows {
+                let col = UIStackView(arrangedSubviews: [Self.text(v, 17, .heavy), Self.text(l, 9.5, .bold, 0.55)])
+                col.axis = .vertical
+                col.alignment = .leading
+                stack.addArrangedSubview(col)
+            }
         } else {
             stack.axis = .vertical
             stack.alignment = .fill
