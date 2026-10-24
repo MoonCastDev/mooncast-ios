@@ -32,6 +32,8 @@ NS_ASSUME_NONNULL_BEGIN
 - (void) mcRestMode;
 /// Leaves without asking (Move to a TV): a PS5 stays on for the TV
 - (void) mcLeaveKeepOn;
+/// Power (PC): "hibernate", "restart" or "shutdown" on a Windows PC
+- (void) mcPower:(NSString*)what;
 @end
 
 @interface MCBridge : NSObject

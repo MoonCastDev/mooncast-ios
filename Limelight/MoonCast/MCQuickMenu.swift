@@ -1,12 +1,13 @@
 //
 //  MCQuickMenu.swift
 //  MoonCast: the Quick menu over a PC stream (QuickMenu.kt's Switch look): the game, live numbers, then Keyboard,
-//  Streaming status, Controllers, Task Manager, Disconnect and Quit game (Touch screen is in Settings). Select + Start +
+//  Streaming status, Controllers, Task Manager, Power, Disconnect and Quit game (Touch screen is in Settings). Select + Start +
 //  LB + RB or a swipe from the left edge opens it; B or a tap outside goes back to the game.
 //
 
 import SwiftUI
 import GameController
+import Network
 
 @objc(MCQuickMenu)
 final class MCQuickMenu: NSObject {
@@ -68,6 +69,10 @@ final class MCQuickMenu: NSObject {
 final class MCQuickModel: ObservableObject {
     let actions: MCQuickActions
     var onClose: () -> Void = {}
+    /// "main", "power" (Hibernate, Restart, Shut down) or "confirm:<what>"
+    @Published var page = "main" {
+        didSet { MCFocus.shared.id = "qm:0" }
+    }
     /// Presses item N (test runs)
     var press: ((Int) -> Void)?
     @Published var stats: [(String, String)] = []
@@ -133,9 +138,33 @@ struct MCQuickMenuView: View {
         }]
     }
 
+    /// Power (PC): Hibernate, Restart or Shut down, each asked again with Cancel first.
+    private func powerItems(_ a: MCQuickActions) -> [Item]? {
+        let words = ["hibernate": ("Hibernate", "moon.zzz", "Saves everything and turns the PC off. Wake it from MoonCast"),
+                     "restart": ("Restart", "arrow.clockwise", "Unsaved progress is lost"),
+                     "shutdown": ("Shut down", "power", "Unsaved progress is lost")]
+        if model.page == "power" {
+            return [Item(icon: "chevron.left", label: "Back", detail: nil) { model.page = "main" }] +
+                ["hibernate", "restart", "shutdown"].map { k in
+                    let w = words[k]!
+                    return Item(icon: w.1, label: w.0, detail: w.2, danger: k != "hibernate") { model.page = "confirm:" + k }
+                }
+        }
+        if model.page.hasPrefix("confirm:"), let w = words[String(model.page.dropFirst(8))] {
+            let k = String(model.page.dropFirst(8))
+            return [Item(icon: "xmark", label: "Cancel", detail: nil) { model.page = "power" },
+                    Item(icon: w.1, label: w.0 + " the PC", detail: "Windows: MoonCast types shutdown in Start for you", danger: true) {
+                        model.close()
+                        a.mcPower?(k)
+                    }]
+        }
+        return nil
+    }
+
     private func items() -> [Item] {
         let a = model.actions
         let pads = GCController.controllers().count
+        if let p = powerItems(a) { return p }
         let move = moveToTv(a)
         if a.mcKind?() == "xbox" {
             return [
@@ -162,6 +191,7 @@ struct MCQuickMenuView: View {
             Item(icon: "info.circle", label: "Streaming status", detail: a.mcStatsOn() ? "On" : "Off") { a.mcToggleStats(); model.rev += 1 },
             Item(icon: "gamecontroller", label: "Controllers", detail: pads == 1 ? "1 connected" : "\(pads) connected") {},
             Item(icon: "list.bullet.rectangle", label: "Task Manager", detail: "Windows: Ctrl + Shift + Esc") { a.mcTaskManager(); model.close() },
+            Item(icon: "power", label: "Power", detail: "Hibernate, restart or shut down the PC") { model.page = "power" },
         ] + move + [
             Item(icon: "arrow.left", label: "Disconnect", detail: "The game keeps running") { model.close(); a.mcDisconnect() },
             Item(icon: "xmark", label: "Quit game", detail: nil, danger: true) {
@@ -198,6 +228,7 @@ struct MCQuickMenuView: View {
             MCFocus.shared.preferred["qm"] = "qm:0"
             MCFocus.shared.id = "qm:0"
             MCFocus.shared.pageButton = { b in
+                if b == .b && model.page != "main" { model.page = model.page == "power" ? "main" : "power"; return true }
                 if b == .b || b == .menu { model.close(); return true }
                 return false
             }
@@ -264,5 +295,95 @@ struct MCQuickMenuView: View {
         }
         .padding(.horizontal, m.px(44))
         .padding(.vertical, m.px(40))
+    }
+}
+
+
+/// Power in the Quick menu (Game.java's hibernate): which command, and watching the PC go. Once the command is typed
+/// the PC's port is checked every second; when it stops answering the stream ends with "<PC> is hibernating" (or
+/// restarting, shutting down) instead of a connection error. A hibernate is remembered per PC (see MCStore.play).
+@objc(MCPower)
+final class MCPower: NSObject {
+    private static var pending: (what: String, pc: String, at: Date)?
+
+    @objc static func command(for what: String) -> String {
+        switch what {
+        case "hibernate": return "shutdown /h"
+        case "restart": return "shutdown /r /t 0"
+        default: return "shutdown /s /t 0"
+        }
+    }
+
+    @objc static func started(what: String, address: String, appId: String, leave: @escaping () -> Void) {
+        let store = MCStore.shared
+        let h = store.host(atAddress: address)
+        pending = (what, h?.name ?? "The PC", Date())
+        if let h = h {
+            if what == "hibernate" { UserDefaults.standard.set(["app": appId, "at": Date().timeIntervalSince1970], forKey: key(h)) }
+            else { clearHibernated(h) }
+        }
+        guard let addr = MCBridge.splitAddress(address), let ip = addr["address"] as? String else { return }
+        DispatchQueue.global(qos: .utility).async {
+            sleep(5)
+            for _ in 0..<90 {
+                guard pending != nil else { return }
+                if !answers(ip, port: 47989) {
+                    DispatchQueue.main.async {
+                        guard pending != nil else { return }
+                        leave()
+                        announce()
+                    }
+                    return
+                }
+                sleep(1)
+            }
+            pending = nil
+        }
+    }
+
+    /// The connection ended: true (and the note shown) when it's because of a power command just sent.
+    @objc static func consumeTermination() -> Bool {
+        guard let p = pending, -p.at.timeIntervalSinceNow < 120 else { return false }
+        announce()
+        return true
+    }
+
+    private static func announce() {
+        guard let p = pending else { return }
+        pending = nil
+        let doing = ["hibernate": "is hibernating", "restart": "is restarting"][p.what] ?? "is shutting down"
+        let next = p.what == "restart" ? "It shows as online again when it's back." : "Wake it from Consoles when you want to play again."
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+            MCStore.shared.dialog = MCDialog(title: "\(p.pc) \(doing)", message: next, opts: [.init(title: "OK") {}])
+        }
+    }
+
+    private static func key(_ h: TemporaryHost) -> String { "mc_hibernated_\(h.uuid)" }
+
+    /// The game a hibernate left running on this PC, for a week.
+    static func hibernated(_ h: TemporaryHost) -> String? {
+        guard let d = UserDefaults.standard.dictionary(forKey: key(h)), let at = d["at"] as? Double,
+              Date().timeIntervalSince1970 - at < 7 * 86400 else { return nil }
+        return d["app"] as? String
+    }
+
+    static func clearHibernated(_ h: TemporaryHost) { UserDefaults.standard.removeObject(forKey: key(h)) }
+
+    /// A TCP connection to the PC's port within a second.
+    private static func answers(_ ip: String, port: UInt16) -> Bool {
+        let c = NWConnection(host: NWEndpoint.Host(ip), port: NWEndpoint.Port(rawValue: port)!, using: .tcp)
+        let done = DispatchSemaphore(value: 0)
+        var ok = false
+        c.stateUpdateHandler = { st in
+            switch st {
+            case .ready: ok = true; done.signal()
+            case .failed, .waiting: done.signal()
+            default: break
+            }
+        }
+        c.start(queue: .global(qos: .utility))
+        _ = done.wait(timeout: .now() + 1)
+        c.cancel()
+        return ok
     }
 }
