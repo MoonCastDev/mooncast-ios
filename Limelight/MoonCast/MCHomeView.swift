@@ -361,16 +361,23 @@ struct MCRoot: View {
             ("Network", "wifi", MCPalette.green, { store.networkTest() }),
             ("Settings", "gearshape.fill", p.sub, { go(.settings) }),
         ]
-        return HStack(alignment: .top, spacing: m.px(m.portrait ? 60 : 96)) {
-            ForEach(items, id: \.0) { label, icon, color, run in
-                VStack(spacing: m.px(18)) {
-                    Image(systemName: icon).font(.system(size: m.px(50), weight: .semibold)).foregroundColor(color)
-                        .frame(width: m.px(112), height: m.px(112))
-                        .background(Circle().fill(p.panel))
-                        .mcFocusable("rb:\(label)", corner: m.px(56), ring: p.ring, action: run)
-                    Text(label).mcFont(27, m).foregroundColor(p.label)
+        // a narrow screen (a phone held upright) gets two rows of three, as on the handheld
+        let rows = m.designWidth < 5 * 112 + 4 * 60 + 2 * m.edge ? [Array(items.prefix(3)), Array(items.dropFirst(3))] : [items]
+        return VStack(spacing: m.px(40)) {
+            ForEach(rows.indices, id: \.self) { r in
+                HStack(alignment: .top, spacing: m.px(m.portrait ? 60 : 96)) {
+                    ForEach(rows[r], id: \.0) { label, icon, color, run in
+                        VStack(spacing: m.px(18)) {
+                            Image(systemName: icon).font(.system(size: m.px(50), weight: .semibold)).foregroundColor(color)
+                                .frame(width: m.px(112), height: m.px(112))
+                                .background(Circle().fill(p.panel))
+                                .mcFocusable("rb:\(label)", corner: m.px(56), ring: p.ring, action: run)
+                            Text(label).mcFont(27, m).foregroundColor(p.label).lineLimit(1).fixedSize()
+                        }
+                        .frame(minWidth: m.px(150))
+                        .accessibilityLabel(label)
+                    }
                 }
-                .accessibilityLabel(label)
             }
         }
     }
@@ -908,7 +915,35 @@ struct MCRoot: View {
 
     private func settingsPage(_ m: MCMetrics, _ p: MCPalette) -> some View {
         focus.preferred["page"] = "set:\(group)"
-        return HStack(alignment: .top, spacing: m.px(36)) {
+        // narrow (a phone held upright): the groups become a row of tabs over full-width settings
+        if m.designWidth < 1100 {
+            return AnyView(VStack(alignment: .leading, spacing: m.px(20)) {
+                ScrollViewReader { proxy in
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: m.px(12)) {
+                            ForEach(groups, id: \.0) { key, label in
+                                Text(label).mcFont(28, m, weight: .heavy).foregroundColor(group == key ? p.bg : p.ink)
+                                    .padding(.horizontal, m.px(30)).frame(height: max(m.px(72), 44))
+                                    .background(Capsule().fill(group == key ? p.ink : p.panel))
+                                    .id("set:\(key)")
+                                    .mcFocusable("set:\(key)", corner: m.px(36), ring: p.ring) { group = key }
+                            }
+                        }
+                        .padding(.horizontal, m.px(m.edge)).padding(.vertical, m.px(8))
+                    }
+                    .onChange(of: group) { _, g in withAnimation { proxy.scrollTo("set:\(g)", anchor: .center) } }
+                }
+                ScrollViewReader { proxy in
+                    ScrollView(.vertical, showsIndicators: false) {
+                        VStack(alignment: .leading, spacing: m.px(14)) { settingRows(m, p) }
+                            .padding(.horizontal, m.px(m.edge)).padding(.bottom, m.px(24))
+                    }
+                    .onChange(of: focus.id) { _, id in if let id = id, id.hasPrefix("s:"), focus.padActive { proxy.scrollTo(id) } }
+                }
+            }
+            .padding(.top, m.px(16)))
+        }
+        return AnyView(HStack(alignment: .top, spacing: m.px(36)) {
             VStack(alignment: .leading, spacing: m.px(10)) {
                 ForEach(groups, id: \.0) { key, label in
                     Text(label).mcFont(30, m).foregroundColor(group == key ? p.bg : p.ink)
@@ -928,7 +963,7 @@ struct MCRoot: View {
             }
         }
         .padding(.horizontal, m.px(m.edge))
-        .padding(.top, m.px(24))
+        .padding(.top, m.px(24)))
     }
 
     @ViewBuilder
