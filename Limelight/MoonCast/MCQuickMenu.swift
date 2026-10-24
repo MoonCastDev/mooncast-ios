@@ -12,6 +12,8 @@ import Network
 @objc(MCQuickMenu)
 final class MCQuickMenu: NSObject {
     private static var host: UIHostingController<MCQuickMenuView>?
+    /// The menu is on screen (the stats card stays under it).
+    @objc static var isOpen: Bool { host != nil }
 
     @objc static func show(in vc: UIViewController) {
         guard host == nil, let actions = vc as? MCQuickActions else { return }

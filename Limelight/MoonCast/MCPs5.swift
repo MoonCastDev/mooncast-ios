@@ -373,7 +373,7 @@ final class MCPs5StreamController: UIViewController, MCPs5SessionDelegate, MCQui
         d["size"] = "\(MCPs5Store.height >= 1080 ? 1920 : MCPs5Store.height >= 720 ? 1280 : 960)x\(MCPs5Store.height)"
         d["targetFps"] = MCPs5Store.fps
         corner?.show(stats: d)
-        if let c = corner { view.bringSubviewToFront(c) }
+        if let c = corner, !MCQuickMenu.isOpen { view.bringSubviewToFront(c) }
     }
 
     func mcStats() -> [AnyHashable: Any] {
