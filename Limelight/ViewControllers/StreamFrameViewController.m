@@ -723,25 +723,35 @@
 }
 
 - (void) mcPower:(NSString*)what {
-    // Start opens with Ctrl + Esc (games often block the Windows key), the command is typed as text (the same on any
-    // keyboard layout) and Enter runs it once Start's search has found it
+    // Windows' Run box runs the command: Start opens with Ctrl + Esc (games often block the Windows key), "run" finds
+    // the Run app, and the command goes in as text (the same on any keyboard layout). Typing the command straight into
+    // Start's search didn't run it: search's best match isn't always the command (test259).
     NSString* cmd = [MCPower commandFor:what];
     [MCPower startedWithWhat:what address:self.streamConfig.host ?: @"" appId:self.streamConfig.appID ?: @"" leave:^{
         [self returnToMainFrame];
     }];
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
-        LiSendKeyboardEvent(0x11, KEY_ACTION_DOWN, MODIFIER_CTRL);
-        LiSendKeyboardEvent(0x1B, KEY_ACTION_DOWN, MODIFIER_CTRL);
-        usleep(80 * 1000);
-        LiSendKeyboardEvent(0x1B, KEY_ACTION_UP, MODIFIER_CTRL);
-        LiSendKeyboardEvent(0x11, KEY_ACTION_UP, 0);
+        void (^press)(short, char) = ^(short key, char mod) {
+            if (mod) LiSendKeyboardEvent(0x11, KEY_ACTION_DOWN, mod);
+            LiSendKeyboardEvent(key, KEY_ACTION_DOWN, mod);
+            usleep(80 * 1000);
+            LiSendKeyboardEvent(key, KEY_ACTION_UP, mod);
+            if (mod) LiSendKeyboardEvent(0x11, KEY_ACTION_UP, 0);
+        };
+        void (^type)(NSString*) = ^(NSString* t) {
+            const char* text = t.UTF8String;
+            LiSendUtf8TextEvent(text, (unsigned int)strlen(text));
+        };
+        press(0x1B, MODIFIER_CTRL);          // Ctrl + Esc: Start
         usleep(1500 * 1000);
-        const char* text = cmd.UTF8String;
-        LiSendUtf8TextEvent(text, (unsigned int)strlen(text));
-        usleep(2000 * 1000);
-        LiSendKeyboardEvent(0x0D, KEY_ACTION_DOWN, 0);
-        usleep(80 * 1000);
-        LiSendKeyboardEvent(0x0D, KEY_ACTION_UP, 0);
+        type(@"run");
+        usleep(1500 * 1000);
+        press(0x0D, 0);                      // opens Run
+        usleep(1500 * 1000);
+        press(0x41, MODIFIER_CTRL);          // Ctrl + A: replace what Run remembers
+        type(cmd);
+        usleep(500 * 1000);
+        press(0x0D, 0);
     });
 }
 
