@@ -572,7 +572,7 @@ final class MCStore: NSObject, ObservableObject, DiscoveryCallback, PairCallback
             return (c.vendorName ?? "Controller") + b
         }
         dialog = MCDialog(title: "Controllers",
-                          message: names.isEmpty ? "None connected. Pair one in the iPad's Settings → Bluetooth, with the pad in pairing mode."
+                          message: names.isEmpty ? "None connected. Pair one in the \(MCDevice.name)'s Settings → Bluetooth, with the pad in pairing mode."
                                                  : names.joined(separator: "\n"),
                           opts: [.init(title: "OK") {}])
     }

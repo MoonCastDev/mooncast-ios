@@ -102,7 +102,7 @@ struct MCTvControllerView: View {
                 Text(s.game.title).mcFont(52, m, weight: .heavy).foregroundColor(p.ink).lineLimit(2)
                 Text(s.state).mcFont(30, m).foregroundColor(s.error == nil ? p.ring : MCPalette.red)
                 if let e = s.error { Text(e).mcFont(26, m, weight: .medium).foregroundColor(p.sub).fixedSize(horizontal: false, vertical: true) }
-                Text(s.links > 0 ? "This iPad is \(s.tv.name)'s controller" : "Waiting for \(s.tv.name) to connect to this iPad's controller…")
+                Text(s.links > 0 ? "This \(MCDevice.name) is \(s.tv.name)'s controller" : "Waiting for \(s.tv.name) to connect to this \(MCDevice.name)'s controller…")
                     .mcFont(26, m, weight: .medium).foregroundColor(p.sub)
                 HStack(spacing: m.px(20)) {
                     button("tvc:here", "Play here instead", main: true) { playHere() }

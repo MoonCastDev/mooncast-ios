@@ -146,7 +146,7 @@ struct MCQuickMenuView: View {
         guard let tv = MCTvFinder.lastTv, let g = MCStore.shared.playing else { return [] }
         let kind = a.mcKind?() ?? "pc"
         if kind == "xbox" && !tv.canXbox { return [] }
-        return [Item(icon: "tv", label: "Move to \(tv.name)", detail: "This iPad becomes its controller") {
+        return [Item(icon: "tv", label: "Move to \(tv.name)", detail: "This \(MCDevice.name) becomes its controller") {
             model.close()
             if let keep = a.mcLeaveKeepOn { keep() } else { a.mcDisconnect() }
             DispatchQueue.main.asyncAfter(deadline: .now() + (kind == "ps5" ? 3 : kind == "xbox" ? 1 : 0.5)) {
