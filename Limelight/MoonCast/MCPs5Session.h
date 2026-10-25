@@ -34,6 +34,8 @@ NS_ASSUME_NONNULL_BEGIN
 /// Away from home: the PSN token, the console's PSN device id (hex) and the account id (8 bytes). When set, start
 /// first punches a hole through PSN to the console (up to a minute).
 @property (nonatomic, copy, nullable) NSString* psnToken;
+/// HDR (HEVC Main 10) from the PS5, when the session is HEVC
+@property (nonatomic) BOOL hdr;
 @property (nonatomic, copy, nullable) NSString* psnDuid;
 @property (nonatomic, copy, nullable) NSData* psnAccountId;
 

@@ -261,6 +261,9 @@ static void MCRegistCb(ChiakiRegistEvent* e, void* user) {
         if (self.psnAccountId.length == CHIAKI_PSN_ACCOUNT_ID_SIZE) memcpy(_info.psn_account_id, self.psnAccountId.bytes, CHIAKI_PSN_ACCOUNT_ID_SIZE);
     }
     @synchronized (self) { if (_stopped) return @""; }
+    if (self.hdr && _h265) {
+        _info.video_profile.codec = CHIAKI_CODEC_H265_HDR;
+    }
     ChiakiErrorCode err = chiaki_session_init(&_session, &_info, &_log);
     if (err != CHIAKI_ERR_SUCCESS) {
         return [NSString stringWithFormat:@"Couldn't set up the session: %s", chiaki_error_string(err)];

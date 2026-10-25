@@ -888,7 +888,8 @@ struct MCRoot: View {
         "s:multi": "person.2", "s:swap": "arrow.left.arrow.right", "s:mouse": "computermouse",
         "s:ps:res": "rectangle.expand.vertical", "s:ps:fps": "speedometer", "s:ps:rate": "gauge.with.dots.needle.67percent",
         "s:ps:codec": "film", "s:ps:disc": "moon.zzz", "s:ps:swap": "arrow.left.arrow.right", "s:theme": "paintpalette",
-        "s:profile": "house", "s:bg": "circle.lefthalf.striped.horizontal", "s:444": "circle.grid.cross", "s:range": "circle.lefthalf.filled", "s:shape": "aspectratio", "s:osctrans": "square.on.square.dashed",
+        "s:profile": "house", "s:ps:fsr": "sparkles", "s:xb:fsr": "sparkles", "s:ps:sharp": "wand.and.rays", "s:xb:sharp": "wand.and.rays",
+        "s:ps:shape": "aspectratio", "s:xb:shape": "aspectratio", "s:ps:hdr": "sun.max", "s:bg": "circle.lefthalf.striped.horizontal", "s:444": "circle.grid.cross", "s:range": "circle.lefthalf.filled", "s:shape": "aspectratio", "s:osctrans": "square.on.square.dashed",
         "s:dz": "smallcircle.filled.circle", "s:motion": "gyroscope", "s:xb:dz": "smallcircle.filled.circle",
         "s:ps:awayres": "rectangle.expand.vertical", "s:ps:awayrate": "gauge.with.dots.needle.67percent",
         "s:xb:res": "rectangle.expand.vertical", "s:xb:rate": "gauge.with.dots.needle.67percent", "s:xb:rumble": "waveform",
@@ -1164,6 +1165,12 @@ struct MCRoot: View {
                 askText("Console PIN", "4 digits, empty to turn it off") { v in
                     UserDefaults.standard.set(v.filter(\.isNumber).prefix(4).description, forKey: "ps5_login_pin"); settingsRev += 1 }
             }
+            header("Picture", m, p)
+            consolePicture("ps", "ps5", m, p)
+            let hdrOn = d.bool(forKey: "ps5_hdr")
+            toggle("s:ps:hdr", "HDR", MCPs5Store.h265 ? "HDR from the PS5 (HEVC 10-bit) on this HDR screen. Super resolution stays off with it" : "Needs Video codec HEVC",
+                   hdrOn, m, p) { d.set(!hdrOn, forKey: "ps5_hdr") }
+            info("s:ps:pace", "Frame pacing", "The PS5 picture is shown the moment it's decoded on this \(MCDevice.name)", m, p)
             header("Away from home", m, p)
             choice("s:ps:awayres", "Resolution", "Over PlayStation Network. Lower keeps a weak link smooth", ["540p", "720p", "1080p"],
                    [540, 720, 1080].firstIndex(of: MCPs5Store.awayHeight) ?? 1, m, p) { i in d.set([540, 720, 1080][i], forKey: "ps5_away_resolution") }
@@ -1197,6 +1204,10 @@ struct MCRoot: View {
                    rumbles.firstIndex(of: d.string(forKey: "xbox_rumble") ?? "strong") ?? 3, m, p) { i in d.set(rumbles[i], forKey: "xbox_rumble") }
             toggle("s:xb:swap", "Swap A and B", "For Nintendo-style layouts", MCXbox.swapAB, m, p) { d.set(!MCXbox.swapAB, forKey: "xbox_swap_ab") }
             toggle("s:xb:coop", "Two players", "A second controller plays as player 2", MCXbox.coop, m, p) { d.set(!MCXbox.coop, forKey: "xbox_coop") }
+            header("Picture", m, p)
+            consolePicture("xb", "xbox", m, p)
+            info("s:xb:hdr", "HDR", "Not available: Xbox Remote Play streams without HDR", m, p)
+            info("s:xb:pace", "Frame pacing", "The Xbox paces its own stream", m, p)
             let xdz = [0, 3, 5, 8, 10, 15]
             choice("s:xb:dz", "Stick deadzone", "Raise it if a worn stick drifts", xdz.map { $0 == 0 ? "Off" : "\($0)%" },
                    xdz.firstIndex(of: d.object(forKey: "xbox_deadzone") as? Int ?? 8) ?? 3, m, p) { i in d.set(xdz[i], forKey: "xbox_deadzone") }
@@ -1223,6 +1234,27 @@ struct MCRoot: View {
                        MCUsage.enabled, m, p) { MCUsage.answer(!MCUsage.enabled) }
             }
         }
+    }
+
+    /// A console's own Super resolution, Sharpening and Picture shape; "Same as Picture" until set.
+    @ViewBuilder
+    private func consolePicture(_ id: String, _ kind: String, _ m: MCMetrics, _ p: MCPalette) -> some View {
+        let d = UserDefaults.standard
+        let srs = ["same", "off", "fsr1"]
+        let sr = d.string(forKey: "\(kind)_super_resolution") ?? "same"
+        choice("s:\(id):fsr", "Super resolution", "Same as Picture, or its own: AMD FSR 1.0 sharpens a lower resolution up to this screen",
+               ["Same as Picture", "Off", "FSR 1.0"], srs.firstIndex(of: sr) ?? 0, m, p) { i in d.set(srs[i], forKey: "\(kind)_super_resolution") }
+        if MCFsr.enabled(kind) {
+            let sharp = [-1, 0, 20, 40, 60, 80, 100]
+            let cur = d.object(forKey: "\(kind)_fsr_sharpness") as? Int ?? -1
+            choice("s:\(id):sharp", "Sharpening", "How crisp FSR makes edges", sharp.map { $0 < 0 ? "Same as Picture" : "\($0)%" },
+                   sharp.firstIndex(of: cur) ?? 0, m, p) { i in
+                if sharp[i] < 0 { d.removeObject(forKey: "\(kind)_fsr_sharpness") } else { d.set(sharp[i], forKey: "\(kind)_fsr_sharpness") } }
+        }
+        let shapes = ["same", "fit", "zoom", "fill", "stretch"]
+        choice("s:\(id):shape", "Picture shape", "Same as Picture, or its own: Fit, Zoom, Fill or Stretch",
+               ["Same as Picture", "Fit", "Zoom", "Fill", "Stretch"], shapes.firstIndex(of: d.string(forKey: "\(kind)_picture_shape") ?? "same") ?? 0, m, p) { i in
+            d.set(shapes[i], forKey: "\(kind)_picture_shape") }
     }
 
     /// Settings → PlayStation → Bitrate → Custom: 2 to 100 Mbps (the PS5 takes up to 100, as PXPlay uses).
