@@ -888,7 +888,7 @@ struct MCRoot: View {
         "s:multi": "person.2", "s:swap": "arrow.left.arrow.right", "s:mouse": "computermouse",
         "s:ps:res": "rectangle.expand.vertical", "s:ps:fps": "speedometer", "s:ps:rate": "gauge.with.dots.needle.67percent",
         "s:ps:codec": "film", "s:ps:disc": "moon.zzz", "s:ps:swap": "arrow.left.arrow.right", "s:theme": "paintpalette",
-        "s:profile": "house", "s:ps:fsr": "sparkles", "s:xb:fsr": "sparkles", "s:ps:sharp": "wand.and.rays", "s:xb:sharp": "wand.and.rays",
+        "s:profile": "house", "s:profname": "pencil", "s:ps:fsr": "sparkles", "s:xb:fsr": "sparkles", "s:ps:sharp": "wand.and.rays", "s:xb:sharp": "wand.and.rays",
         "s:ps:shape": "aspectratio", "s:xb:shape": "aspectratio", "s:ps:hdr": "sun.max", "s:bg": "circle.lefthalf.striped.horizontal", "s:444": "circle.grid.cross", "s:range": "circle.lefthalf.filled", "s:shape": "aspectratio", "s:osctrans": "square.on.square.dashed",
         "s:dz": "smallcircle.filled.circle", "s:motion": "gyroscope", "s:xb:dz": "smallcircle.filled.circle",
         "s:ps:awayres": "rectangle.expand.vertical", "s:ps:awayrate": "gauge.with.dots.needle.67percent",
@@ -995,8 +995,14 @@ struct MCRoot: View {
         let v = settings.load()
         switch group {
         case "picture":
-            choice("s:profile", "Streaming profile", "Home and Away keep their own picture and sound settings. Pick Away on a slow or far network",
-                   ["Home", "Away"], MCSettings.profile == "away" ? 1 : 0, m, p) { i in settings.switchProfile(to: i == 1 ? "away" : "home") }
+            let profs = MCSettings.profiles
+            choice("s:profile", "Streaming profile", "Each keeps its own picture, sound, PlayStation and Xbox settings. Away suits a slow or far network; the custom ones are yours to name",
+                   profs.map(MCSettings.profileName), profs.firstIndex(of: MCSettings.profile) ?? 0, m, p) { i in settings.switchProfile(to: profs[i]) }
+            if MCSettings.profile.hasPrefix("c") {
+                row("s:profname", icon: "pencil", color: p.sub, title: "Rename this profile", sub: "Now \"\(MCSettings.profileName(MCSettings.profile))\"", right: nil, m, p) {
+                    askText("Name this profile", "A name, like Hotel or Office") { n in MCSettings.renameProfile(MCSettings.profile, n); settingsRev += 1 }
+                }
+            }
             let native = MCSettings.native
             let res: [(String, (Int, Int))] = [("720p", (1280, 720)), ("1080p", (1920, 1080)), ("1440p", (2560, 1440)), ("4K", (3840, 2160)),
                                                ("Native \(native.0)×\(native.1)", native)]
