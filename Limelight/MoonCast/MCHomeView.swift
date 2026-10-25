@@ -289,13 +289,14 @@ struct MCRoot: View {
     private func focusedGame() -> MCGame? {
         guard let id = focus.id, id.hasPrefix("g:") else { return nil }
         let key = String(id.dropFirst(2))
-        return store.allGames().first { $0.key == key }
+        return (store.homePcs() + store.allGames()).first { $0.key == key }
     }
 
     // MARK: Home
 
     private func homePage(_ m: MCMetrics, _ p: MCPalette) -> some View {
-        let games = store.homeGames()
+        // one tile per PC (press: its games), then the consoles
+        let games = store.homePcs() + store.homeGames()
         // PCs found on the network but not paired yet: a tile each, so pairing is one press from Home
         let unpaired = games.isEmpty ? store.hosts.filter { store.online($0) && !store.paired($0) } : []
         let gap: CGFloat = 32
@@ -327,7 +328,11 @@ struct MCRoot: View {
                             tile(nil, kind: "add", label: "Add a PC", size: ts, m, p) { go(.consoles) }
                         }
                         ForEach(games) { g in
-                            tile(g, kind: "game", label: g.title, size: ts, m, p) { store.play(g) }
+                            if g.key.hasPrefix("pchost:"), let h = g.host {
+                                tile(g, kind: "pchost", label: g.title, size: ts, m, p) { openPc(h) }
+                            } else {
+                                tile(g, kind: "game", label: g.title, size: ts, m, p) { store.play(g) }
+                            }
                         }
                         tile(nil, kind: "all", label: "All games", size: ts, m, p) { gamesTab = "all"; go(.games) }
                     }
@@ -420,6 +425,10 @@ struct MCRoot: View {
                 Text("+").font(.system(size: s * 0.3, weight: .semibold)).foregroundColor(.white)
                     .frame(width: s, height: s)
             }
+            if kind == "pchost" && custom == nil {
+                Image(systemName: "desktopcomputer").font(.system(size: s * 0.3, weight: .semibold)).foregroundColor(.white.opacity(0.9))
+                    .frame(width: s, height: s * 0.86)
+            }
             if g != nil && (box == nil || placeholder) || kind == "add" || kind.hasPrefix("pair:") {
                 Text(label).font(.system(size: m.px(36), weight: .heavy)).foregroundColor(.white).lineLimit(3)
                     .shadow(color: .black.opacity(0.35), radius: m.px(5), y: m.px(2))
@@ -451,7 +460,8 @@ struct MCRoot: View {
         .clipShape(RoundedRectangle(cornerRadius: corner, style: .continuous))
         .shadow(color: .black.opacity(page == .home ? 0.3 : 0), radius: m.px(10), y: m.px(6))
         .id(id)
-        .mcFocusable(id, corner: corner, ring: p.ring, menu: g.map { g in { gameMenu(g) } }, action: action)
+        .mcFocusable(id, corner: corner, ring: p.ring,
+                     menu: g.map { g in kind == "pchost" ? { if let h = g.host { pcMenu(h) } } : { gameMenu(g) } }, action: action)
         .accessibilityLabel(label)
     }
 
@@ -464,6 +474,14 @@ struct MCRoot: View {
                 }
             }
         }
+    }
+
+    /// A PC's tile on Home: its games, in All games (offline: wake it; not paired: pair it).
+    private func openPc(_ h: TemporaryHost) {
+        if !store.online(h) { pcMenu(h); return }
+        gamesTab = "pc:\(h.uuid)"
+        sortAz = false
+        go(.games)
     }
 
     private func gameMenu(_ g: MCGame) {
@@ -628,6 +646,7 @@ struct MCRoot: View {
                     confirm("Quit \(cur.name ?? "the game")?", "Anything not saved in it is lost.", yes: "Quit") { store.quit(h) }
                 })
             }
+            opts.append(.init(title: "Show its games", picked: !opts.contains { $0.picked }) { DispatchQueue.main.async { openPc(h) } })
             opts.append(.init(title: "Refresh the games") { store.fetchApps(h, force: true) })
         }
         opts.append(.init(title: "Away address", sub: h.externalAddress.map { "Now \($0)" } ?? "To reach it from another network or a VPN") {

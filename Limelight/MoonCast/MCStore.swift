@@ -190,8 +190,24 @@ final class MCStore: NSObject, ObservableObject, DiscoveryCallback, PairCallback
     }
 
     /// Home's row: what's running, the last few played, then the rest of the PC games A to Z, up to ten.
+    /// Home's PCs: one tile per paired PC (its games are a press away, in All games), running ones first.
+    func homePcs() -> [MCGame] {
+        hosts.filter { paired($0) }
+            .sorted { a, b in
+                let ra = a.currentGame != nil && a.currentGame != "0", rb = b.currentGame != nil && b.currentGame != "0"
+                if ra != rb { return ra }
+                if online(a) != online(b) { return online(a) }
+                return a.name.localizedCaseInsensitiveCompare(b.name) == .orderedAscending
+            }
+            .map { h in
+                let running = h.currentGame != nil && h.currentGame != "0"
+                return MCGame(key: "pchost:\(h.uuid)", title: h.name, src: "PC", seed: h.name, running: running, host: h, app: nil)
+            }
+    }
+
+    /// Home's consoles (PS5, Xbox), the most recently played first. PC games are behind their PC's tile.
     func homeGames() -> [MCGame] {
-        let all = allGames()
+        let all = allGames().filter { $0.ps != nil || $0.xb != nil }
         let byKey = Dictionary(all.map { ($0.key, $0) }, uniquingKeysWith: { a, _ in a })
         let recent = MCRecents.list().compactMap { byKey[$0] }
         var ordered: [MCGame] = []
