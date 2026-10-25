@@ -9,6 +9,8 @@
 #import "StreamConfiguration.h"
 #import "Connection.h"
 
+#import <AVFoundation/AVFoundation.h>
+
 @interface StreamManager : NSOperation
 
 - (id) initWithConfig:(StreamConfiguration*)config renderView:(UIView*)view connectionCallbacks:(id<ConnectionCallbacks>)callback;
@@ -21,5 +23,7 @@
 - (NSDictionary*) mcStats;
 /// MoonCast: the view changed size: fit the picture again
 - (void) mcRelayout;
+/// MoonCast: the picture's display layer (nil while Super resolution draws it)
+- (nullable AVSampleBufferDisplayLayer*) mcDisplayLayer;
 
 @end

@@ -153,6 +153,10 @@
     [_mcRenderer mcRelayout];
 }
 
+- (AVSampleBufferDisplayLayer*) mcDisplayLayer {
+    return [_mcRenderer mcDisplayLayer];
+}
+
 - (NSDictionary*) mcStats {
     video_stats_t stats;
     if (!_connection || ![_connection getVideoStats:&stats]) {

@@ -43,6 +43,7 @@
     UITapGestureRecognizer *_playPauseTapGestureRecognizer;
     UITextView *_overlayView;
     MCStatsPill *_mcPill;
+    MCPip *_mcPip;
     UILabel *_stageLabel;
     UILabel *_tipLabel;
     UIActivityIndicatorView *_spinner;
@@ -328,6 +329,8 @@
     
     [_statsUpdateTimer invalidate];
     _statsUpdateTimer = nil;
+    [_mcPip stop];
+    _mcPip = nil;
     
     [self.navigationController popToRootViewControllerAnimated:YES];
 }
@@ -336,6 +339,9 @@
 - (void)applicationWillResignActive:(NSNotification *)notification {
     if (_inactivityTimer != nil) {
         [_inactivityTimer invalidate];
+    }
+    if (_mcPip != nil && _mcPip.keepsStream) {
+        return;
     }
     
 #if !TARGET_OS_TV
@@ -368,6 +374,13 @@
 
 // This fires when the home button is pressed
 - (void)applicationDidEnterBackground:(UIApplication *)application {
+    // MoonCast: Settings → Picture in picture keeps the stream in a floating window
+    if (_mcPip != nil && _mcPip.keepsStream) {
+        Log(LOG_I, @"Keeping the stream in picture in picture");
+        [_inactivityTimer invalidate];
+        _inactivityTimer = nil;
+        return;
+    }
     Log(LOG_I, @"Terminating stream immediately for backgrounding");
 
     if (_inactivityTimer != nil) {
@@ -388,6 +401,15 @@
 - (void) connectionStarted {
 #if DEBUG
     dispatch_async(dispatch_get_main_queue(), ^{
+        // MoonCast: Settings → Picture in picture
+        if (MCPip.enabled && self->_mcPip == nil) {
+            AVSampleBufferDisplayLayer* layer = [self->_streamMan mcDisplayLayer];
+            if (layer != nil) {
+                self->_mcPip = [[MCPip alloc] initWithLayer:layer];
+                __weak StreamFrameViewController* weakSelf = self;
+                self->_mcPip.onClosedInBackground = ^{ [weakSelf returnToMainFrame]; };
+            }
+        }
         [MCQuickMenu runTestStepsIn:self];
     });
 #endif
