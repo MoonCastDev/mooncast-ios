@@ -182,15 +182,49 @@ struct MCQuickMenuView: View {
         return nil
     }
 
+    /// Bitrate: the stream can't change it while it runs (PC and PS5 protocols; the Xbox sets its own within a
+    /// cap), so a pick saves it and reconnects to the same game, which keeps running.
+    private func bitrateNow(_ kind: String) -> String {
+        switch kind {
+        case "ps5": return MCPs5Store.bitrate == 0 ? "Auto" : "\(MCPs5Store.bitrate) Mbps"
+        case "xbox": return MCXbox.maxMbps == 0 ? "Auto" : "Up to \(MCXbox.maxMbps) Mbps"
+        default: return String(format: "%.0f Mbps", Double(MCSettings().load().bitrate) / 1000)
+        }
+    }
+
+    private func bitrateItems(_ a: MCQuickActions) -> [Item]? {
+        guard model.page == "bitrate" else { return nil }
+        let kind = a.mcKind?() ?? "pc"
+        let steps: [Int] = kind == "pc" ? [10, 20, 30, 50, 80, 100, 150] : kind == "ps5" ? [0, 10, 15, 20, 30, 50, 80, 100] : [0, 5, 10, 15, 20, 30]
+        let cur: Int = kind == "pc" ? MCSettings().load().bitrate / 1000 : kind == "ps5" ? MCPs5Store.bitrate : MCXbox.maxMbps
+        return [Item(icon: "chevron.left", label: "Back", detail: nil) { model.page = "main" }] + steps.map { n in
+            Item(icon: n == cur ? "checkmark" : "speedometer", label: n == 0 ? "Auto" : "\(n) Mbps",
+                 detail: n == cur ? "Now" : "Reconnects in a moment; the game keeps running") {
+                guard n != cur, let g = MCStore.shared.playing else { model.page = "main"; return }
+                switch kind {
+                case "ps5": UserDefaults.standard.set(n, forKey: "ps5_bitrate")
+                case "xbox": UserDefaults.standard.set(n, forKey: "xbox_bitrate")
+                default: MCSettings().save { $0.bitrate = n * 1000 }
+                }
+                model.close()
+                if let keep = a.mcLeaveKeepOn { keep() } else { a.mcDisconnect() }
+                DispatchQueue.main.asyncAfter(deadline: .now() + (kind == "pc" ? 1.5 : 3)) { MCStore.shared.play(g, here: true) }
+            }
+        }
+    }
+
     private func items() -> [Item] {
         let a = model.actions
         let pads = GCController.controllers().count
         if let p = powerItems(a) { return p }
+        if let b = bitrateItems(a) { return b }
+        let bitrate = Item(icon: "speedometer", label: "Bitrate", detail: bitrateNow(a.mcKind?() ?? "pc") + " · change it here") { model.page = "bitrate" }
         let move = moveToTv(a)
         if a.mcKind?() == "xbox" {
             return [
                 Item(icon: "xbox.logo", label: "Xbox button", detail: "Opens the guide") { a.mcPsButton?(); model.flash("Xbox button", "Pressed") },
                 Item(icon: "info.circle", label: "Streaming status", detail: MCStatsLevel.label(MCStatsLevel.current) + " · Off, Lite, Detailed") { a.mcToggleStats(); model.rev += 1 },
+                bitrate,
                 Item(icon: "gamecontroller", label: "Controllers", detail: pads == 1 ? "1 connected" : "\(pads) connected") {},
             ] + move + [
                 Item(icon: "arrow.left", label: "Disconnect", detail: "The game keeps running") { model.close(); a.mcDisconnect() },
@@ -200,6 +234,7 @@ struct MCQuickMenuView: View {
         if a.mcKind?() == "ps5" {
             return [
                 Item(icon: "info.circle", label: "Streaming status", detail: MCStatsLevel.label(MCStatsLevel.current) + " · Off, Lite, Detailed") { a.mcToggleStats(); model.rev += 1 },
+                bitrate,
                 Item(icon: "gamecontroller", label: "Controllers", detail: pads == 1 ? "1 connected" : "\(pads) connected") {},
                 Item(icon: "playstation.logo", label: "PS button", detail: "Pads without one: L2 + Start") { a.mcPsButton?(); model.flash("PS button", "Pressed") },
             ] + move + [
@@ -210,6 +245,7 @@ struct MCQuickMenuView: View {
         return [
             Item(icon: "keyboard", label: "Keyboard", detail: "On-screen") { a.mcToggleKeyboard(); model.close() },
             Item(icon: "info.circle", label: "Streaming status", detail: MCStatsLevel.label(MCStatsLevel.current) + " · Off, Lite, Detailed") { a.mcToggleStats(); model.rev += 1 },
+            bitrate,
             Item(icon: "gamecontroller", label: "Controllers", detail: pads == 1 ? "1 connected" : "\(pads) connected") {},
             Item(icon: "list.bullet.rectangle", label: "Task Manager", detail: "Windows: Ctrl + Shift + Esc") { a.mcTaskManager(); model.flash("Task Manager", "Opened on the PC") },
             Item(icon: "power", label: "Power", detail: "Hibernate, restart or shut down the PC") { model.page = "power" },
@@ -249,7 +285,7 @@ struct MCQuickMenuView: View {
             MCFocus.shared.preferred["qm"] = "qm:0"
             MCFocus.shared.id = "qm:0"
             MCFocus.shared.pageButton = { b in
-                if b == .b && model.page != "main" { model.page = model.page == "power" ? "main" : "power"; return true }
+                if b == .b && model.page != "main" { model.page = model.page.hasPrefix("confirm:") ? "power" : "main"; return true }
                 if b == .b || b == .menu { model.close(); return true }
                 return false
             }
