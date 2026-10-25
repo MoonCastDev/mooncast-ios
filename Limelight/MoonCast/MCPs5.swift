@@ -131,7 +131,7 @@ final class MCPs5StreamController: UIViewController, MCPs5SessionDelegate, MCQui
 
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
-        session?.videoLayer.frame = MCPictureShape.frame(in: view.bounds, aspect: 16.0 / 9.0)
+        session?.videoLayer.frame = MCPictureShape.frame(in: view.bounds, aspect: 16.0 / 9.0, kind: "ps5")
         status.frame = CGRect(x: 40, y: view.bounds.midY + 10, width: view.bounds.width - 80, height: 80)
         spinner.center = CGPoint(x: view.bounds.midX, y: view.bounds.midY - 30)
     }
@@ -187,10 +187,14 @@ final class MCPs5StreamController: UIViewController, MCPs5SessionDelegate, MCQui
         let s = MCPs5Session(host: console.host, registKey: console.registKey, morning: console.morning,
                              width: h >= 1080 ? 1920 : h >= 720 ? 1280 : 960, height: Int32(h), fps: Int32(MCPs5Store.fps), bitrate: Int32(rate), h265: MCPs5Store.h265)
         if let r = remote { s.psnToken = r.0; s.psnDuid = r.1; s.psnAccountId = r.2 }
+        // Settings → PlayStation → HDR (HEVC 10-bit); FSR works on 8-bit frames only
+        let hdr = MCPs5Store.h265 && UserDefaults.standard.bool(forKey: "ps5_hdr")
+        s.hdr = hdr
         // Settings → Picture → Super resolution: 720p / 1080p up to the iPad's screen through FSR
         fsr?.removeFromSuperview(); fsr = nil
-        if MCFsr.wanted(videoHeight: h) {
-            let v = MCFsrView(frame: view.bounds, sharpness: MCFsr.sharpness)
+        if !hdr && MCFsr.wanted(videoHeight: h, kind: "ps5") {
+            let v = MCFsrView(frame: view.bounds, sharpness: MCFsr.sharpness("ps5"))
+            v.shapeKind = "ps5"
             if v.ready {
                 v.autoresizingMask = [.flexibleWidth, .flexibleHeight]
                 view.insertSubview(v, at: 0)
@@ -201,7 +205,7 @@ final class MCPs5StreamController: UIViewController, MCPs5SessionDelegate, MCQui
         }
         s.delegate = self
         session = s
-        s.videoLayer.frame = MCPictureShape.frame(in: view.bounds, aspect: 16.0 / 9.0)
+        s.videoLayer.frame = MCPictureShape.frame(in: view.bounds, aspect: 16.0 / 9.0, kind: "ps5")
         view.clipsToBounds = true
         view.layer.insertSublayer(s.videoLayer, at: 0)
         // over PSN start blocks while the hole is punched: keep the screen live

@@ -28,6 +28,20 @@ final class MCFsr: NSObject {
         return Int(min(b.width, b.height))
     }
     @objc static func wanted(videoHeight: Int) -> Bool { enabled && worthIt(videoHeight: videoHeight, screenHeight: screenPixelHeight) }
+
+    /// "ps5" or "xbox": its own Super resolution and Sharpening (Settings → PlayStation / Xbox), unless "Same as Picture".
+    static func enabled(_ kind: String) -> Bool {
+        switch UserDefaults.standard.string(forKey: "\(kind)_super_resolution") ?? "same" {
+        case "fsr1": return true
+        case "off": return false
+        default: return enabled
+        }
+    }
+    static func sharpness(_ kind: String) -> Float {
+        guard let v = UserDefaults.standard.object(forKey: "\(kind)_fsr_sharpness") as? Int else { return sharpness }
+        return Float(v) / 100
+    }
+    static func wanted(videoHeight: Int, kind: String) -> Bool { enabled(kind) && worthIt(videoHeight: videoHeight, screenHeight: screenPixelHeight) }
 }
 
 /// Settings → Picture → Ultra low latency (the handheld's switch, iPad style): PC frames shown the moment they're
@@ -52,6 +66,8 @@ final class MCFsrView: UIView {
     private var drawableSize = CGSize.zero
     /// The stream's aspect ratio (width / height): the picture is fitted into the view with it.
     @objc var aspect: CGFloat = 16.0 / 9.0
+    /// "ps5" or "xbox" for their own Picture shape; nil for the PC (Settings → Picture)
+    var shapeKind: String?
     @objc private(set) var frames = 0
 
     @objc init(frame: CGRect, sharpness: Float) {
@@ -117,7 +133,7 @@ final class MCFsrView: UIView {
         let inW = CVPixelBufferGetWidth(pb), inH = CVPixelBufferGetHeight(pb)
         // the stream on the screen as Settings → Picture → Picture shape says
         let dw = drawableSize.width, dh = drawableSize.height
-        let out = MCPictureShape.size(in: drawableSize, aspect: aspect)
+        let out = MCPictureShape.size(in: drawableSize, aspect: aspect, kind: shapeKind)
         let outW = out.width, outH = out.height
         let ow = max(1, Int(outW.rounded())), oh = max(1, Int(outH.rounded()))
         let ox = (Int(dw) - ow) / 2, oy = (Int(dh) - oh) / 2

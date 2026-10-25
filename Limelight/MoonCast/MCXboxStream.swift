@@ -44,11 +44,12 @@ final class MCXboxStreamController: UIViewController, MCXboxRtc.Listener, MCQuic
         // the view is sized for Settings → Picture → Picture shape in viewDidLayoutSubviews
         video.videoContentMode = .scaleToFill
         view.clipsToBounds = true
-        video.frame = MCPictureShape.frame(in: view.bounds, aspect: 16.0 / 9.0)
+        video.frame = MCPictureShape.frame(in: view.bounds, aspect: 16.0 / 9.0, kind: "xbox")
         view.addSubview(video)
         // Settings → Picture → Super resolution
-        if MCFsr.enabled {
-            let v = MCFsrView(frame: view.bounds, sharpness: MCFsr.sharpness)
+        if MCFsr.enabled("xbox") {
+            let v = MCFsrView(frame: view.bounds, sharpness: MCFsr.sharpness("xbox"))
+            v.shapeKind = "xbox"
             if v.ready {
                 v.autoresizingMask = [.flexibleWidth, .flexibleHeight]
                 v.isHidden = true
@@ -77,7 +78,7 @@ final class MCXboxStreamController: UIViewController, MCXboxRtc.Listener, MCQuic
 
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
-        video.frame = MCPictureShape.frame(in: view.bounds, aspect: 16.0 / 9.0)
+        video.frame = MCPictureShape.frame(in: view.bounds, aspect: 16.0 / 9.0, kind: "xbox")
         status.frame = CGRect(x: 40, y: view.bounds.midY + 10, width: view.bounds.width - 80, height: 80)
         spinner.center = CGPoint(x: view.bounds.midX, y: view.bounds.midY - 30)
     }

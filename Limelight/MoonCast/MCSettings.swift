@@ -85,13 +85,21 @@ final class MCPictureShape: NSObject {
     /// "fit", "zoom", "fill" or "stretch".
     @objc static var current: String { UserDefaults.standard.string(forKey: "mc_picture_shape") ?? "fit" }
 
+    /// The shape for "ps5" or "xbox": its own (Settings → PlayStation / Xbox), unless that's "Same as Picture".
+    static func current(_ kind: String?) -> String {
+        if let k = kind, let v = UserDefaults.standard.string(forKey: "\(k)_picture_shape"), v != "same" { return v }
+        return current
+    }
+
     /// The picture's size in an area of this size, for a stream of this aspect ratio (width / height).
-    @objc static func size(in area: CGSize, aspect: CGFloat) -> CGSize {
+    @objc static func size(in area: CGSize, aspect: CGFloat) -> CGSize { size(in: area, aspect: aspect, kind: nil) }
+
+    static func size(in area: CGSize, aspect: CGFloat, kind: String?) -> CGSize {
         guard aspect > 0, area.width > 0, area.height > 0 else { return area }
         let wide = area.width > area.height * aspect
         let fit = wide ? CGSize(width: area.height * aspect, height: area.height) : CGSize(width: area.width, height: area.width / aspect)
         let fill = wide ? CGSize(width: area.width, height: area.width / aspect) : CGSize(width: area.height * aspect, height: area.height)
-        switch current {
+        switch current(kind) {
         case "stretch": return area
         case "fill": return fill
         case "zoom":
@@ -105,8 +113,8 @@ final class MCPictureShape: NSObject {
     }
 
     /// Where the picture goes in [bounds]: its size from [size(in:aspect:)], centred (the parts outside are cut off).
-    static func frame(in bounds: CGRect, aspect: CGFloat) -> CGRect {
-        let s = size(in: bounds.size, aspect: aspect)
+    static func frame(in bounds: CGRect, aspect: CGFloat, kind: String? = nil) -> CGRect {
+        let s = size(in: bounds.size, aspect: aspect, kind: kind)
         return CGRect(x: bounds.midX - s.width / 2, y: bounds.midY - s.height / 2, width: s.width, height: s.height)
     }
 }
