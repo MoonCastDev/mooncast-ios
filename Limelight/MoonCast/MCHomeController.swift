@@ -169,12 +169,14 @@ final class MCHomeController: UIHostingController<MCRoot> {
         let digits = placeholder.contains("digits") || placeholder.contains("fps") || decimal
         a.addTextField { t in
             t.placeholder = placeholder
-            t.keyboardType = decimal ? .decimalPad : digits ? .numberPad : .URL
-            t.autocapitalizationType = .none
+            // "A name…" asks for words (a profile's name), anything else for an address
+            let words = placeholder.hasPrefix("A name")
+            t.keyboardType = decimal ? .decimalPad : digits ? .numberPad : words ? .default : .URL
+            t.autocapitalizationType = words ? .words : .none
             t.autocorrectionType = .no
         }
         a.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-        a.addAction(UIAlertAction(title: digits ? "OK" : "Add", style: .default) { _ in done(a.textFields?.first?.text ?? "") })
+        a.addAction(UIAlertAction(title: digits || placeholder.hasPrefix("A name") ? "OK" : "Add", style: .default) { _ in done(a.textFields?.first?.text ?? "") })
         present(a, animated: true)
     }
 }
