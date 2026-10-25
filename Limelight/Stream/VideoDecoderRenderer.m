@@ -171,6 +171,11 @@ int DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
     }
 }
 
+- (AVSampleBufferDisplayLayer*)mcDisplayLayer
+{
+    return mcFsr != nil ? nil : displayLayer;
+}
+
 - (void)mcRelayout
 {
     CGSize videoSize = [MCPictureShape sizeIn:_view.bounds.size aspect:_streamAspectRatio];

@@ -40,6 +40,7 @@ final class MCXboxStreamController: UIViewController, MCXboxRtc.Listener, MCQuic
 
     override func viewDidLoad() {
         super.viewDidLoad()
+        NotificationCenter.default.addObserver(self, selector: #selector(wentToBackground), name: UIApplication.didEnterBackgroundNotification, object: nil)
         view.backgroundColor = .black
         // the view is sized for Settings → Picture → Picture shape in viewDidLayoutSubviews
         video.videoContentMode = .scaleToFill
@@ -139,6 +140,9 @@ final class MCXboxStreamController: UIViewController, MCXboxRtc.Listener, MCQuic
             present(a, animated: true)
         }
     }
+
+    /// Leaving MoonCast ends the Xbox stream (its WebRTC view can't go into picture in picture).
+    @objc private func wentToBackground() { leave() }
 
     private func leave() {
         guard !closed else { return }

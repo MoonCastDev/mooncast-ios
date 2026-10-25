@@ -86,6 +86,7 @@ final class MCPs5StreamController: UIViewController, MCPs5SessionDelegate, MCQui
     private let status = UILabel()
     private let spinner = UIActivityIndicatorView(style: .large)
     private var corner: MCStatsPill?
+    private var pip: MCPip?
     private var cornerTimer: Timer?
     private var connected = false
     private var closed = false
@@ -109,6 +110,7 @@ final class MCPs5StreamController: UIViewController, MCPs5SessionDelegate, MCQui
 
     override func viewDidLoad() {
         super.viewDidLoad()
+        NotificationCenter.default.addObserver(self, selector: #selector(wentToBackground), name: UIApplication.didEnterBackgroundNotification, object: nil)
         view.backgroundColor = .black
         status.textColor = .white
         status.font = .systemFont(ofSize: 22, weight: .bold)
@@ -225,6 +227,12 @@ final class MCPs5StreamController: UIViewController, MCPs5SessionDelegate, MCQui
     func ps5Connected() {
         connected = true
         setStatus(nil)
+        // Settings → Picture in picture (not while Super resolution draws the picture)
+        if MCPip.enabled, pip == nil, fsr == nil, let s = session {
+            let p = MCPip(layer: s.videoLayer)
+            p.onClosedInBackground = { [weak self] in self?.leave() }
+            pip = p
+        }
         MCRecents.touch("ps:\(console.host)")
         MCQuickMenu.runTestSteps(in: self)
         #if DEBUG
@@ -295,9 +303,17 @@ final class MCPs5StreamController: UIViewController, MCPs5SessionDelegate, MCQui
 
     override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) { touchesEnded(touches, with: event) }
 
+    /// Leaving MoonCast: the stream goes on in picture in picture if that's on, else it ends (the PS5 stays on).
+    @objc private func wentToBackground() {
+        if pip?.keepsStream == true { return }
+        leave()
+    }
+
     private func leave() {
         guard !closed else { return }
         closed = true
+        pip?.stop()
+        pip = nil
         MCPs5Session.cancelPsn()
         MCRumble.shared.stop()
         cornerTimer?.invalidate()

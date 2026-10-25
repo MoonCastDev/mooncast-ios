@@ -888,7 +888,7 @@ struct MCRoot: View {
         "s:multi": "person.2", "s:swap": "arrow.left.arrow.right", "s:mouse": "computermouse",
         "s:ps:res": "rectangle.expand.vertical", "s:ps:fps": "speedometer", "s:ps:rate": "gauge.with.dots.needle.67percent",
         "s:ps:codec": "film", "s:ps:disc": "moon.zzz", "s:ps:swap": "arrow.left.arrow.right", "s:theme": "paintpalette",
-        "s:profile": "house", "s:profname": "pencil", "s:ps:fsr": "sparkles", "s:xb:fsr": "sparkles", "s:ps:sharp": "wand.and.rays", "s:xb:sharp": "wand.and.rays",
+        "s:profile": "house", "s:pip": "pip", "s:profname": "pencil", "s:ps:fsr": "sparkles", "s:xb:fsr": "sparkles", "s:ps:sharp": "wand.and.rays", "s:xb:sharp": "wand.and.rays",
         "s:ps:shape": "aspectratio", "s:xb:shape": "aspectratio", "s:ps:hdr": "sun.max", "s:bg": "circle.lefthalf.striped.horizontal", "s:444": "circle.grid.cross", "s:range": "circle.lefthalf.filled", "s:shape": "aspectratio", "s:osctrans": "square.on.square.dashed",
         "s:dz": "smallcircle.filled.circle", "s:motion": "gyroscope", "s:xb:dz": "smallcircle.filled.circle",
         "s:ps:awayres": "rectangle.expand.vertical", "s:ps:awayrate": "gauge.with.dots.needle.67percent",
@@ -1093,6 +1093,9 @@ struct MCRoot: View {
                 rotate.toggle()
                 MCLaunch.updateOrientation()
             }
+            let pipOn = UserDefaults.standard.bool(forKey: "mc_pip")
+            toggle("s:pip", "Picture in picture", "Leaving MoonCast during a PC or PS5 game keeps it in a small window. Closing the window ends the stream; the game keeps running. Not with Super resolution or on Xbox",
+                   pipOn, m, p) { UserDefaults.standard.set(!pipOn, forKey: "mc_pip") }
             let dim = UserDefaults.standard.object(forKey: "hh_dim_on_tv") as? Bool ?? true
             toggle("s:dim", "Dim the screen on a TV", "While this \(MCDevice.name) is the controller for a TV", dim, m, p) {
                 UserDefaults.standard.set(!dim, forKey: "hh_dim_on_tv")

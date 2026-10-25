@@ -93,5 +93,9 @@
 	<string>$(MC_TELEMETRY_APP_ID)</string>
 	<key>MCTelemetryNamespace</key>
 	<string>$(MC_TELEMETRY_NAMESPACE)</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>audio</string>
+	</array>
 </dict>
 </plist>
