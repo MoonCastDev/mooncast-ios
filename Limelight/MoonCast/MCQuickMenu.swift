@@ -144,19 +144,39 @@ struct MCQuickMenuView: View {
 
     /// Move to <TV>: the stream here ends (the game keeps running), the TV plays it and this iPad becomes its
     /// controller, after a moment for the PC, PS5 or Xbox to let this session go (MoveToTv.kt).
-    private func moveToTv(_ a: MCQuickActions) -> [Item] {
-        guard let tv = MCTvFinder.lastTv, let g = MCStore.shared.playing else { return [] }
+    private func move(_ a: MCQuickActions, to tv: MCTvBox, _ g: MCGame) {
         let kind = a.mcKind?() ?? "pc"
-        if kind == "xbox" && !tv.canXbox { return [] }
-        return [Item(icon: "tv", label: "Move to \(tv.name)", detail: "This \(MCDevice.name) becomes its controller") {
-            model.close()
-            if let keep = a.mcLeaveKeepOn { keep() } else { a.mcDisconnect() }
-            // the PC, PS5 or Xbox must have let this session go before the TV starts, or the TV waits for ever
-            // (a PC after 0.5 s still had the iPad's session: the TV's start never went on)
-            DispatchQueue.main.asyncAfter(deadline: .now() + (kind == "xbox" ? 1 : 3)) {
-                MCStore.shared.tvSession = MCTvSession(tv: tv, game: g)
-            }
+        model.close()
+        if let keep = a.mcLeaveKeepOn { keep() } else { a.mcDisconnect() }
+        // the PC, PS5 or Xbox must have let this session go before the TV starts, or the TV waits for ever
+        // (a PC after 0.5 s still had the iPad's session: the TV's start never went on)
+        DispatchQueue.main.asyncAfter(deadline: .now() + (kind == "xbox" ? 1 : 3)) {
+            MCStore.shared.tvSession = MCTvSession(tv: tv, game: g)
+        }
+    }
+
+    /// Play on TV: the game moves to a MoonCast TV and this iPad becomes its controller. The item opens the list of
+    /// TVs (the last one first; the network is looked over again while it's open).
+    private func moveToTv(_ a: MCQuickActions) -> [Item] {
+        guard MCStore.shared.playing != nil else { return [] }
+        let last = MCTvFinder.lastTv
+        return [Item(icon: "tv", label: "Play on TV", detail: last.map { "Last: \($0.name) · this \(MCDevice.name) becomes its controller" } ?? "Pick a MoonCast TV") {
+            model.page = "tv"
+            Task { @MainActor in _ = await MCTvFinder.sweep(); model.rev += 1 }
         }]
+    }
+
+    private func tvItems(_ a: MCQuickActions) -> [Item]? {
+        guard model.page == "tv", let g = MCStore.shared.playing else { return nil }
+        let kind = a.mcKind?() ?? "pc"
+        let tvs = MCTvFinder.known.filter { kind != "xbox" || $0.canXbox }
+        return [Item(icon: "chevron.left", label: "Back", detail: tvs.isEmpty ? "Looking for MoonCast TVs on this Wi-Fi…" : nil) { model.page = "main" }] +
+            tvs.map { tv in
+                let here = MCTvFinder.isHere(tv)
+                return Item(icon: "tv", label: tv.name, detail: here ? "On this Wi-Fi · plays here, this \(MCDevice.name) becomes its controller" : "Not found on this network right now") {
+                    move(a, to: tv, g)
+                }
+            }
     }
 
     /// Power (PC): Hibernate, Restart or Shut down, each asked again with Cancel first.
@@ -218,6 +238,7 @@ struct MCQuickMenuView: View {
         let pads = GCController.controllers().count
         if let p = powerItems(a) { return p }
         if let b = bitrateItems(a) { return b }
+        if let t = tvItems(a) { return t }
         let bitrate = Item(icon: "speedometer", label: "Bitrate", detail: bitrateNow(a.mcKind?() ?? "pc") + " · change it here") { model.page = "bitrate" }
         let move = moveToTv(a)
         if a.mcKind?() == "xbox" {
