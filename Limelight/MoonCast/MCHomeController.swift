@@ -143,6 +143,8 @@ final class MCHomeController: UIHostingController<MCRoot> {
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         navigationController?.setNavigationBarHidden(true, animated: false)
+        // back home: no PC stream runs now
+        MCAwayStream.current = nil
         MCPad.shared.attach()
         MCStore.shared.resume()
     }

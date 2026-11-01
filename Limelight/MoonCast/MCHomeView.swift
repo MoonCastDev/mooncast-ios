@@ -888,7 +888,7 @@ struct MCRoot: View {
         "s:multi": "person.2", "s:swap": "arrow.left.arrow.right", "s:mouse": "computermouse",
         "s:ps:res": "rectangle.expand.vertical", "s:ps:fps": "speedometer", "s:ps:rate": "gauge.with.dots.needle.67percent",
         "s:ps:codec": "film", "s:ps:disc": "moon.zzz", "s:ps:swap": "arrow.left.arrow.right", "s:theme": "paintpalette",
-        "s:profile": "house", "s:pip": "pip", "s:profname": "pencil", "s:ps:fsr": "sparkles", "s:xb:fsr": "sparkles", "s:ps:sharp": "wand.and.rays", "s:xb:sharp": "wand.and.rays",
+        "s:profile": "house", "s:autoaway": "location", "s:pip": "pip", "s:profname": "pencil", "s:ps:fsr": "sparkles", "s:xb:fsr": "sparkles", "s:ps:sharp": "wand.and.rays", "s:xb:sharp": "wand.and.rays",
         "s:ps:shape": "aspectratio", "s:xb:shape": "aspectratio", "s:ps:hdr": "sun.max", "s:bg": "circle.lefthalf.striped.horizontal", "s:444": "circle.grid.cross", "s:range": "circle.lefthalf.filled", "s:shape": "aspectratio", "s:osctrans": "square.on.square.dashed",
         "s:dz": "smallcircle.filled.circle", "s:motion": "gyroscope", "s:xb:dz": "smallcircle.filled.circle",
         "s:ps:awayres": "rectangle.expand.vertical", "s:ps:awayrate": "gauge.with.dots.needle.67percent",
@@ -998,6 +998,9 @@ struct MCRoot: View {
             let profs = MCSettings.profiles
             choice("s:profile", "Streaming profile", "Each keeps its own picture, sound, PlayStation and Xbox settings. Away suits a slow or far network; the custom ones are yours to name",
                    profs.map(MCSettings.profileName), profs.firstIndex(of: MCSettings.profile) ?? 0, m, p) { i in settings.switchProfile(to: profs[i]) }
+            let autoAway = MCAwayStream.autoAway
+            toggle("s:autoaway", "Switch to Away automatically", "When Home is chosen and the PC is reached over the internet, that stream uses the Away settings. Away from home there's never more than 100 Mbps",
+                   autoAway, m, p) { UserDefaults.standard.set(!autoAway, forKey: "mc_auto_away") }
             if MCSettings.profile.hasPrefix("c") {
                 row("s:profname", icon: "pencil", color: p.sub, title: "Rename this profile", sub: "Now \"\(MCSettings.profileName(MCSettings.profile))\"", right: nil, m, p) {
                     askText("Name this profile", "A name, like Hotel or Office") { n in MCSettings.renameProfile(MCSettings.profile, n); settingsRev += 1 }

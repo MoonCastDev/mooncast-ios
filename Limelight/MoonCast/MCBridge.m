@@ -104,7 +104,14 @@
 
     config.serverCodecModeSupport = app.host.serverCodecModeSupport;
 
-    switch (settings.preferredCodec) {
+    [MCBridge setVideoFormats:config codec:settings.preferredCodec hdr:settings.enableHdr
+                       yuv444:[[NSUserDefaults standardUserDefaults] boolForKey:@"mc_yuv444"]];
+    return config;
+}
+
++ (void) setVideoFormats:(StreamConfiguration*)config codec:(uint32_t)codec hdr:(BOOL)hdr yuv444:(BOOL)yuv444 {
+    config.supportedVideoFormats = 0;
+    switch (codec) {
         case CODEC_PREF_AV1:
             if (VTIsHardwareDecodeSupported(kCMVideoCodecType_AV1)) {
                 config.supportedVideoFormats |= VIDEO_FORMAT_AV1_MAIN8;
@@ -121,26 +128,25 @@
             break;
     }
 
-    if ((config.width > 4096 || config.height > 4096 || settings.enableHdr) && VTIsHardwareDecodeSupported(kCMVideoCodecType_HEVC)) {
+    if ((config.width > 4096 || config.height > 4096 || hdr) && VTIsHardwareDecodeSupported(kCMVideoCodecType_HEVC)) {
         config.supportedVideoFormats |= VIDEO_FORMAT_H265;
-        if (settings.enableHdr && (AVPlayer.availableHDRModes & AVPlayerHDRModeHDR10) != 0) {
+        if (hdr && (AVPlayer.availableHDRModes & AVPlayerHDRModeHDR10) != 0) {
             config.supportedVideoFormats |= VIDEO_FORMAT_H265_MAIN10;
         }
     }
 
-    if ((config.supportedVideoFormats & VIDEO_FORMAT_MASK_AV1) && settings.enableHdr &&
+    if ((config.supportedVideoFormats & VIDEO_FORMAT_MASK_AV1) && hdr &&
         VTIsHardwareDecodeSupported(kCMVideoCodecType_AV1) && (AVPlayer.availableHDRModes & AVPlayerHDRModeHDR10) != 0) {
         config.supportedVideoFormats |= VIDEO_FORMAT_AV1_MAIN10;
     }
 
     // MoonCast: Settings → Picture → YUV 4:4:4 (HEVC): full colour detail, used when the PC offers HEVC 4:4:4
-    if ([[NSUserDefaults standardUserDefaults] boolForKey:@"mc_yuv444"] && (config.supportedVideoFormats & VIDEO_FORMAT_H265)) {
+    if (yuv444 && (config.supportedVideoFormats & VIDEO_FORMAT_H265)) {
         config.supportedVideoFormats |= VIDEO_FORMAT_H265_REXT8_444;
         if (config.supportedVideoFormats & VIDEO_FORMAT_H265_MAIN10) {
             config.supportedVideoFormats |= VIDEO_FORMAT_H265_REXT10_444;
         }
     }
-    return config;
 }
 
 + (nullable NSString*) refreshServerInfo:(TemporaryHost*)host discovery:(DiscoveryManager*)disc {

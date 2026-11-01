@@ -41,6 +41,9 @@ NS_ASSUME_NONNULL_BEGIN
 /// What MainFrameViewController's prepareToStreamApp builds: the saved settings, clamped to this screen.
 + (StreamConfiguration*) streamConfigForApp:(TemporaryApp*)app;
 
+/// The video formats to offer for a codec preference (CODEC_PREF_*), HDR and YUV 4:4:4, as streamConfigForApp does.
++ (void) setVideoFormats:(StreamConfiguration*)config codec:(uint32_t)codec hdr:(BOOL)hdr yuv444:(BOOL)yuv444;
+
 /// Asks the PC for its server info and fills the host in. Nil when it worked, else the error to show.
 + (nullable NSString*) refreshServerInfo:(TemporaryHost*)host discovery:(DiscoveryManager*)disc;
 

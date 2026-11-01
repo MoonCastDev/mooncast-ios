@@ -281,7 +281,11 @@ final class MCStore: NSObject, ObservableObject, DiscoveryCallback, PairCallback
         playing = g
         MCUsage.used("pc")
         let cfg = MCBridge.streamConfig(for: a)
-        onStream?(cfg)
+        // over the internet, Home streams with the Away settings and never more than 100 Mbps (MCAwayStream)
+        MCAwayStream.prepare(cfg, host: g.host) { [weak self] plan in
+            self?.onStream?(cfg)
+            if let msg = plan.message { MCToast.show(msg) }
+        }
     }
 
     func quit(_ h: TemporaryHost, then: ((Bool) -> Void)? = nil) {

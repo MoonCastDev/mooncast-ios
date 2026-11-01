@@ -208,23 +208,33 @@ struct MCQuickMenuView: View {
         switch kind {
         case "ps5": return MCPs5Store.bitrate == 0 ? "Auto" : "\(MCPs5Store.bitrate) Mbps"
         case "xbox": return MCXbox.maxMbps == 0 ? "Auto" : "Up to \(MCXbox.maxMbps) Mbps"
-        default: return String(format: "%.0f Mbps", Double(MCSettings().load().bitrate) / 1000)
+        default:
+            // the stream's own (an away stream may differ from the settings)
+            let k = MCAwayStream.current.map { $0.kbps } ?? MCSettings().load().bitrate
+            return String(format: "%.0f Mbps", Double(k) / 1000) + (MCAwayStream.current?.away == true ? " · away" : "")
         }
     }
 
     private func bitrateItems(_ a: MCQuickActions) -> [Item]? {
         guard model.page == "bitrate" else { return nil }
         let kind = a.mcKind?() ?? "pc"
-        let steps: [Int] = kind == "pc" ? MCSettings.pcSteps : kind == "ps5" ? [0, 10, 15, 20, 30, 50, 80, 100] : [0, 5, 10, 15, 20, 30]
-        let cur: Int = kind == "pc" ? MCSettings().load().bitrate / 1000 : kind == "ps5" ? MCPs5Store.bitrate : MCXbox.maxMbps
-        return [Item(icon: "chevron.left", label: "Back", detail: nil) { model.page = "main" }] + steps.map { n in
+        // away from home (MCAwayStream): only the steps up to the cap; Home switched to Away saves into Away
+        let plan = kind == "pc" ? MCAwayStream.current : nil
+        let away = plan?.away == true, auto = plan?.autoAway == true
+        let pcSteps = away ? MCSettings.pcSteps.filter { $0 * 1000 <= plan!.capKbps } : MCSettings.pcSteps
+        let steps: [Int] = kind == "pc" ? pcSteps : kind == "ps5" ? [0, 10, 15, 20, 30, 50, 80, 100] : [0, 5, 10, 15, 20, 30]
+        let pcNow = auto ? (MCSettings.awayValue("bitrate") as? Int ?? MCSettings().load().bitrate) : MCSettings().load().bitrate
+        let cur: Int = kind == "pc" ? pcNow / 1000 : kind == "ps5" ? MCPs5Store.bitrate : MCXbox.maxMbps
+        let note = away ? "Away from home" + (auto ? ", so this sets your Away profile" : "") : nil
+        return [Item(icon: "chevron.left", label: "Back", detail: note) { model.page = "main" }] + steps.map { n in
             Item(icon: n == cur ? "checkmark" : "speedometer", label: n == 0 ? "Auto" : "\(n) Mbps",
                  detail: n == cur ? "Now" : "Reconnects in a moment; the game keeps running") {
                 guard n != cur, let g = MCStore.shared.playing else { model.page = "main"; return }
                 switch kind {
                 case "ps5": UserDefaults.standard.set(n, forKey: "ps5_bitrate")
                 case "xbox": UserDefaults.standard.set(n, forKey: "xbox_bitrate")
-                default: MCSettings().save { $0.bitrate = n * 1000 }
+                default:
+                    if auto { MCSettings.setAwayValue("bitrate", n * 1000) } else { MCSettings().save { $0.bitrate = n * 1000 } }
                 }
                 model.close()
                 if let keep = a.mcLeaveKeepOn { keep() } else { a.mcDisconnect() }

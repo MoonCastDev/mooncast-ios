@@ -92,7 +92,8 @@ final class MCSettings {
                                     "hdr": v.hdr, "pacing": v.pacing, "audio": v.audio, "audioOnPC": v.audioOnPC]
         for k in MCSettings.profileKeys { saved[k] = d.object(forKey: k) ?? "" }
         d.set(saved, forKey: "mc_profile_\(was)")
-        if let p = d.dictionary(forKey: "mc_profile_\(want)") {
+        // a profile that only holds a Quick menu bitrate picked while away (setAwayValue) wasn't set up yet
+        if let p = d.dictionary(forKey: "mc_profile_\(want)"), p["width"] != nil {
             save {
                 $0.width = p["width"] as? Int ?? $0.width; $0.height = p["height"] as? Int ?? $0.height
                 $0.framerate = p["fps"] as? Int ?? $0.framerate; $0.bitrate = p["bitrate"] as? Int ?? $0.bitrate
@@ -104,9 +105,57 @@ final class MCSettings {
                 if let o = p[k], !(o is String && (o as! String).isEmpty) { d.set(o, forKey: k) } else { d.removeObject(forKey: k) }
             }
         } else if want == "away" {
-            save { $0.width = 1280; $0.height = 720; $0.framerate = 60; $0.bitrate = MCRoot.defaultBitrate(1280, 720, 60) }
+            let k = d.dictionary(forKey: "mc_profile_away")?["bitrate"] as? Int
+            save { $0.width = 1280; $0.height = 720; $0.framerate = 60; $0.bitrate = k ?? MCRoot.defaultBitrate(1280, 720, 60) }
         }
         d.set(want, forKey: "mc_profile")
+    }
+
+    // MARK: the Away profile, read without switching to it (automatic Away, MCAwayStream)
+
+    /// The Away profile's value for [key] ("width", "height", "fps", "bitrate", "codec", "hdr", or one of its
+    /// MoonCast keys), as a stream started in Away would see it; nil for the setting's default. While Away is the
+    /// profile in use, that's the live value.
+    static func awayValue(_ key: String) -> Any? {
+        if profile == "away" {
+            let v = MCSettings().load()
+            switch key {
+            case "width": return v.width
+            case "height": return v.height
+            case "fps": return v.framerate
+            case "bitrate": return v.bitrate
+            case "codec": return Int(v.codec)
+            case "hdr": return v.hdr
+            default: return UserDefaults.standard.object(forKey: key)
+            }
+        }
+        let o = UserDefaults.standard.dictionary(forKey: "mc_profile_away")?[key]
+        if let s = o as? String, s.isEmpty { return nil }
+        return o
+    }
+
+    /// True when the Away profile holds settings of its own: it is in use now, or it was left once (leaving a
+    /// profile saves its settings). A Quick menu bitrate alone doesn't count.
+    static var awaySetUp: Bool {
+        profile == "away" || UserDefaults.standard.dictionary(forKey: "mc_profile_away")?["width"] != nil
+    }
+
+    /// Sets the Away profile's [key] (nil: its default) without switching to it. Only the bitrate is set this way.
+    static func setAwayValue(_ key: String, _ value: Int?) {
+        if profile == "away" {
+            if key == "bitrate", let v = value { MCSettings().save { $0.bitrate = v } }
+            return
+        }
+        let d = UserDefaults.standard
+        var p = d.dictionary(forKey: "mc_profile_away") ?? [:]
+        p[key] = value ?? ""
+        d.set(p, forKey: "mc_profile_away")
+    }
+
+    /// Resolution is Native: the saved size is this screen's own.
+    static var nativeOn: Bool {
+        let v = MCSettings().load(), n = native
+        return v.width == n.0 && v.height == n.1
     }
 
     /// This screen in pixels, landscape.
