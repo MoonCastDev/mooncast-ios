@@ -49,8 +49,8 @@ final class MCSettings {
 
     // MARK: Home and Away profiles (Profile.kt): Settings → Picture → Streaming profile
 
-    /// The profiles: Home, Away and three custom ones you can rename.
-    static let profiles = ["home", "away", "c1", "c2", "c3"]
+    /// The profiles: Home and Away (the custom ones 1-3 are gone; see [migrateProfiles]).
+    static let profiles = ["home", "away"]
 
     /// The active profile.
     static var profile: String {
@@ -58,24 +58,19 @@ final class MCSettings {
         return profiles.contains(p) ? p : "home"
     }
 
-    /// A profile's name: Home, Away, or a custom one's own name ("Custom 1" until renamed).
-    static func profileName(_ p: String) -> String {
-        switch p {
-        case "home": return "Home"
-        case "away": return "Away"
-        default:
-            let n = UserDefaults.standard.string(forKey: "mc_profile_name_\(p)")?.trimmingCharacters(in: .whitespaces) ?? ""
-            return n.isEmpty ? "Custom \(p.dropFirst())" : n
-        }
-    }
+    static func profileName(_ p: String) -> String { p == "away" ? "Away" : "Home" }
 
-    static func renameProfile(_ p: String, _ name: String) {
-        UserDefaults.standard.set(String(name.trimmingCharacters(in: .whitespaces).prefix(24)), forKey: "mc_profile_name_\(p)")
+    /// A custom profile (c1-c3, from an older build) still chosen becomes Home: its settings are saved under its own
+    /// name first (they stay on disk, unused) and Home's come back.
+    static func migrateProfiles() {
+        let d = UserDefaults.standard
+        guard let raw = d.string(forKey: "mc_profile"), !profiles.contains(raw) else { return }
+        MCSettings().switchProfile(to: "home", from: raw)
     }
 
     /// MoonCast's own settings that belong to a profile, next to Moonlight's picture and sound values.
     private static let profileKeys = ["mc_full_range", "mc_picture_shape", "mc_ultra_low_latency", "mc_super_resolution",
-                                      "mc_fsr_sharpness", "mc_yuv444", "xbox_resolution", "xbox_bitrate",
+                                      "mc_fsr_sharpness", "mc_native_fps", "xbox_resolution", "xbox_bitrate",
                                       "ps5_resolution", "ps5_fps", "ps5_bitrate", "ps5_h265", "ps5_hdr",
                                       "ps5_super_resolution", "ps5_fsr_sharpness", "ps5_picture_shape",
                                       "xbox_super_resolution", "xbox_fsr_sharpness", "xbox_picture_shape"]
@@ -83,9 +78,9 @@ final class MCSettings {
     /// Saves the picture and sound settings for the profile being left and brings back the other one's. The first
     /// time Away starts from 720p 60 fps at its Auto bitrate, a good start for a hotel or a phone's hotspot; a custom
     /// profile starts as a copy of the one you were on.
-    func switchProfile(to want: String) {
+    func switchProfile(to want: String, from: String? = nil) {
         let d = UserDefaults.standard
-        let was = MCSettings.profile
+        let was = from ?? MCSettings.profile
         guard want != was else { return }
         let v = load()
         var saved: [String: Any] = ["width": v.width, "height": v.height, "fps": v.framerate, "bitrate": v.bitrate, "codec": Int(v.codec),
@@ -165,6 +160,15 @@ final class MCSettings {
         }
         set { UserDefaults.standard.set(newValue, forKey: "mc_native") }
     }
+
+    /// Frame rate is Native: each stream runs at this screen's fastest refresh rate (Settings → Frame rate).
+    static var nativeFps: Bool {
+        get { UserDefaults.standard.bool(forKey: "mc_native_fps") }
+        set { UserDefaults.standard.set(newValue, forKey: "mc_native_fps") }
+    }
+
+    /// This screen's fastest refresh rate, the Native frame rate.
+    static var nativeHz: Int { max(60, UIScreen.main.maximumFramesPerSecond) }
 
     /// This screen in pixels, landscape.
     static var native: (Int, Int) {

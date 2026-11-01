@@ -63,6 +63,8 @@ final class MCNativeRes: NSObject {
             cfg.width = Int32(s.0)
             cfg.height = Int32(s.1)
         }
+        // Native frame rate: this screen's fastest
+        if MCSettings.nativeFps { cfg.frameRate = Int32(MCSettings.nativeHz) }
         streamSize = (Int(cfg.width), Int(cfg.height))
         NSLog("MoonCast: stream \(cfg.width)x\(cfg.height), Native \(MCSettings.nativeOn), Polaris \(polaris)")
     }

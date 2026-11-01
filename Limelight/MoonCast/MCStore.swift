@@ -85,6 +85,7 @@ final class MCStore: NSObject, ObservableObject, DiscoveryCallback, PairCallback
         _ = IdManager.getUniqueId()
         clientCert = CryptoManager.readCertFromFile()
         hosts = MCBridge.savedHosts()
+        MCSettings.migrateProfiles()
         MCPs5Store.testAdd()
         Task { await MCTvFinder.testTarget(); await MCTvFinder.checkTarget(); self.bump() }
         #if DEBUG

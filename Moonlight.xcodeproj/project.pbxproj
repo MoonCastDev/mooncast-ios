@@ -160,6 +160,8 @@
 		718BB6E7E9DB524121A6CABF /* MCFsrRtc.swift in Sources */ = {isa = PBXBuildFile; fileRef = E768DDE95ABD7645347E8360 /* MCFsrRtc.swift */; };
 		64865257E4CAF602A1D0BBC8 /* MCPip.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61F7ABBAD484211679DD7F5D /* MCPip.swift */; };
 		921EC5A166FC0945D40A0245 /* MCStatsPill.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C8E77FA16777CC1B051C6CE /* MCStatsPill.swift */; };
+		B758096E7BF0B7341DD7196B /* MCSettingsCards.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9884395C1F6BAFBB7226581A /* MCSettingsCards.swift */; };
+		E67EBC0246EFFC5B6C3AB181 /* MCStyles.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7C86825391A6ABDE6569C3D /* MCStyles.swift */; };
 		195E6C6249A905795B9DCD31 /* MCNative.swift in Sources */ = {isa = PBXBuildFile; fileRef = 13E8911994C23DC2B0EECAFE /* MCNative.swift */; };
 		BDD51C48E2EF63C5DE6D79B6 /* MCAway.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39D12CDB6EA02FAD150998DC /* MCAway.swift */; };
 		581F2B785740847890BFEBD7 /* licences.txt in Resources */ = {isa = PBXBuildFile; fileRef = C3978CAC59C43325CF6103A6 /* licences.txt */; };
@@ -374,6 +376,8 @@
 		8F4F36483CF5DF6B5A31894B /* MCAbout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCAbout.swift; sourceTree = "<group>"; };
 		C3978CAC59C43325CF6103A6 /* licences.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = licences.txt; sourceTree = "<group>"; };
 		7C8E77FA16777CC1B051C6CE /* MCStatsPill.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCStatsPill.swift; sourceTree = "<group>"; };
+		9884395C1F6BAFBB7226581A /* MCSettingsCards.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCSettingsCards.swift; sourceTree = "<group>"; };
+		E7C86825391A6ABDE6569C3D /* MCStyles.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCStyles.swift; sourceTree = "<group>"; };
 		13E8911994C23DC2B0EECAFE /* MCNative.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCNative.swift; sourceTree = "<group>"; };
 		39D12CDB6EA02FAD150998DC /* MCAway.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCAway.swift; sourceTree = "<group>"; };
 		61F7ABBAD484211679DD7F5D /* MCPip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCPip.swift; sourceTree = "<group>"; };
@@ -753,6 +757,8 @@
 				E768DDE95ABD7645347E8360 /* MCFsrRtc.swift */,
 				61F7ABBAD484211679DD7F5D /* MCPip.swift */,
 				7C8E77FA16777CC1B051C6CE /* MCStatsPill.swift */,
+				9884395C1F6BAFBB7226581A /* MCSettingsCards.swift */,
+				E7C86825391A6ABDE6569C3D /* MCStyles.swift */,
 				13E8911994C23DC2B0EECAFE /* MCNative.swift */,
 				39D12CDB6EA02FAD150998DC /* MCAway.swift */,
 				C3978CAC59C43325CF6103A6 /* licences.txt */,
@@ -991,6 +997,8 @@
 				718BB6E7E9DB524121A6CABF /* MCFsrRtc.swift in Sources */,
 				64865257E4CAF602A1D0BBC8 /* MCPip.swift in Sources */,
 				921EC5A166FC0945D40A0245 /* MCStatsPill.swift in Sources */,
+				B758096E7BF0B7341DD7196B /* MCSettingsCards.swift in Sources */,
+				E67EBC0246EFFC5B6C3AB181 /* MCStyles.swift in Sources */,
 				195E6C6249A905795B9DCD31 /* MCNative.swift in Sources */,
 				BDD51C48E2EF63C5DE6D79B6 /* MCAway.swift in Sources */,
 				4CF2CB5B55AB196C6BE8FFE4 /* MCAbout.swift in Sources */,

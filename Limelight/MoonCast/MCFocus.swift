@@ -42,6 +42,10 @@ final class MCFocus: ObservableObject {
     var scopes: [String: String] = [:]
     var actions: [String: () -> Void] = [:]
     var menus: [String: () -> Void] = [:]
+    /// Items where holding A opens the menu (a PC play style: its own page); a short press still presses them.
+    var holdable = Set<String>()
+    /// Items that take left and right themselves (the bitrate slider: one step each).
+    var adjusters: [String: (Int) -> Void] = [:]
     /// Only items in this scope can be reached (a dialog takes it while it's open).
     var scope = "page"
     /// What the page does with the buttons items don't use (B, L, R, Y, X).
@@ -49,11 +53,24 @@ final class MCFocus: ObservableObject {
     /// Where focus goes when a page or dialog opens.
     var preferred: [String: String] = [:]
 
-    func register(_ id: String, scope: String, action: @escaping () -> Void, menu: (() -> Void)?) {
+    func register(_ id: String, scope: String, action: @escaping () -> Void, menu: (() -> Void)?,
+                  hold: Bool = false, adjust: ((Int) -> Void)? = nil) {
         actions[id] = action
         scopes[id] = scope
         if let menu = menu { menus[id] = menu } else { menus.removeValue(forKey: id) }
+        if hold && menu != nil { holdable.insert(id) } else { holdable.remove(id) }
+        if let a = adjust { adjusters[id] = a } else { adjusters.removeValue(forKey: id) }
     }
+
+    /// A is held on [id] long enough: its menu instead of its press.
+    func held(_ id: String) {
+        guard scopes[id] == scope, let m = menus[id] else { return }
+        MCFeel.play(.select)
+        m()
+    }
+
+    /// The focused item opens its menu when A is held on it.
+    var focusHoldable: Bool { id.map { holdable.contains($0) && scopes[$0] == scope } ?? false }
 
     /// The focus is gone or out of scope: land on the scope's preferred item, or its top-left one.
     func settle() {
@@ -67,6 +84,7 @@ final class MCFocus: ObservableObject {
         switch b {
         case .up, .down, .left, .right:
             if id == nil || frames[id!] == nil || scopes[id!] != scope { settle(); return }
+            if (b == .left || b == .right), let adj = adjusters[id!] { adj(b == .left ? -1 : 1); return }
             if let next = nearest(from: id!, b) { id = next; MCFeel.play(.move) } else { _ = pageButton?(b) }
         case .a:
             if let id = id, scopes[id] == scope { MCFeel.play(.select); actions[id]?() } else { settle() }
@@ -111,6 +129,9 @@ final class MCPad {
     private var held: MCButton?
     private var repeatTimer: Timer?
     private var stickDir: [ObjectIdentifier: MCButton] = [:]
+    /// A went down on an item that opens its menu when held: waiting to see if it's a hold
+    private var holdTimer: Timer?
+    private var holdFired = false
 
     private init() {
         NotificationCenter.default.addObserver(forName: .GCControllerDidConnect, object: nil, queue: .main) { [weak self] _ in self?.hookAll() }
@@ -152,7 +173,27 @@ final class MCPad {
         }
         on(g.dpad.up, .up, repeats: true); on(g.dpad.down, .down, repeats: true)
         on(g.dpad.left, .left, repeats: true); on(g.dpad.right, .right, repeats: true)
-        on(g.buttonA, .a); on(g.buttonB, .b); on(g.buttonX, .x); on(g.buttonY, .y)
+        // A on an item that opens its menu when held (a PC play style): held 0.5 s opens it, a shorter press presses
+        g.buttonA.pressedChangedHandler = { [weak self] _, _, pressed in
+            guard let self = self, self.attached else { return }
+            let f = MCFocus.shared
+            if pressed {
+                self.stopRepeat()
+                guard f.focusHoldable, let id = f.id else { f.press(.a); return }
+                self.holdFired = false
+                self.holdTimer?.invalidate()
+                self.holdTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { [weak self] _ in
+                    self?.holdFired = true
+                    self?.holdTimer = nil
+                    if f.id == id { f.held(id) }
+                }
+            } else if let t = self.holdTimer {
+                t.invalidate()
+                self.holdTimer = nil
+                if !self.holdFired { f.press(.a) }
+            }
+        }
+        on(g.buttonB, .b); on(g.buttonX, .x); on(g.buttonY, .y)
         on(g.leftShoulder, .l); on(g.rightShoulder, .r); on(g.buttonMenu, .menu)
         let key = ObjectIdentifier(c)
         g.leftThumbstick.valueChangedHandler = { [weak self] _, x, y in
@@ -201,10 +242,12 @@ struct MCFocusable: ViewModifier {
     var ring: Color
     var action: () -> Void
     var menu: (() -> Void)?
+    var hold = false
+    var adjust: ((Int) -> Void)? = nil
 
     func body(content: Content) -> some View {
         let on = focus.padActive && focus.id == id
-        focus.register(id, scope: scope, action: action, menu: menu)
+        focus.register(id, scope: scope, action: action, menu: menu, hold: hold, adjust: adjust)
         return content
             .scaleEffect(on ? 1.04 : 1)
             .overlay(MCRing(corner: corner, color: ring).opacity(on ? 1 : 0))
@@ -223,8 +266,9 @@ struct MCFocusable: ViewModifier {
 
 extension View {
     func mcFocusable(_ id: String, scope: String = "page", corner: CGFloat = 16, ring: Color,
-                     menu: (() -> Void)? = nil, action: @escaping () -> Void) -> some View {
-        modifier(MCFocusable(id: id, scope: scope, corner: corner, ring: ring, action: action, menu: menu))
+                     menu: (() -> Void)? = nil, hold: Bool = false, adjust: ((Int) -> Void)? = nil,
+                     action: @escaping () -> Void) -> some View {
+        modifier(MCFocusable(id: id, scope: scope, corner: corner, ring: ring, action: action, menu: menu, hold: hold, adjust: adjust))
     }
 
     /// At the root: collects every item's place for the focus.

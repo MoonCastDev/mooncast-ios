@@ -104,8 +104,8 @@
 
     config.serverCodecModeSupport = app.host.serverCodecModeSupport;
 
-    [MCBridge setVideoFormats:config codec:settings.preferredCodec hdr:settings.enableHdr
-                       yuv444:[[NSUserDefaults standardUserDefaults] boolForKey:@"mc_yuv444"]];
+    // YUV 4:4:4 is no longer offered (it is PyroWave's on Android): a value left by an older build is ignored
+    [MCBridge setVideoFormats:config codec:settings.preferredCodec hdr:settings.enableHdr yuv444:NO];
     return config;
 }
 

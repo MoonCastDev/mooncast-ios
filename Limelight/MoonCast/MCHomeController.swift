@@ -178,7 +178,7 @@ final class MCHomeController: UIHostingController<MCRoot> {
             t.autocorrectionType = .no
         }
         a.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-        a.addAction(UIAlertAction(title: digits || placeholder.hasPrefix("A name") ? "OK" : "Add", style: .default) { _ in done(a.textFields?.first?.text ?? "") })
+        a.addAction(UIAlertAction(title: digits || placeholder.hasPrefix("A name") || placeholder.hasPrefix("Width") ? "OK" : "Add", style: .default) { _ in done(a.textFields?.first?.text ?? "") })
         present(a, animated: true)
     }
 }

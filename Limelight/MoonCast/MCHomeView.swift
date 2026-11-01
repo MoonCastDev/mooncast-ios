@@ -12,22 +12,24 @@ enum MCPage: String { case home = "Home", games = "All games", consoles = "Conso
 struct MCRoot: View {
     @ObservedObject var store = MCStore.shared
     @ObservedObject var focus = MCFocus.shared
-    @AppStorage("hh_theme") private var theme = "dark"
-    @State private var page: MCPage = .home
-    @State private var gamesTab = "all"
-    @State private var sortAz = false
-    @State private var group = "ipad"
-    @State private var settingsRev = 0
-    @State private var pickingArt: String?
-    @State private var photo: PhotosPickerItem?
-    @State private var artRev = 0
-    @State private var enterTick = 0
-    @State private var padTest = false
-    @State private var licence: MCLicences.Part?
-    @AppStorage("hh_screen_size") private var screenSize = "auto"
-    @AppStorage("hh_rotate") private var rotate = true
+    @AppStorage("hh_theme") var theme = "dark"
+    @State var page: MCPage = .home
+    @State var gamesTab = "all"
+    @State var sortAz = false
+    @State var group = "ipad"
+    @State var settingsRev = 0
+    @State var pickingArt: String?
+    @State var photo: PhotosPickerItem?
+    @State var artRev = 0
+    @State var enterTick = 0
+    @State var padTest = false
+    @State var licence: MCLicences.Part?
+    /// Settings as one card per device (MCSettingsCards): which screen, tab and style page shows
+    @State var cards = MCCardsState()
+    @AppStorage("hh_screen_size") var screenSize = "auto"
+    @AppStorage("hh_rotate") var rotate = true
 
-    private let settings = MCSettings()
+    let settings = MCSettings()
     /// Set by the controller: asks for text (a PC's address) with the system's keyboard dialog.
     var askText: (String, String, @escaping (String) -> Void) -> Void = { _, _, _ in }
     /// Set by the controller: Sony's sign-in page; true when signed in.
@@ -111,7 +113,7 @@ struct MCRoot: View {
 
     /// Test runs only: MC_PAGE opens a page (home, games, consoles, settings), MC_GROUP a settings group,
     /// MC_THEME sets the theme, so every screen can be checked from a script.
-    private func testStart() {
+    func testStart() {
         #if DEBUG
         let env = ProcessInfo.processInfo.environment
         if let t = env["MC_THEME"] { theme = t }
@@ -143,13 +145,19 @@ struct MCRoot: View {
         }
         if let pg = env["MC_PAGE"], let target = [MCPage.home, .games, .consoles, .settings].first(where: { $0.rawValue.lowercased().hasPrefix(pg.lowercased()) || (pg == "games" && $0 == .games) }) {
             go(target)
+            // MC_GROUP is a group of the Classic list; MC_CARD, MC_TAB, MC_STYLE, MC_STRIP open the cards' screens
+            if target == .settings {
+                if env["MC_GROUP"] != nil { cards.classic = true }
+                // a moment for the PCs and consoles to load
+                DispatchQueue.main.asyncAfter(deadline: .now() + (env["MC_CARD"] != nil || env["MC_STYLE"] != nil ? 1.5 : 0)) { cardsTestStart(env) }
+            }
         }
         #endif
     }
 
     /// An official build asks once, a moment after the home opens, whether to send the anonymous check-in
     /// (No thanks picked first); after a yes it goes at most once a day.
-    private func askUsage() {
+    func askUsage() {
         if MCUsage.enabled { MCUsage.checkIn(); return }
         guard MCUsage.shouldAsk else { return }
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
@@ -160,14 +168,15 @@ struct MCRoot: View {
         }
     }
 
-    private func go(_ p: MCPage) {
+    func go(_ p: MCPage) {
+        if p == .settings && page != .settings { cards = MCCardsState() }
         page = p
         enterTick += 1
         focus.id = nil
         DispatchQueue.main.async { focus.settle() }
     }
 
-    private func hookButtons() {
+    func hookButtons() {
         focus.pageButton = { b in
             if store.busy != nil { return true }
             if store.dialog != nil {
@@ -176,6 +185,7 @@ struct MCRoot: View {
             }
             switch b {
             case .b:
+                if page == .settings && cardsBack() { return true }
                 if page != .home { go(.home) }
                 return true
             case .l, .r:
@@ -186,6 +196,8 @@ struct MCRoot: View {
                         focus.id = nil
                         DispatchQueue.main.async { focus.settle() }
                     }
+                } else if page == .settings && !cards.classic {
+                    cardsShoulder(b == .r ? 1 : -1)
                 } else if page == .settings {
                     let g = groups.map { $0.0 }
                     if let i = g.firstIndex(of: group) { group = g[(i + (b == .r ? 1 : g.count - 1)) % g.count] }
@@ -193,6 +205,10 @@ struct MCRoot: View {
                 return true
             case .x:
                 if page == .games { sortAz.toggle(); return true }
+                if page == .settings && !cards.classic { return cardsKey(.x) }
+                return false
+            case .y:
+                if page == .settings && !cards.classic { return cardsKey(.y) }
                 return false
             default:
                 return false
@@ -202,7 +218,7 @@ struct MCRoot: View {
 
     // MARK: shell
 
-    private func topBar(_ m: MCMetrics, _ p: MCPalette) -> some View {
+    func topBar(_ m: MCMetrics, _ p: MCPalette) -> some View {
         HStack(spacing: m.px(20)) {
             if page == .home {
                 Image("MoonCastLogo").resizable().scaledToFit().frame(width: m.px(84), height: m.px(84))
@@ -217,19 +233,19 @@ struct MCRoot: View {
                 .background(Capsule().fill(p.panel))
                 .onTapGesture { playWhere() }
             } else {
-                Button { go(.home) } label: {
+                Button { if page == .settings && cardsBack() { return }; go(.home) } label: {
                     Image(systemName: "chevron.left").font(.system(size: m.px(36), weight: .bold)).foregroundColor(p.ink)
                         .frame(width: max(m.px(84), 44), height: max(m.px(84), 44))
                         .background(Circle().fill(p.panel))
                 }
                 .accessibilityLabel("Back")
-                Text(page.rawValue).mcFont(44, m, weight: .heavy).foregroundColor(p.ink)
+                Text(page == .settings ? cardsTitle() : page.rawValue).mcFont(44, m, weight: .heavy).foregroundColor(p.ink).lineLimit(1)
             }
             Spacer()
         }
     }
 
-    private func foot(_ m: MCMetrics, _ p: MCPalette) -> some View {
+    func foot(_ m: MCMetrics, _ p: MCPalette) -> some View {
         HStack(spacing: m.px(14)) {
             if focus.padActive {
                 Image(systemName: "gamecontroller.fill").font(.system(size: m.px(30))).foregroundColor(p.sub)
@@ -253,28 +269,29 @@ struct MCRoot: View {
         .overlay(Rectangle().fill(p.line).frame(height: 1), alignment: .top)
     }
 
-    private func hints() -> [(String, String)] {
+    func hints() -> [(String, String)] {
         if store.dialog != nil { return [("B", "Cancel"), ("A", "OK")] }
         switch page {
         case .home: return [("X", "Options"), ("A", "Start")]
         case .games: return [("L R", "Tabs"), ("X", sortAz ? "Recent first" : "A to Z"), ("B", "Back"), ("A", "Start")]
         case .consoles: return [("B", "Back"), ("A", "Open")]
-        case .settings: return [("L R", "Groups"), ("B", "Back"), ("A", "OK")]
+        case .settings: return cards.classic ? [("L R", "Groups"), ("B", "Back"), ("A", "OK")] : cardsHints()
         }
     }
 
-    private func tapHint(_ k: String) {
+    func tapHint(_ k: String) {
         switch k {
         case "A": focus.press(.a)
         case "B": focus.press(.b)
         case "X": focus.press(.x)
+        case "Y": focus.press(.y)
         case "L R": focus.press(.r)
         default: break
         }
     }
 
     /// The colour of the focused game, washed over the background.
-    private func wash(_ m: MCMetrics, _ p: MCPalette) -> some View {
+    func wash(_ m: MCMetrics, _ p: MCPalette) -> some View {
         // Settings → Theme → Background: Static keeps the theme's plain colour
         let c = UserDefaults.standard.string(forKey: "hh_background") == "static" ? nil : focusedGame().map { g -> Color in MCArt.tint(g.key) ?? Covers.tint(g.seed) }
         return GeometryReader { g in
@@ -286,7 +303,7 @@ struct MCRoot: View {
         .animation(.easeInOut(duration: 0.3), value: focus.id)
     }
 
-    private func focusedGame() -> MCGame? {
+    func focusedGame() -> MCGame? {
         guard let id = focus.id, id.hasPrefix("g:") else { return nil }
         let key = String(id.dropFirst(2))
         return (store.homePcs() + store.allGames()).first { $0.key == key }
@@ -294,7 +311,7 @@ struct MCRoot: View {
 
     // MARK: Home
 
-    private func homePage(_ m: MCMetrics, _ p: MCPalette) -> some View {
+    func homePage(_ m: MCMetrics, _ p: MCPalette) -> some View {
         // one tile per PC (press: its games), then the consoles
         let games = store.homePcs() + store.homeGames()
         // PCs found on the network but not paired yet: a tile each, so pairing is one press from Home
@@ -360,7 +377,7 @@ struct MCRoot: View {
         }
     }
 
-    private func roundButtons(_ m: MCMetrics, _ p: MCPalette) -> some View {
+    func roundButtons(_ m: MCMetrics, _ p: MCPalette) -> some View {
         let items: [(String, String, Color, () -> Void)] = [
             ("Consoles", "square.stack.3d.up.fill", MCPalette.cyan, { go(.consoles) }),
             ("Play on TV", "tv", MCPalette.amber, { playWhere() }),
@@ -390,7 +407,7 @@ struct MCRoot: View {
     }
 
     /// A square game tile: art (box art for PC games), its source, Running, and the name at the bottom.
-    private func tile(_ g: MCGame?, kind: String, label: String, size: CGFloat, _ m: MCMetrics, _ p: MCPalette,
+    func tile(_ g: MCGame?, kind: String, label: String, size: CGFloat, _ m: MCMetrics, _ p: MCPalette,
                       action: @escaping () -> Void) -> some View {
         let s = m.px(size)
         let corner = m.px(m.tileCorner)
@@ -465,7 +482,7 @@ struct MCRoot: View {
         .accessibilityLabel(label)
     }
 
-    private func allGrid(_ w: CGFloat, _ p: MCPalette) -> some View {
+    func allGrid(_ w: CGFloat, _ p: MCPalette) -> some View {
         let s = w * 36 / 380, g = w * 12 / 380
         return VStack(spacing: g) {
             ForEach(0..<3, id: \.self) { _ in
@@ -477,14 +494,14 @@ struct MCRoot: View {
     }
 
     /// A PC's tile on Home: its games, in All games (offline: wake it; not paired: pair it).
-    private func openPc(_ h: TemporaryHost) {
+    func openPc(_ h: TemporaryHost) {
         if !store.online(h) { pcMenu(h); return }
         gamesTab = "pc:\(h.uuid)"
         sortAz = false
         go(.games)
     }
 
-    private func gameMenu(_ g: MCGame) {
+    func gameMenu(_ g: MCGame) {
         var opts: [MCDialog.Opt] = [.init(title: g.running ? "Resume" : "Start", picked: true) { store.play(g) }]
         if g.running, let h = g.host {
             opts.append(.init(title: "Quit game", sub: "Anything not saved is lost", danger: true) {
@@ -504,11 +521,11 @@ struct MCRoot: View {
 
     // MARK: All games
 
-    private func gameTabs() -> [(String, String)] {
+    func gameTabs() -> [(String, String)] {
         [("all", "All")] + store.hosts.filter { store.paired($0) }.map { ("pc:\($0.uuid)", $0.name) }
     }
 
-    private func gamesPage(_ m: MCMetrics, _ p: MCPalette) -> some View {
+    func gamesPage(_ m: MCMetrics, _ p: MCPalette) -> some View {
         var games = store.allGames()
         if gamesTab.hasPrefix("pc:") { games = games.filter { $0.key.hasPrefix(gamesTab + ":") } }
         if sortAz {
@@ -570,7 +587,7 @@ struct MCRoot: View {
 
     // MARK: Consoles
 
-    private func consolesPage(_ m: MCMetrics, _ p: MCPalette) -> some View {
+    func consolesPage(_ m: MCMetrics, _ p: MCPalette) -> some View {
         let pcs = store.hosts.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
         focus.preferred["page"] = pcs.first.map { "pc:\($0.uuid)" } ?? "add:pc"
         return ScrollViewReader { proxy in
@@ -619,7 +636,7 @@ struct MCRoot: View {
         }
     }
 
-    private func pcStatus(_ h: TemporaryHost) -> String {
+    func pcStatus(_ h: TemporaryHost) -> String {
         if h.state == State.unknown { return "Checking…" }
         if !store.online(h) { return "Off or asleep" }
         if !store.paired(h) { return "Not paired: press to pair" }
@@ -628,11 +645,11 @@ struct MCRoot: View {
         return "Online · \(n) game\(n == 1 ? "" : "s")"
     }
 
-    private func pcRight(_ h: TemporaryHost) -> String? {
+    func pcRight(_ h: TemporaryHost) -> String? {
         store.online(h) ? (store.paired(h) ? "Paired" : "Pair") : nil
     }
 
-    private func pcMenu(_ h: TemporaryHost) {
+    func pcMenu(_ h: TemporaryHost) {
         var opts: [MCDialog.Opt] = []
         if store.online(h) && !store.paired(h) {
             opts.append(.init(title: "Pair", sub: "Shows a PIN to enter in Sunshine", picked: true) { store.pair(h) })
@@ -667,7 +684,7 @@ struct MCRoot: View {
 
     // MARK: Play on TV: where games go (this iPad or a MoonCast TV)
 
-    private func playWhere() {
+    func playWhere() {
         store.busy = "Looking for MoonCast TVs on this Wi-Fi…"
         Task { @MainActor in
             let tvs = await MCTvFinder.sweep()
@@ -694,7 +711,7 @@ struct MCRoot: View {
 
     // MARK: Xbox (Microsoft's device-code sign-in, as on the handheld)
 
-    private func xboxSignIn() {
+    func xboxSignIn() {
         store.busy = "Getting a code…"
         Task { @MainActor in
             do {
@@ -731,12 +748,12 @@ struct MCRoot: View {
         }
     }
 
-    private func xboxWaiting(_ dc: MCXbox.DeviceCode) {
+    func xboxWaiting(_ dc: MCXbox.DeviceCode) {
         store.dialog = MCDialog(title: "Waiting for Microsoft…", message: "Enter the code on the page, then come back here. (It's copied.)",
                                 big: dc.userCode, opts: [.init(title: "Cancel", picked: true) {}])
     }
 
-    private func refreshXboxes(loud: Bool) {
+    func refreshXboxes(loud: Bool) {
         if loud { store.busy = "Finding your Xbox consoles…" }
         Task { @MainActor in
             let list = (try? await MCXbox.refreshConsoles()) ?? MCXbox.consoles
@@ -751,7 +768,7 @@ struct MCRoot: View {
         }
     }
 
-    private func xboxMenu(_ c: MCXbox.Console) {
+    func xboxMenu(_ c: MCXbox.Console) {
         store.dialog = MCDialog(title: c.name, message: c.type, opts: [
             .init(title: "Cancel", picked: true) {},
             .init(title: "Play", sub: "Wakes it if it's sleeping") { store.onXboxStream?(c) },
@@ -760,7 +777,7 @@ struct MCRoot: View {
         ])
     }
 
-    private func ps5Line(_ c: MCPs5Console) -> String {
+    func ps5Line(_ c: MCPs5Console) -> String {
         guard let st = store.ps5Status[c.host] else { return "\(c.host) · checking…" }
         switch st.power {
         case .on: return st.runningApp.map { "On · playing \($0)" } ?? "On"
@@ -771,7 +788,7 @@ struct MCRoot: View {
 
     // MARK: linking a PS5 (Ps5 registration on the handheld): PSN sign-in once -> pick the PS5 -> its 8-digit code
 
-    private func linkPs5() {
+    func linkPs5() {
         guard MCPsn.signedIn else {
             store.dialog = MCDialog(title: "Sign in to PlayStation Network",
                                     message: "Once, to link your PS5 to this \(MCDevice.name). Your password goes to Sony only; MoonCast keeps a sign-in token in the \(MCDevice.name)'s Keychain.",
@@ -805,7 +822,7 @@ struct MCRoot: View {
         }
     }
 
-    private func enterCode(_ host: String, _ name: String) {
+    func enterCode(_ host: String, _ name: String) {
         askText("Type the code from \(name)", "8 digits") { raw in
             let code = raw.filter(\.isNumber)
             guard code.count == 8, let pin = UInt32(code), let acc = MCPsn.accountId, let accData = Data(base64Encoded: acc) else {
@@ -832,7 +849,7 @@ struct MCRoot: View {
         }
     }
 
-    private func ps5Menu(_ c: MCPs5Console) {
+    func ps5Menu(_ c: MCPs5Console) {
         store.dialog = MCDialog(title: c.name, message: "Address: \(c.host)", opts: [
             .init(title: "Cancel", picked: true) {},
             .init(title: "Play", sub: "Wakes it if it's in rest mode") { store.onPs5Stream?(c) },
@@ -846,7 +863,7 @@ struct MCRoot: View {
     }
 
     /// About → Open-source licences: every project, grouped; one opens its full text.
-    private func licences(group g: String? = nil) {
+    func licences(group g: String? = nil) {
         let groups = ["The app", "PS5", "Xbox", "More"]
         guard let g = g else {
             store.dialog = MCDialog(title: "Open-source licences", message: "MoonCast is free software (\(MCLicences.sourceLicence)). These are the projects inside it.",
@@ -862,7 +879,7 @@ struct MCRoot: View {
                                 })
     }
 
-    private func hiddenGames(_ h: TemporaryHost) {
+    func hiddenGames(_ h: TemporaryHost) {
         let ids = store.hidden(h)
         let names = Dictionary(store.apps(h).map { ($0.id ?? "", $0.name ?? "") }, uniquingKeysWith: { a, _ in a })
         var opts: [MCDialog.Opt] = [.init(title: "Done", picked: true) {}]
@@ -875,7 +892,7 @@ struct MCRoot: View {
         store.dialog = MCDialog(title: "Hidden on \(h.name)", message: "Pick one to show it again.", opts: opts)
     }
 
-    private func header(_ t: String, _ m: MCMetrics, _ p: MCPalette) -> some View {
+    func header(_ t: String, _ m: MCMetrics, _ p: MCPalette) -> some View {
         Text(t.uppercased()).mcFont(24, m, weight: .heavy).foregroundColor(p.sub).padding(.top, m.px(18)).padding(.leading, m.px(8))
     }
 
@@ -889,14 +906,14 @@ struct MCRoot: View {
         "s:ps:res": "rectangle.expand.vertical", "s:ps:fps": "speedometer", "s:ps:rate": "gauge.with.dots.needle.67percent",
         "s:ps:codec": "film", "s:ps:disc": "moon.zzz", "s:ps:swap": "arrow.left.arrow.right", "s:theme": "paintpalette",
         "s:profile": "house", "s:autoaway": "location", "s:pip": "pip", "s:profname": "pencil", "s:ps:fsr": "sparkles", "s:xb:fsr": "sparkles", "s:ps:sharp": "wand.and.rays", "s:xb:sharp": "wand.and.rays",
-        "s:ps:shape": "aspectratio", "s:xb:shape": "aspectratio", "s:ps:hdr": "sun.max", "s:bg": "circle.lefthalf.striped.horizontal", "s:444": "circle.grid.cross", "s:range": "circle.lefthalf.filled", "s:shape": "aspectratio", "s:osctrans": "square.on.square.dashed",
+        "s:ps:shape": "aspectratio", "s:xb:shape": "aspectratio", "s:ps:hdr": "sun.max", "s:bg": "circle.lefthalf.striped.horizontal", "s:range": "circle.lefthalf.filled", "s:shape": "aspectratio", "s:osctrans": "square.on.square.dashed",
         "s:dz": "smallcircle.filled.circle", "s:motion": "gyroscope", "s:xb:dz": "smallcircle.filled.circle",
         "s:ps:awayres": "rectangle.expand.vertical", "s:ps:awayrate": "gauge.with.dots.needle.67percent",
         "s:xb:res": "rectangle.expand.vertical", "s:xb:rate": "gauge.with.dots.needle.67percent", "s:xb:rumble": "waveform",
         "s:xb:swap": "arrow.left.arrow.right", "s:xb:coop": "person.2", "s:usage": "chart.line.uptrend.xyaxis",
     ]
 
-    private func row(_ id: String, icon: String, color: Color, title: String, sub: String?, right: String?, switchOn: Bool? = nil,
+    func row(_ id: String, icon: String, color: Color, title: String, sub: String?, right: String?, switchOn: Bool? = nil,
                      _ m: MCMetrics, _ p: MCPalette, action: @escaping () -> Void) -> some View {
         HStack(spacing: m.px(26)) {
             Group {
@@ -932,12 +949,14 @@ struct MCRoot: View {
 
     // MARK: Settings
 
-    private var groups: [(String, String)] {
+    var groups: [(String, String)] {
         [("ipad", MCDevice.name), ("picture", "Picture"), ("sound", "Sound"), ("pads", "Controllers"),
          ("ps", "PlayStation"), ("xbox", "Xbox"), ("theme", "Theme"), ("about", "About")]
     }
 
-    private func settingsPage(_ m: MCMetrics, _ p: MCPalette) -> some View {
+    func settingsPage(_ m: MCMetrics, _ p: MCPalette) -> some View {
+        // the cards first; Classic settings is the list below, as it was
+        if !cards.classic { return AnyView(cardsPage(m, p)) }
         focus.preferred["page"] = "set:\(group)"
         // narrow (a phone held upright): the groups become a row of tabs over full-width settings
         if m.designWidth < 1100 {
@@ -991,21 +1010,11 @@ struct MCRoot: View {
     }
 
     @ViewBuilder
-    private func settingRows(_ m: MCMetrics, _ p: MCPalette) -> some View {
+    func settingRows(_ m: MCMetrics, _ p: MCPalette, group g: String? = nil) -> some View {
         let v = settings.load()
-        switch group {
+        switch g ?? group {
         case "picture":
-            let profs = MCSettings.profiles
-            choice("s:profile", "Streaming profile", "Each keeps its own picture, sound, PlayStation and Xbox settings. Away suits a slow or far network; the custom ones are yours to name",
-                   profs.map(MCSettings.profileName), profs.firstIndex(of: MCSettings.profile) ?? 0, m, p) { i in settings.switchProfile(to: profs[i]) }
-            let autoAway = MCAwayStream.autoAway
-            toggle("s:autoaway", "Switch to Away automatically", "When Home is chosen and the PC is reached over the internet, that stream uses the Away settings. Away from home there's never more than 100 Mbps",
-                   autoAway, m, p) { UserDefaults.standard.set(!autoAway, forKey: "mc_auto_away") }
-            if MCSettings.profile.hasPrefix("c") {
-                row("s:profname", icon: "pencil", color: p.sub, title: "Rename this profile", sub: "Now \"\(MCSettings.profileName(MCSettings.profile))\"", right: nil, m, p) {
-                    askText("Name this profile", "A name, like Hotel or Office") { n in MCSettings.renameProfile(MCSettings.profile, n); settingsRev += 1 }
-                }
-            }
+            profileRows(m, p)
             let native = MCSettings.native
             let res: [(String, (Int, Int))] = [("720p", (1280, 720)), ("1080p", (1920, 1080)), ("1440p", (2560, 1440)), ("4K", (3840, 2160)),
                                                ("Native \(native.0)×\(native.1)", native)]
@@ -1018,8 +1027,15 @@ struct MCRoot: View {
             let maxFps = UIScreen.main.maximumFramesPerSecond
             let fps = [30, 60, 90, 120].filter { $0 <= max(60, maxFps) }
             let topFps = max(60, maxFps)
-            choice("s:fps", "Frame rate", "60 is smooth. 120 needs a ProMotion screen and a fast PC", fps.map { "\($0) fps" } + ["Custom…"],
-                   fps.firstIndex(of: v.framerate) ?? -1, other: "\(v.framerate) fps", m, p) { i in
+            choice("s:fps", "Frame rate", "Native matches this screen (\(topFps) Hz). 120 needs a ProMotion screen and a fast PC",
+                   ["Native · \(topFps) fps"] + fps.map { "\($0) fps" } + ["Custom…"],
+                   MCSettings.nativeFps ? 0 : fps.firstIndex(of: v.framerate).map { $0 + 1 } ?? -1, other: "\(v.framerate) fps", m, p) { j in
+                MCSettings.nativeFps = j == 0
+                if j == 0 {
+                    settings.save { $0.framerate = topFps; $0.bitrate = MCRoot.defaultBitrate($0.width, $0.height, topFps) }
+                    return
+                }
+                let i = j - 1
                 if i == fps.count {
                     askText("Custom frame rate", "15 to \(topFps) fps") { t in
                         guard let n = Int(t.trimmingCharacters(in: .whitespaces)) else { return }
@@ -1048,9 +1064,6 @@ struct MCRoot: View {
             }
             choice("s:codec", "Video codec", "HEVC and AV1 look better at the same bitrate", ["Auto", "H.264", "HEVC", "AV1"],
                    Int(v.codec), m, p) { i in settings.save { $0.codec = UInt32(i) } }
-            toggle("s:444", "YUV 4:4:4 (HEVC)", "Full colour detail: sharper text and coloured edges. Needs HEVC and a PC whose Sunshine offers 4:4:4; not with Super resolution",
-                   UserDefaults.standard.bool(forKey: "mc_yuv444"), m, p) {
-                UserDefaults.standard.set(!UserDefaults.standard.bool(forKey: "mc_yuv444"), forKey: "mc_yuv444") }
             let fsrOn = UserDefaults.standard.string(forKey: "mc_super_resolution") == "fsr1"
             choice("s:fsr", "Super resolution", "AMD FSR 1.0 sharpens a lower resolution up to this screen. For PC, PS5 and Xbox; not with HDR",
                    ["Off", "FSR 1.0"], fsrOn ? 1 : 0, m, p) { i in UserDefaults.standard.set(i == 1 ? "fsr1" : "off", forKey: "mc_super_resolution") }
@@ -1251,7 +1264,7 @@ struct MCRoot: View {
 
     /// A console's own Super resolution, Sharpening and Picture shape; "Same as Picture" until set.
     @ViewBuilder
-    private func consolePicture(_ id: String, _ kind: String, _ m: MCMetrics, _ p: MCPalette) -> some View {
+    func consolePicture(_ id: String, _ kind: String, _ m: MCMetrics, _ p: MCPalette) -> some View {
         let d = UserDefaults.standard
         let srs = ["same", "off", "fsr1"]
         let sr = d.string(forKey: "\(kind)_super_resolution") ?? "same"
@@ -1271,7 +1284,7 @@ struct MCRoot: View {
     }
 
     /// Settings → PlayStation → Bitrate → Custom: 2 to 100 Mbps (the PS5 takes up to 100, as PXPlay uses).
-    private func customPs5Rate(_ key: String) {
+    func customPs5Rate(_ key: String) {
         askText("Custom bitrate", "2 to 100 Mbps") { t in
             guard let n = Double(t.replacingOccurrences(of: ",", with: ".").trimmingCharacters(in: .whitespaces)) else { return }
             UserDefaults.standard.set(Int(max(2, min(100, n)).rounded()), forKey: key)
@@ -1279,7 +1292,7 @@ struct MCRoot: View {
         }
     }
 
-    private func choice(_ id: String, _ title: String, _ sub: String, _ opts: [String], _ cur: Int, other: String? = nil,
+    func choice(_ id: String, _ title: String, _ sub: String, _ opts: [String], _ cur: Int, other: String? = nil,
                         _ m: MCMetrics, _ p: MCPalette, pick: @escaping (Int) -> Void) -> some View {
         let value = cur >= 0 && cur < opts.count ? opts[cur] : (other ?? "")
         return row(id, icon: MCRoot.icons[id] ?? "slider.horizontal.3", color: p.sub, title: title, sub: sub, right: value, m, p) {
@@ -1289,14 +1302,14 @@ struct MCRoot: View {
         }
     }
 
-    private func toggle(_ id: String, _ title: String, _ sub: String, _ on: Bool, _ m: MCMetrics, _ p: MCPalette,
+    func toggle(_ id: String, _ title: String, _ sub: String, _ on: Bool, _ m: MCMetrics, _ p: MCPalette,
                         flip: @escaping () -> Void) -> some View {
         row(id, icon: MCRoot.icons[id] ?? "switch.2", color: p.sub, title: title, sub: sub, right: nil, switchOn: on, m, p) {
             flip(); settingsRev += 1
         }
     }
 
-    private func info(_ id: String, _ title: String, _ sub: String, _ m: MCMetrics, _ p: MCPalette) -> some View {
+    func info(_ id: String, _ title: String, _ sub: String, _ m: MCMetrics, _ p: MCPalette) -> some View {
         row(id, icon: "info.circle", color: p.sub, title: title, sub: sub, right: nil, m, p) {}
     }
 
@@ -1327,7 +1340,7 @@ struct MCRoot: View {
 
     // MARK: dialogs
 
-    private func confirm(_ title: String, _ msg: String, yes: String, run: @escaping () -> Void) {
+    func confirm(_ title: String, _ msg: String, yes: String, run: @escaping () -> Void) {
         // a new dialog after the menu closes
         DispatchQueue.main.async {
             store.dialog = MCDialog(title: title, message: msg, opts: [.init(title: "Cancel", picked: true) {},
@@ -1335,13 +1348,13 @@ struct MCRoot: View {
         }
     }
 
-    private func closeDialog(cancel: Bool) {
+    func closeDialog(cancel: Bool) {
         guard let d = store.dialog else { return }
         store.dialog = nil
         if cancel, let c = d.opts.first(where: { $0.title == "Cancel" || $0.title == "Done" }) { c.run() }
     }
 
-    private func dialogView(_ d: MCDialog, _ m: MCMetrics, _ p: MCPalette) -> some View {
+    func dialogView(_ d: MCDialog, _ m: MCMetrics, _ p: MCPalette) -> some View {
         ZStack {
             Color.black.opacity(0.55).ignoresSafeArea().onTapGesture { closeDialog(cancel: true) }
             VStack(alignment: .leading, spacing: m.px(18)) {
@@ -1382,7 +1395,7 @@ struct MCRoot: View {
         }
     }
 
-    private func busyView(_ text: String, _ m: MCMetrics, _ p: MCPalette) -> some View {
+    func busyView(_ text: String, _ m: MCMetrics, _ p: MCPalette) -> some View {
         ZStack {
             Color.black.opacity(0.55).ignoresSafeArea()
             HStack(spacing: m.px(24)) {
