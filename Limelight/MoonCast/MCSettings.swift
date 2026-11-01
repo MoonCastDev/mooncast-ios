@@ -109,6 +109,9 @@ final class MCSettings {
             save { $0.width = 1280; $0.height = 720; $0.framerate = 60; $0.bitrate = k ?? MCRoot.defaultBitrate(1280, 720, 60) }
         }
         d.set(want, forKey: "mc_profile")
+        // Native follows the profile's size: its own screen's size is Native
+        let n = MCSettings.native, now = load()
+        MCSettings.nativeOn = now.width == n.0 && now.height == n.1
     }
 
     // MARK: the Away profile, read without switching to it (automatic Away, MCAwayStream)
@@ -152,10 +155,15 @@ final class MCSettings {
         d.set(p, forKey: "mc_profile_away")
     }
 
-    /// Resolution is Native: the saved size is this screen's own.
+    /// Resolution is Native (MCNativeRes): each stream asks for the screen's own size (on Polaris, the window's
+    /// exact size). Saved with Settings → Resolution; before that, a saved size that is this screen's own is Native.
     static var nativeOn: Bool {
-        let v = MCSettings().load(), n = native
-        return v.width == n.0 && v.height == n.1
+        get {
+            if let b = UserDefaults.standard.object(forKey: "mc_native") as? Bool { return b }
+            let v = MCSettings().load(), n = native
+            return v.width == n.0 && v.height == n.1
+        }
+        set { UserDefaults.standard.set(newValue, forKey: "mc_native") }
     }
 
     /// This screen in pixels, landscape.
@@ -184,6 +192,8 @@ final class MCPictureShape: NSObject {
 
     static func size(in area: CGSize, aspect: CGFloat, kind: String?) -> CGSize {
         guard aspect > 0, area.width > 0, area.height > 0 else { return area }
+        // Native on Polaris: the picture is this area's own size, so it takes all of it
+        if kind == nil && MCNativeRes.fillsArea(area, aspect: aspect) { return area }
         let wide = area.width > area.height * aspect
         let fit = wide ? CGSize(width: area.height * aspect, height: area.height) : CGSize(width: area.width, height: area.width / aspect)
         let fill = wide ? CGSize(width: area.width, height: area.width / aspect) : CGSize(width: area.height * aspect, height: area.height)

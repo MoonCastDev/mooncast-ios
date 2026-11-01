@@ -1009,10 +1009,11 @@ struct MCRoot: View {
             let native = MCSettings.native
             let res: [(String, (Int, Int))] = [("720p", (1280, 720)), ("1080p", (1920, 1080)), ("1440p", (2560, 1440)), ("4K", (3840, 2160)),
                                                ("Native \(native.0)×\(native.1)", native)]
-            choice("s:res", "Resolution", "Native matches this screen. Higher needs a faster network", res.map { $0.0 },
-                   res.firstIndex { $0.1.0 == v.width && $0.1.1 == v.height } ?? -1,
+            choice("s:res", "Resolution", MCRoot.nativeLine(native), res.map { $0.0 },
+                   MCSettings.nativeOn ? res.count - 1 : res.firstIndex { $0.1.0 == v.width && $0.1.1 == v.height } ?? -1,
                    other: "\(v.width)×\(v.height)", m, p) { i in
                 settings.save { $0.width = res[i].1.0; $0.height = res[i].1.1; $0.bitrate = MCRoot.defaultBitrate($0.width, $0.height, $0.framerate) }
+                MCSettings.nativeOn = i == res.count - 1
             }
             let maxFps = UIScreen.main.maximumFramesPerSecond
             let fps = [30, 60, 90, 120].filter { $0 <= max(60, maxFps) }
@@ -1297,6 +1298,14 @@ struct MCRoot: View {
 
     private func info(_ id: String, _ title: String, _ sub: String, _ m: MCMetrics, _ p: MCPalette) -> some View {
         row(id, icon: "info.circle", color: p.sub, title: title, sub: sub, right: nil, m, p) {}
+    }
+
+    /// Resolution's line: Native for the PC streamed last (Polaris: the window's exact size, following it on an iPad).
+    static func nativeLine(_ n: (Int, Int)) -> String {
+        guard MCNativeRes.exactHost else { return "Native matches this screen. Higher needs a faster network" }
+        let s = MCNativeRes.size(polaris: true)
+        return "Native fills the screen you play on, now \(s.0) × \(s.1)" +
+            (UIDevice.current.userInterfaceIdiom == .pad ? ". Resizing the window mid-game reconnects at the new size" : "")
     }
 
     /// Moonlight's default (from Moonlight Qt): by resolution, and frame rate up to 60, square root above.

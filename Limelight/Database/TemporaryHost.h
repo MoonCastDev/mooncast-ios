@@ -17,6 +17,8 @@
 @property (atomic, nullable, retain) NSString * currentGame;
 @property (atomic) unsigned short httpsPort;
 @property (atomic) BOOL isNvidiaServerSoftware;
+/// MoonCast: the host is Polaris (serverinfo state POLARIS_SERVER_FREE/BUSY): exact Native, resize reconnect-and-resume. Not saved.
+@property (atomic) BOOL isPolaris;
 
 @property (atomic, nullable, retain) NSData *serverCert;
 @property (atomic, nullable, retain) NSString *address;

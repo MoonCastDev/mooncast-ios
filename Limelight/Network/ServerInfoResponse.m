@@ -87,6 +87,9 @@
     
     // GFE uses the Mjolnir codename in their state enum values
     host.isNvidiaServerSoftware = [state containsString:@"MJOLNIR"];
+    // MoonCast: Polaris reports POLARIS_SERVER_FREE / POLARIS_SERVER_BUSY (its appversion and GfeVersion mimic GFE's,
+    // so only the state tells it apart)
+    host.isPolaris = [state hasPrefix:@"POLARIS_"];
     
     NSInteger pairStatus;
     if ([self getIntTag:TAG_PAIR_STATUS value:&pairStatus]) {

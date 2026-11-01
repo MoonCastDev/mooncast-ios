@@ -97,6 +97,9 @@ final class MCStore: NSObject, ObservableObject, DiscoveryCallback, PairCallback
             if p[0] == "ml_res" {
                 let wh = p[1].split(separator: "x").compactMap { Int($0) }
                 if wh.count == 2 { MCSettings().save { $0.width = wh[0]; $0.height = wh[1]; $0.bitrate = MCRoot.defaultBitrate(wh[0], wh[1], $0.framerate) } }
+                // ml_res=native: Native (the screen's own size; Polaris: the window's)
+                if p[1] == "native" { let n = MCSettings.native; MCSettings().save { $0.width = n.0; $0.height = n.1 } }
+                MCSettings.nativeOn = p[1] == "native" || (wh.count == 2 && wh[0] == MCSettings.native.0 && wh[1] == MCSettings.native.1)
                 continue
             }
             if p[0] == "ml_stats" { MCSettings().save { $0.stats = p[1] == "true" }; continue }
@@ -110,6 +113,7 @@ final class MCStore: NSObject, ObservableObject, DiscoveryCallback, PairCallback
             UserDefaults.standard.set(true, forKey: "mc_res_init")
             let n = MCSettings.native
             MCSettings().save { $0.width = n.0; $0.height = n.1; $0.bitrate = MCRoot.defaultBitrate(n.0, n.1, $0.framerate) }
+            MCSettings.nativeOn = true
         }
         disc = DiscoveryManager(hosts: hosts, andCallback: self)
         assets = AppAssetManager(callback: self)
@@ -281,6 +285,8 @@ final class MCStore: NSObject, ObservableObject, DiscoveryCallback, PairCallback
         playing = g
         MCUsage.used("pc")
         let cfg = MCBridge.streamConfig(for: a)
+        // Native: this screen's size, or on Polaris the window's exact size (MCNativeRes)
+        MCNativeRes.prepare(cfg, host: g.host)
         // over the internet, Home streams with the Away settings and never more than 100 Mbps (MCAwayStream)
         MCAwayStream.prepare(cfg, host: g.host) { [weak self] plan in
             self?.onStream?(cfg)

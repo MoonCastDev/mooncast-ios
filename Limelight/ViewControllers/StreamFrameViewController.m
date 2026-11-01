@@ -764,6 +764,8 @@
         if (!first) {
             [_streamMan mcRelayout];
             [_streamView mcRelayout];
+            // Polaris with Native on: once the window holds still, reconnect at its new size (the game keeps running)
+            [MCNativeRes streamResized:self];
         }
     }
 }
