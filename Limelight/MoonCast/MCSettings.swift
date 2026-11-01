@@ -33,6 +33,20 @@ final class MCSettings {
                         btMouseSupport: v.btMouse, absoluteTouchMode: v.absoluteTouch, statsOverlay: v.stats)
     }
 
+    // MARK: PC bitrate (QuickBitrate.kt)
+
+    /// The PC (Sunshine) bitrate steps in Mbps, shared by Settings and the Quick menu: fine steps up to 150, then
+    /// bigger ones up to 1 Gbps. Anything else saved is a Custom bitrate. PS5 and Xbox keep their own limits.
+    static let pcSteps = [10, 20, 30, 50, 80, 100, 150, 200, 300, 400, 500, 600, 800, 1000]
+    /// The highest PC bitrate, in Mbps (Custom entry).
+    static let pcMaxMbps = 1000
+    /// Above this many Mbps, Settings shows [highHint].
+    static let highMbps = 300
+    static let highHint = "Needs a cable or Wi-Fi 6/7 close to the router; the PC's encoder and this device's decoder must keep up"
+
+    /// The hint for a PC bitrate in kbps, or nil when it isn't high.
+    static func highHint(kbps: Int) -> String? { kbps > highMbps * 1000 ? highHint : nil }
+
     // MARK: Home and Away profiles (Profile.kt): Settings → Picture → Streaming profile
 
     /// The profiles: Home, Away and three custom ones you can rename.

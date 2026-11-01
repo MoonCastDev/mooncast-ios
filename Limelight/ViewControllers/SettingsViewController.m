@@ -48,6 +48,14 @@ static const int bitrateTable[] = {
     100000,
     120000,
     150000,
+    // MoonCast: PC bitrate up to 1 Gbps
+    200000,
+    300000,
+    400000,
+    500000,
+    600000,
+    800000,
+    1000000,
 };
 
 const int RESOLUTION_TABLE_SIZE = 7;

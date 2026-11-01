@@ -1027,15 +1027,15 @@ struct MCRoot: View {
                 settings.save { $0.framerate = fps[i]; $0.bitrate = MCRoot.defaultBitrate($0.width, $0.height, $0.framerate) }
             }
             let auto = MCRoot.defaultBitrate(v.width, v.height, v.framerate)
-            let rates = [5, 10, 15, 20, 30, 40, 50, 80, 100, 150].map { $0 * 1000 }
-            choice("s:rate", "Bitrate", "Auto suits the resolution and frame rate. Higher looks better on a fast network",
+            let rates = MCSettings.pcSteps.map { $0 * 1000 }
+            choice("s:rate", "Bitrate", MCSettings.highHint(kbps: v.bitrate) ?? "Auto suits the resolution and frame rate. Higher looks better on a fast network",
                    ["Auto (\(auto / 1000) Mbps)"] + rates.map { "\($0 / 1000) Mbps" } + ["Custom…"],
                    v.bitrate == auto ? 0 : (rates.firstIndex(of: v.bitrate).map { $0 + 1 } ?? -1),
                    other: String(format: "%.1f Mbps", Double(v.bitrate) / 1000), m, p) { i in
                 if i == rates.count + 1 {
-                    askText("Custom bitrate", "0.5 to 150 Mbps") { t in
+                    askText("Custom bitrate", "0.5 to \(MCSettings.pcMaxMbps) Mbps") { t in
                         guard let n = Double(t.replacingOccurrences(of: ",", with: ".").trimmingCharacters(in: .whitespaces)) else { return }
-                        settings.save { $0.bitrate = Int((max(0.5, min(150, n)) * 2).rounded()) * 500 }
+                        settings.save { $0.bitrate = Int((max(0.5, min(Double(MCSettings.pcMaxMbps), n)) * 2).rounded()) * 500 }
                         settingsRev += 1
                     }
                     return

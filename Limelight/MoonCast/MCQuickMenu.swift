@@ -215,7 +215,7 @@ struct MCQuickMenuView: View {
     private func bitrateItems(_ a: MCQuickActions) -> [Item]? {
         guard model.page == "bitrate" else { return nil }
         let kind = a.mcKind?() ?? "pc"
-        let steps: [Int] = kind == "pc" ? [10, 20, 30, 50, 80, 100, 150] : kind == "ps5" ? [0, 10, 15, 20, 30, 50, 80, 100] : [0, 5, 10, 15, 20, 30]
+        let steps: [Int] = kind == "pc" ? MCSettings.pcSteps : kind == "ps5" ? [0, 10, 15, 20, 30, 50, 80, 100] : [0, 5, 10, 15, 20, 30]
         let cur: Int = kind == "pc" ? MCSettings().load().bitrate / 1000 : kind == "ps5" ? MCPs5Store.bitrate : MCXbox.maxMbps
         return [Item(icon: "chevron.left", label: "Back", detail: nil) { model.page = "main" }] + steps.map { n in
             Item(icon: n == cur ? "checkmark" : "speedometer", label: n == 0 ? "Auto" : "\(n) Mbps",
