@@ -2,7 +2,8 @@
 //  MCStyles.swift
 //  MoonCast: the play styles behind Settings' cards (SettingsCards.kt): the PC's four presets of its own (Battery,
 //  Balanced, Sharpest, Fastest), each fine-tuned, renamed, given an icon and a colour, and the PS5's and the Xbox's
-//  ready-made sets. Picking a style writes the same settings the Classic list does.
+//  ready-made sets. Picking a style writes the same settings the Classic list does. Where this device decodes
+//  PyroWave (MCPyroWave), a fifth PC style, PyroWave (experimental), streams with it; picking any other turns it off.
 //
 
 import SwiftUI
@@ -15,36 +16,48 @@ struct MCPcStyle {
     let icon: String
     /// nil: the theme's cyan
     let color: UInt32?
+    /// The PyroWave style: PyroWave is its codec, with its own rows (4:4:4, GPU boost, dithering)
+    var pyro = false
 }
 
 /// The PC play styles and the PC settings they set, in their own terms: "res" ("native" or "WxH"), "fps" ("native"
 /// or a number), "kbps" (0 = Auto, the default for the size and frame rate), "codec" (0 Auto, 1 H.264, 2 HEVC,
 /// 3 AV1), "hdr", "shape" (fit, zoom, fill, stretch), "pacing" (true = Smoothest), "fsr" ("off", "fsr1"),
-/// "fsrSharp" (0-100), "range", "ull".
+/// "fsrSharp" (0-100), "range", "ull", and PyroWave's: "pw" (on only in the PyroWave style), "y444", "boost" (GPU
+/// boost), "dither" ("off", "low", "high").
 enum MCPcStyles {
     static let purple: UInt32 = 0x8B5CF6
     static let orange: UInt32 = 0xF29A2E
 
-    static let all: [MCPcStyle] = [
-        MCPcStyle(id: "battery", defName: "Battery", icon: "leaf", color: 0x2DBE5A),
-        MCPcStyle(id: "balanced", defName: "Balanced", icon: "half", color: nil),
-        MCPcStyle(id: "sharpest", defName: "Sharpest", icon: "star", color: purple),
-        MCPcStyle(id: "fastest", defName: "Fastest", icon: "bolt", color: orange),
-    ]
+    static let pyroStyle = MCPcStyle(id: "pyro", defName: "PyroWave", icon: "wave", color: 0x5C8DF6, pyro: true)
+
+    /// The four, and PyroWave where this device decodes it (the probe passed).
+    static var all: [MCPcStyle] {
+        [
+            MCPcStyle(id: "battery", defName: "Battery", icon: "leaf", color: 0x2DBE5A),
+            MCPcStyle(id: "balanced", defName: "Balanced", icon: "half", color: nil),
+            MCPcStyle(id: "sharpest", defName: "Sharpest", icon: "star", color: purple),
+            MCPcStyle(id: "fastest", defName: "Fastest", icon: "bolt", color: orange),
+        ] + (MCPyroWave.deviceSupported ? [pyroStyle] : [])
+    }
 
     static func style(_ id: String?) -> MCPcStyle? { all.first { $0.id == id } }
 
     /// The order values are written in: the size and frame rate before the bitrate (Auto follows them).
-    static let keys = ["res", "fps", "kbps", "codec", "hdr", "shape", "pacing", "fsr", "fsrSharp", "range", "ull"]
-    private static let strings: Set<String> = ["res", "fps", "shape", "fsr"]
+    static let keys = ["res", "fps", "kbps", "codec", "hdr", "shape", "pacing", "fsr", "fsrSharp", "range", "ull",
+                       "pw", "y444", "boost", "dither"]
+    private static let strings: Set<String> = ["res", "fps", "shape", "fsr", "dither"]
     private static let ints: Set<String> = ["kbps", "codec", "fsrSharp"]
 
     /// The screen shows HDR10.
     static var screenHdr: Bool { AVPlayer.availableHDRModes.contains(.hdr10) }
 
-    /// A style's own values before any fine-tuning: all four start at Native resolution and frame rate.
+    /// A style's own values before any fine-tuning: all start at Native resolution and frame rate. PyroWave's bitrate
+    /// follows its resolution and frame rate (MCPyroWave recommendedKbps) until it's fine-tuned; it leaves the codec
+    /// (the one played when the PC doesn't offer PyroWave) as it is.
     static func defaults(_ id: String) -> [String: Any] {
         switch id {
+        case "pyro": return ["res": "native", "fps": "native", "y444": true, "boost": true, "dither": "low", "ull": false]
         case "battery": return ["res": "native", "fps": "native", "kbps": 15000, "codec": 1, "hdr": false, "pacing": true, "ull": false]
         case "balanced": return ["res": "native", "fps": "native", "kbps": 40000, "codec": 2, "pacing": true, "ull": false]
         case "sharpest":
@@ -58,8 +71,31 @@ enum MCPcStyles {
     static func stored(_ id: String) -> [String: Any] { UserDefaults.standard.dictionary(forKey: "mc_pcstyle_\(id)") ?? [:] }
     static func store(_ id: String, _ m: [String: Any]) { UserDefaults.standard.set(m, forKey: "mc_pcstyle_\(id)") }
 
-    /// A style's values: its defaults, then what was fine-tuned.
-    static func values(_ id: String) -> [String: Any] { defaults(id).merging(stored(id)) { $1 } }
+    /// A style's values: its defaults, then what was fine-tuned. PyroWave comes only with the PyroWave style, which has
+    /// no Ultra low latency.
+    static func values(_ id: String) -> [String: Any] {
+        var m = defaults(id).merging(stored(id)) { $1 }
+        if id == "pyro" {
+            if stored(id)["kbps"] == nil { m["kbps"] = pyroRecommended(m) }
+            m["pw"] = true
+            m["ull"] = false
+        } else {
+            m["pw"] = false
+        }
+        return m
+    }
+
+    /// The PyroWave style's recommended bitrate for the resolution and frame rate in [m] (Native: this screen's).
+    static func pyroRecommended(_ m: [String: Any]) -> Int {
+        let r = m["res"] as? String ?? "native"
+        let wh = r.split(separator: "x").compactMap { Int($0) }
+        let (w, h) = r == "native" || wh.count != 2 ? MCSettings.native : (wh[0], wh[1])
+        let f = m["fps"] as? String ?? "native"
+        return Int(MCPyroWave.recommendedKbpsWidth(Int32(w), height: Int32(h), fps: Int32(f == "native" ? MCSettings.nativeHz : Int(f) ?? 60)))
+    }
+
+    /// The PyroWave style's bitrate is its recommended one (nothing fine-tuned).
+    static var pyroRecommendedRate: Bool { stored("pyro")["kbps"] == nil }
 
     /// The same value for [key], whatever type it came back as from the store.
     static func same(_ key: String, _ a: Any?, _ b: Any?) -> Bool {
@@ -87,6 +123,10 @@ enum MCPcStyles {
         case "fsrSharp": return d.object(forKey: "mc_fsr_sharpness") as? Int ?? 60
         case "range": return d.bool(forKey: "mc_full_range")
         case "ull": return d.bool(forKey: "mc_ultra_low_latency")
+        case "pw": return d.bool(forKey: "mc_pyrowave")
+        case "y444": return d.object(forKey: "mc_pyrowave_444") as? Bool ?? true
+        case "boost": return d.object(forKey: "mc_pyrowave_boost") as? Bool ?? true
+        case "dither": return d.string(forKey: "mc_pyrowave_dither") ?? "low"
         default: return nil
         }
     }
@@ -129,6 +169,10 @@ enum MCPcStyles {
         case "fsrSharp": d.set((value as? NSNumber)?.intValue ?? 60, forKey: "mc_fsr_sharpness")
         case "range": d.set((value as? NSNumber)?.boolValue ?? false, forKey: "mc_full_range")
         case "ull": d.set((value as? NSNumber)?.boolValue ?? false, forKey: "mc_ultra_low_latency")
+        case "pw": d.set((value as? NSNumber)?.boolValue ?? false, forKey: "mc_pyrowave")
+        case "y444": d.set((value as? NSNumber)?.boolValue ?? true, forKey: "mc_pyrowave_444")
+        case "boost": d.set((value as? NSNumber)?.boolValue ?? true, forKey: "mc_pyrowave_boost")
+        case "dither": d.set(value as? String ?? "low", forKey: "mc_pyrowave_dither")
         default: break
         }
     }
@@ -139,12 +183,17 @@ enum MCPcStyles {
         set { d.set(newValue, forKey: "mc_style_pc") }
     }
 
-    /// Sets one of a style's own values (and the live one while it's in use).
+    /// Sets one of a style's own values (and the live one while it's in use). The PyroWave style's bitrate on 0 (its
+    /// Auto) is its recommended one again, which follows its resolution and frame rate.
     static func putStyle(_ id: String, _ key: String, _ value: Any) {
         var m = stored(id)
-        m[key] = value
+        let pyroRate = id == "pyro" && (key == "kbps" || ((key == "res" || key == "fps") && m["kbps"] == nil))
+        if id == "pyro" && key == "kbps" && (value as? NSNumber)?.intValue == 0 { m.removeValue(forKey: key) } else { m[key] = value }
         store(id, m)
-        if inUseId == id { putLive(key, value) }
+        guard inUseId == id else { return }
+        if key != "kbps" { putLive(key, value) }
+        if pyroRate, let k = values(id)["kbps"] { putLive("kbps", k) }
+        else if key == "kbps" { putLive(key, value) }
     }
 
     static func matches(_ id: String) -> Bool {
@@ -249,7 +298,8 @@ enum MCPcStyles {
     static func lines(_ st: MCPcStyle) -> [String] {
         let m = values(st.id)
         let kbps = (m["kbps"] as? NSNumber)?.intValue ?? 0
-        var l2 = [kbps == 0 ? "Auto bitrate" : mbps(kbps), codecLabel((m["codec"] as? NSNumber)?.intValue ?? 0)]
+        var l2 = [kbps == 0 ? "Auto bitrate" : mbps(kbps), st.pyro ? "PyroWave" : codecLabel((m["codec"] as? NSNumber)?.intValue ?? 0)]
+        if st.pyro && (m["y444"] as? NSNumber)?.boolValue == true { l2.append("4:4:4") }
         if (m["hdr"] as? NSNumber)?.boolValue == true { l2.append("HDR") }
         if (m["ull"] as? NSNumber)?.boolValue == true { l2.append("lowest delay") }
         let f = m["fps"] as? String ?? "native"

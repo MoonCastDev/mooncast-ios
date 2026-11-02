@@ -21,6 +21,8 @@ enum MCLicences {
         Part(group: "The app", name: "Moonlight for iOS", what: "The app MoonCast for iPad grew from: PC streaming, the on-screen controller", licence: "GPL-3.0", file: "gpl-3.0.txt", url: "https://github.com/moonlight-stream/moonlight-ios"),
         Part(group: "The app", name: "moonlight-common-c", what: "The PC streaming protocol", licence: "GPL-3.0", file: "gpl-3.0.txt", url: "https://github.com/moonlight-stream/moonlight-common-c"),
         Part(group: "The app", name: "AMD FidelityFX Super Resolution 1.0", what: "Super resolution: the upscaling and sharpening (FSR 1)", licence: "MIT", file: "fsr1.txt", url: "https://github.com/GPUOpen-Effects/FidelityFX-FSR"),
+        Part(group: "The app", name: "PyroWave", what: "The PyroWave play style: the wavelet codec and its Metal decoder", licence: "MIT", file: "pyrowave.txt", url: "https://github.com/Themaister/pyrowave"),
+        Part(group: "The app", name: "Moonlight X", what: "The PyroWave play style: how the stream asks for PyroWave, reads its frames and shows them", licence: "GPL-3.0", file: "gpl-3.0.txt", url: "https://github.com/MoreOrLessSoftware/moonlight-android"),
         Part(group: "The app", name: "ENet", what: "Inside moonlight-common-c: the network link", licence: "MIT", file: "enet.txt", url: "https://github.com/lsalzman/enet"),
         Part(group: "The app", name: "nanors", what: "Inside moonlight-common-c: repairing lost video", licence: "MIT", file: "nanors.txt", url: "https://github.com/sleepybishop/nanors"),
         Part(group: "The app", name: "FFmpeg", what: "Reading video stream settings", licence: "LGPL-2.1", file: "lgpl-2.1.txt", url: "https://ffmpeg.org"),

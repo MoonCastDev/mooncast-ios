@@ -73,7 +73,7 @@ final class MCSettings {
                                       "mc_fsr_sharpness", "mc_native_fps", "xbox_resolution", "xbox_bitrate",
                                       "ps5_resolution", "ps5_fps", "ps5_bitrate", "ps5_h265", "ps5_hdr",
                                       "ps5_super_resolution", "ps5_fsr_sharpness", "ps5_picture_shape",
-                                      "xbox_super_resolution", "xbox_fsr_sharpness", "xbox_picture_shape"]
+                                      "xbox_super_resolution", "xbox_fsr_sharpness", "xbox_picture_shape", "mc_pyrowave"]
 
     /// Saves the picture and sound settings for the profile being left and brings back the other one's. The first
     /// time Away starts from 720p 60 fps at its Auto bitrate, a good start for a hotel or a phone's hotspot; a custom
@@ -102,6 +102,8 @@ final class MCSettings {
         } else if want == "away" {
             let k = d.dictionary(forKey: "mc_profile_away")?["bitrate"] as? Int
             save { $0.width = 1280; $0.height = 720; $0.framerate = 60; $0.bitrate = k ?? MCRoot.defaultBitrate(1280, 720, 60) }
+            // PyroWave's hundreds of Mbps are for home
+            d.set(false, forKey: "mc_pyrowave")
         }
         d.set(want, forKey: "mc_profile")
         // Native follows the profile's size: its own screen's size is Native

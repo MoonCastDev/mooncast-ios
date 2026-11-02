@@ -165,8 +165,8 @@ extension MCRoot {
     }
 
     /// Test runs: MC_CARD=pc|ps|xb|dev|pads|tvs|about|classic opens a card (pc, ps and xb: the first one),
-    /// MC_TAB=finetune|styles|away|power|sign|screen|sound|look a tab, MC_STYLE=battery|balanced|sharpest|fastest a PC
-    /// style's own page, MC_STRIP=icon|color its icon or colour strip.
+    /// MC_TAB=finetune|styles|away|power|sign|screen|sound|look a tab, MC_STYLE=battery|balanced|sharpest|fastest|pyro a PC
+    /// style's own page (pyro: where this device decodes PyroWave), MC_STRIP=icon|color its icon or colour strip.
     func cardsTestStart(_ env: [String: String]) {
         #if DEBUG
         if let st = env["MC_STYLE"], MCPcStyles.style(st) != nil {
@@ -381,7 +381,7 @@ extension MCRoot {
         return deviceCard(h.map { "pc:\($0.uuid)" } ?? "pc:any", badge: "PC", name: h?.name ?? "PC games",
                           art: AnyView(CoverArt(colors: Covers.colors(h?.name ?? "PC"))),
                           lines: [("\(min(v.width, v.height))p · \(fps) fps", true),
-                                  ("\(auto ? "Auto bitrate" : MCPcStyles.mbps(v.bitrate)) · \(MCPcStyles.codecLabel(Int(v.codec)))", true),
+                                  ("\(auto ? "Auto bitrate" : MCPcStyles.mbps(v.bitrate)) · \(MCPyroWave.wanted && MCPyroWave.deviceSupported ? "PyroWave" : MCPcStyles.codecLabel(Int(v.codec)))", true),
                                   ("HDR \(v.hdr ? "on" : "off") · \(shapeLabel(MCPictureShape.current))", false),
                                   (MCPcStyles.nowLabel(), false)],
                           foot: "Profile: \(MCSettings.profileName(MCSettings.profile))", footRing: true, w, ht, m, p)
@@ -429,10 +429,14 @@ extension MCRoot {
 
     // MARK: Play style
 
-    private func styleCard(_ id: String, icon: String, color: Color, name: String, lines: [String], note: String, inUse: Bool,
+    private func styleCard(_ id: String, icon: String, color: Color, name: String, lines: [String], note: String, inUse: Bool, tag: String? = nil,
                            _ w: CGFloat, _ h: CGFloat, _ m: MCMetrics, _ p: MCPalette, hold: (() -> Void)?, action: @escaping () -> Void) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            iconBox(icon, color, 76, m)
+            HStack(spacing: m.px(14)) {
+                iconBox(icon, color, 76, m)
+                // a small tag beside the icon (PyroWave's "Experimental"), kept when the style is renamed
+                if let t = tag { tagView(t, color, m) }
+            }
             Text(name).mcFont(32, m, weight: .heavy).foregroundColor(p.ink).lineLimit(1).padding(.top, m.px(20))
             ForEach(lines.indices, id: \.self) { i in
                 Text(lines[i]).mcFont(22, m, weight: .semibold).foregroundColor(p.sub).lineLimit(2).padding(.top, m.px(i == 0 ? 10 : 6))
@@ -448,6 +452,12 @@ extension MCRoot {
         .accessibilityLabel(name)
     }
 
+    private func tagView(_ t: String, _ color: Color, _ m: MCMetrics) -> some View {
+        Text(t.uppercased()).mcFont(16, m, weight: .heavy).foregroundColor(color).lineLimit(1)
+            .padding(.horizontal, m.px(12)).padding(.vertical, m.px(6))
+            .background(Capsule().fill(color.opacity(0.18)))
+    }
+
     private func iconBox(_ icon: String, _ color: Color, _ size: CGFloat, _ m: MCMetrics) -> some View {
         Image(systemName: MCPcStyles.symbol(icon)).font(.system(size: m.px(size * 0.4), weight: .semibold)).foregroundColor(color)
             .frame(width: m.px(size), height: m.px(size))
@@ -456,7 +466,7 @@ extension MCRoot {
 
     private func playPage(_ k: String, _ m: MCMetrics, _ p: MCPalette) -> some View {
         struct Card { let id: String, icon: String, color: Color, name: String, lines: [String], note: String, inUse: Bool
-            let use: () -> Void; let hold: (() -> Void)? }
+            let use: () -> Void; let hold: (() -> Void)?; var tag: String? = nil }
         var list: [Card] = []
         let nowName: String
         if k == "pc" {
@@ -467,8 +477,8 @@ extension MCRoot {
                 let inUse = st.id == picked.id
                 // no taglines on the PC's cards: their values say it
                 list.append(Card(id: st.id, icon: MCPcStyles.icon(st), color: MCPcStyles.color(st, p), name: MCPcStyles.name(st),
-                                 lines: MCPcStyles.lines(st), note: inUse ? (exact ? "✓ In use" : "✓ In use, changed") : "", inUse: inUse,
-                                 use: { usePcStyle(st) }, hold: { editStyle(st) }))
+                                 lines: MCPcStyles.lines(st), note: inUse ? (exact ? "✓ In use" : "✓ In use, changed") : st.pyro ? "Wired or fast Wi-Fi only" : "",
+                                 inUse: inUse, use: { usePcStyle(st) }, hold: { editStyle(st) }, tag: st.pyro ? "Experimental" : nil))
             }
         } else {
             let now = MCConsoleStyle.detect(k)
@@ -496,7 +506,7 @@ extension MCRoot {
         let focusOn = list.first { $0.id == cards.lastStyle && k == "pc" } ?? list.first { $0.inUse } ?? list.first
         focus.preferred["page"] = focusOn.map { "style:\($0.id)" }
         let cardViews = list.map { c in
-            AnyView(styleCard(c.id, icon: c.icon, color: c.color, name: c.name, lines: c.lines, note: c.note, inUse: c.inUse, cw, ch, m, p,
+            AnyView(styleCard(c.id, icon: c.icon, color: c.color, name: c.name, lines: c.lines, note: c.note, inUse: c.inUse, tag: c.tag, cw, ch, m, p,
                               hold: c.hold, action: c.use))
         }
         return ScrollView(.vertical, showsIndicators: false) {
@@ -623,7 +633,7 @@ extension MCRoot {
                         iconBox(icon, color, 76, m)
                         VStack(alignment: .leading, spacing: m.px(4)) {
                             Text(MCPcStyles.name(st)).mcFont(34, m, weight: .heavy).foregroundColor(p.ink).lineLimit(1)
-                            Text("FINE-TUNE").mcFont(18, m, weight: .heavy).foregroundColor(p.sub)
+                            Text(st.pyro ? "EXPERIMENTAL · FINE-TUNE" : "FINE-TUNE").mcFont(18, m, weight: .heavy).foregroundColor(st.pyro ? color : p.sub)
                         }
                     }
                     ScrollView(.horizontal, showsIndicators: false) {
@@ -903,14 +913,21 @@ extension MCRoot {
                 }
             }
         }))
-        rows.append(AnyView(bitrateRow(v, m, p)))
-        let codec = v.i("codec", 0)
-        rows.append(AnyView(vrow("codec", "Video codec", MCPcStyles.codecLabel(codec), m, p) {
-            pick("Video codec", "HEVC and AV1 look better at the same bitrate", ["Auto", "H.264", "HEVC", "AV1"], codec) { v.put("codec", $0) }
-        }))
+        // the PyroWave style: its Auto is its recommended bitrate, which follows the resolution and frame rate
+        let pyro = style?.pyro == true
+        rows.append(AnyView(bitrateRow(v, recommended: pyro ? MCPcStyles.pyroRecommended(MCPcStyles.values("pyro")) : nil, m, p)))
+        // a play style: PyroWave is its codec; the other styles pick theirs
+        if !pyro {
+            let codec = v.i("codec", 0)
+            rows.append(AnyView(vrow("codec", "Video codec", MCPcStyles.codecLabel(codec), m, p) {
+                pick("Video codec", "HEVC and AV1 look better at the same bitrate", ["Auto", "H.264", "HEVC", "AV1"], codec) { v.put("codec", $0) }
+            }))
+        }
         if style != nil {
             let hdr = v.b("hdr")
-            rows.append(AnyView(vrow("hdr", "HDR", onOff(hdr), sub: MCPcStyles.screenHdr ? nil : "This screen doesn't show HDR10", m, p) {
+            let hdrSub = pyro ? (MCPcStyles.screenHdr ? "10-bit, and HDR when the PC is in HDR." : "10-bit; HDR from the PC is tone mapped on this screen.")
+                : MCPcStyles.screenHdr ? nil : "This screen doesn't show HDR10"
+            rows.append(AnyView(vrow("hdr", "HDR", onOff(hdr), sub: hdrSub, m, p) {
                 v.put("hdr", !hdr); settingsRev += 1
             }))
         }
@@ -920,6 +937,25 @@ extension MCRoot {
             pick("Picture shape", "Fit shows all of it, Zoom trims a little, Fill crops, Stretch fills and changes the shape.", ["Fit", "Zoom", "Fill", "Stretch"],
                  shapes.firstIndex(of: shape) ?? 0) { v.put("shape", shapes[$0]) }
         }))
+        if pyro {
+            // PyroWave shows each frame as it's decoded (no pacing), always full range, without Super resolution; GPU
+            // boost sits where the other styles have Ultra low latency
+            let boost = v.b("boost"), y444 = v.b("y444")
+            rows.append(AnyView(vrow("boost", "PyroWave: GPU boost", onOff(boost), sub: "Steadier decoding. Uses more battery.", m, p) {
+                v.put("boost", !boost); settingsRev += 1
+            }))
+            rows.append(AnyView(vrow("y444", "YUV 4:4:4", onOff(y444), sub: "Sharper text and colour edges, when the PC offers it.", m, p) {
+                v.put("y444", !y444); settingsRev += 1
+            }))
+            let dithers = ["off", "low", "high"]
+            let dither = v.s("dither", "low")
+            rows.append(AnyView(vrow("dither", "PyroWave: spatial dithering", ["Off", "Low", "High"][dithers.firstIndex(of: dither) ?? 1],
+                                     sub: "Hides colour banding.", m, p) {
+                pick("PyroWave: spatial dithering", "Fine moving grain that hides banding, most visible in dark gradients and HDR.",
+                     ["Off", "Low", "High"], dithers.firstIndex(of: dither) ?? 1) { v.put("dither", dithers[$0]) }
+            }))
+            return rows
+        }
         let pacing = v.b("pacing")
         rows.append(AnyView(vrow("pacing", "Frame pacing", pacing ? "Smoothest" : "Lowest delay", m, p) {
             pick("Frame pacing", "Smoother motion costs a little delay.", ["Lowest delay", "Smoothest"], pacing ? 1 : 0) { v.put("pacing", $0 == 1) }
@@ -946,11 +982,13 @@ extension MCRoot {
 
     /// Bitrate as a slider over Auto and the steps up to 1000 Mbps: left / right one step, a finger drags it, each step
     /// saved at once. A, X or a tap on the value types an exact one (0.5 to 1000 in 0.5 steps).
-    private func bitrateRow(_ v: MCVals, _ m: MCMetrics, _ p: MCPalette) -> some View {
+    private func bitrateRow(_ v: MCVals, recommended: Int? = nil, _ m: MCMetrics, _ p: MCPalette) -> some View {
         let steps = [0] + MCSettings.pcSteps.map { $0 * 1000 }
-        let kbps = v.i("kbps", 0)
+        // [recommended]: the PyroWave style's Auto, while its bitrate isn't fine-tuned
+        let kbps = recommended != nil && MCPcStyles.pyroRecommendedRate ? 0 : v.i("kbps", 0)
         let at = steps.firstIndex(of: kbps) ?? steps.indices.min { abs(steps[$0] - kbps) < abs(steps[$1] - kbps) } ?? 0
-        let value = kbps == 0 ? "Auto" : steps.contains(kbps) ? MCPcStyles.mbps(kbps) : "\(MCPcStyles.mbps(kbps)) (exact)"
+        let auto = recommended.map { "Recommended · \(MCPcStyles.mbps($0))" } ?? "Auto"
+        let value = kbps == 0 ? auto : steps.contains(kbps) ? MCPcStyles.mbps(kbps) : "\(MCPcStyles.mbps(kbps)) (exact)"
         let exact = {
             askText("Exact bitrate", "0.5 to \(MCSettings.pcMaxMbps) Mbps") { t in
                 guard let n = Double(t.replacingOccurrences(of: ",", with: ".").trimmingCharacters(in: .whitespaces)) else { return }
@@ -977,7 +1015,7 @@ extension MCRoot {
             MCStepSlider(count: steps.count, at: at, fill: p.ring, track: p.line, thick: m.px(8), knob: m.px(15)) { move($0) }
                 .frame(height: max(m.px(44), 30))
             Text("◀ ▶ to change · A: exact value").mcFont(20, m, weight: .semibold).foregroundColor(p.sub)
-            if let h = MCSettings.highHint(kbps: kbps) {
+            if let h = MCSettings.highHint(kbps: kbps == 0 ? recommended ?? 0 : kbps) {
                 Text(h).mcFont(22, m, weight: .semibold).foregroundColor(p.sub).fixedSize(horizontal: false, vertical: true)
             }
         }
