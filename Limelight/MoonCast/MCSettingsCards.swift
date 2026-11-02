@@ -453,8 +453,9 @@ extension MCRoot {
     }
 
     private func tagView(_ t: String, _ color: Color, _ m: MCMetrics) -> some View {
-        Text(t.uppercased()).mcFont(16, m, weight: .heavy).foregroundColor(color).lineLimit(1)
-            .padding(.horizontal, m.px(12)).padding(.vertical, m.px(6))
+        // shrinks rather than wraps on a narrow card
+        Text(t.uppercased()).mcFont(16, m, weight: .heavy).foregroundColor(color).lineLimit(1).minimumScaleFactor(0.6)
+            .padding(.horizontal, m.px(10)).padding(.vertical, m.px(6))
             .background(Capsule().fill(color.opacity(0.18)))
     }
 
@@ -477,7 +478,7 @@ extension MCRoot {
                 let inUse = st.id == picked.id
                 // no taglines on the PC's cards: their values say it
                 list.append(Card(id: st.id, icon: MCPcStyles.icon(st), color: MCPcStyles.color(st, p), name: MCPcStyles.name(st),
-                                 lines: MCPcStyles.lines(st), note: inUse ? (exact ? "✓ In use" : "✓ In use, changed") : st.pyro ? "Wired or fast Wi-Fi only" : "",
+                                 lines: MCPcStyles.lines(st), note: inUse ? (exact ? "✓ In use" : "✓ In use, changed") : "",
                                  inUse: inUse, use: { usePcStyle(st) }, hold: { editStyle(st) }, tag: st.pyro ? "Experimental" : nil))
             }
         } else {
@@ -501,7 +502,8 @@ extension MCRoot {
         let gap: CGFloat = 24, e = m.edge
         let isNarrow = narrow(m)
         let n = CGFloat(k == "pc" ? list.count : list.count + 1)
-        let cw: CGFloat = isNarrow ? (m.designWidth - 2 * e - gap) / 2 : max(300, (m.designWidth - 2 * e - gap * (n - 1)) / n)
+        // the cards share the width (five PC styles fit an iPad on its side); only below 220 each does the row scroll
+        let cw: CGFloat = isNarrow ? (m.designWidth - 2 * e - gap) / 2 : max(220, (m.designWidth - 2 * e - gap * (n - 1)) / n)
         let ch: CGFloat = 320
         let focusOn = list.first { $0.id == cards.lastStyle && k == "pc" } ?? list.first { $0.inUse } ?? list.first
         focus.preferred["page"] = focusOn.map { "style:\($0.id)" }
