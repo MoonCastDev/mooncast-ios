@@ -12,6 +12,7 @@
 
 #include <signal.h>
 #include <dlfcn.h>
+#include <pthread.h>
 
 #import <VideoToolbox/VideoToolbox.h>
 
@@ -189,6 +190,7 @@ int DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit)
                 fprintf(stderr, "MoonCast: video window %.2f s: %d frames received, %d counted lost, frame numbers %u..%u, steps %d..%d, %d odd steps\n",
                     now - currentVideoStats.startTime, currentVideoStats.receivedFrames, currentVideoStats.networkDroppedFrames,
                     windowFirstFrame, (uint32_t)lastFrameNumber, windowMinStep, windowMaxStep, windowOddSteps);
+                fflush(stderr);
             }
             windowFirstFrame = decodeUnit->frameNumber;
             windowMinStep = INT_MAX;
@@ -282,6 +284,30 @@ static void mcRestoreDefaultSignals(const char* where)
                 who, image ? " in " : "", image ? image + 1 : "");
         signal(sigs[i], SIG_DFL);
     }
+    fflush(stderr);
+}
+
+// MoonCast: one line at each stream's start, always: which build this is, and SIGTERM's disposition and this
+// thread's mask
+static void mcReportSignals(const char* where)
+{
+    struct sigaction now;
+    const char* disp = "?";
+    if (sigaction(SIGTERM, NULL, &now) == 0) {
+        void* h = (now.sa_flags & SA_SIGINFO) ? (void*)now.sa_sigaction : (void*)now.sa_handler;
+        disp = h == (void*)SIG_DFL ? "default" : h == (void*)SIG_IGN ? "ignored" : "handled";
+    }
+    sigset_t mask;
+    pthread_sigmask(SIG_BLOCK, NULL, &mask);
+#if DEBUG
+    const int debug = 1;
+#else
+    const int debug = 0;
+#endif
+    fprintf(stderr, "MoonCast: %s (%s thread): build %s %s debug=%d, SIGTERM %s, %s here, SIGINT %s here\n", where,
+            [NSThread isMainThread] ? "main" : "other", __DATE__, __TIME__, debug, disp,
+            sigismember(&mask, SIGTERM) ? "blocked" : "not blocked", sigismember(&mask, SIGINT) ? "blocked" : "not blocked");
+    fflush(stderr);
 }
 
 int ArInit(int audioConfiguration, POPUS_MULTISTREAM_CONFIGURATION opusConfig, void* context, int flags)
@@ -304,6 +330,7 @@ int ArInit(int audioConfiguration, POPUS_MULTISTREAM_CONFIGURATION opusConfig, v
     want.samples = opusConfig->samplesPerFrame;
 
     mcRestoreDefaultSignals("audio start");
+    mcReportSignals("audio start");
     audioDevice = SDL_OpenAudioDevice(NULL, 0, &want, &have, 0);
     if (audioDevice == 0) {
         Log(LOG_E, @"Failed to open audio device: %s\n", SDL_GetError());
@@ -406,6 +433,7 @@ void ClStageFailed(int stage, int errorCode)
 void ClConnectionStarted(void)
 {
     mcRestoreDefaultSignals("stream started");
+    mcReportSignals("stream started");
     [_callbacks connectionStarted];
 }
 
@@ -541,10 +569,9 @@ void ClSetControllerLED(uint16_t controllerNumber, uint8_t r, uint8_t g, uint8_t
     // MoonCast: PyroWave is encoded in the colour space asked for (BT.709; BT.2020 while the PC is in HDR) and
     // always full range (moonlight-common-c asks for that itself)
     offeredPyroWave = (config.supportedVideoFormats & VIDEO_FORMAT_MASK_PYROWAVE) != 0;
-#if DEBUG
     // MoonCast: high-bitrate streams log their receive path once a second (packets, Mbps, gaps, socket backlog)
     LiSetVideoReceiveDiagnostics(offeredPyroWave || config.bitRate >= 100000);
-#endif
+    mcReportSignals("stream setup");
     if (offeredPyroWave) {
         _streamConfig.colorSpace = COLORSPACE_REC_709;
     }

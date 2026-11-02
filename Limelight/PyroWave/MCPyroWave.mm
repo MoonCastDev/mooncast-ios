@@ -24,7 +24,7 @@
 
 // MoonCast's PyroWave log lines go to the unified log and to stderr (which devicectl --console shows)
 #define PWLog(...) do { NSString* pwLine_ = [NSString stringWithFormat:__VA_ARGS__]; NSLog(@"%@", pwLine_); \
-    fprintf(stderr, "%s\n", pwLine_.UTF8String); } while (0)
+    fprintf(stderr, "%s\n", pwLine_.UTF8String); fflush(stderr); } while (0)
 
 namespace {
 
@@ -701,10 +701,8 @@ static BOOL boolDefault(NSString* key, BOOL def) {
         _rates[3] = skip / t;
     }
     _rateStart = now;
-#if DEBUG
     PWLog(@"MoonCast: PyroWave %.2f s: %d received, %d decoded, %d presented, %d skipped (newer waiting), %d bad, GPU decode %.2f ms",
           t, rec, dec, pres, skip, bad, self.decodeMs);
-#endif
 }
 
 - (double)rate:(int)i {
