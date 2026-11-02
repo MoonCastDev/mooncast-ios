@@ -157,6 +157,10 @@
     return [_mcRenderer mcDisplayLayer];
 }
 
+- (BOOL) mcPyroWave {
+    return [_mcRenderer mcPyroWave];
+}
+
 - (NSDictionary*) mcStats {
     video_stats_t stats;
     if (!_connection || ![_connection getVideoStats:&stats]) {
@@ -177,6 +181,8 @@
               @"hostMax": @(stats.framesWithHostProcessingLatency != 0 ? stats.maxHostProcessingLatency / 10.f : -1),
               @"rttVar": haveRtt ? @(variance) : @(-1),
               @"loss": @(stats.totalFrames > 0 ? 100.0f * stats.networkDroppedFrames / stats.totalFrames : 0),
+              // MoonCast: PyroWave's decode time on the GPU (-1, left out, for the other codecs)
+              @"decode": @([_mcRenderer mcDecodeMs]),
               @"codec": [_connection getActiveCodecName] ?: @"" };
 }
 

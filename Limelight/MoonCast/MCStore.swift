@@ -87,6 +87,12 @@ final class MCStore: NSObject, ObservableObject, DiscoveryCallback, PairCallback
         hosts = MCBridge.savedHosts()
         MCSettings.migrateProfiles()
         MCPs5Store.testAdd()
+        // PyroWave comes only with Settings' PyroWave play style; the probe (it compiles PyroWave's shaders once per
+        // app build) runs off the main thread before Settings asks
+        if UserDefaults.standard.bool(forKey: "mc_pyrowave") && MCPcStyles.inUseId != "pyro" {
+            UserDefaults.standard.set(false, forKey: "mc_pyrowave")
+        }
+        DispatchQueue.global(qos: .utility).async { _ = MCPyroWave.deviceSupported }
         Task { await MCTvFinder.testTarget(); await MCTvFinder.checkTarget(); self.bump() }
         #if DEBUG
         // test runs: MC_SET="key=value;key=value" sets settings (numbers and true/false as such)
@@ -107,6 +113,12 @@ final class MCStore: NSObject, ObservableObject, DiscoveryCallback, PairCallback
             if let i = Int(p[1]) { UserDefaults.standard.set(i, forKey: p[0]) }
             else if p[1] == "true" || p[1] == "false" { UserDefaults.standard.set(p[1] == "true", forKey: p[0]) }
             else { UserDefaults.standard.set(p[1], forKey: p[0]) }
+        }
+        // MC_USE_STYLE=battery|balanced|sharpest|fastest|pyro picks that PC play style, as its card's A does (pyro:
+        // the PyroWave style, where this device decodes PyroWave)
+        if let id = ProcessInfo.processInfo.environment["MC_USE_STYLE"] {
+            if let st = MCPcStyles.style(id) { MCPcStyles.use(st); NSLog("MoonCast: MC_USE_STYLE: \(MCPcStyles.lines(st))") }
+            else { NSLog("MoonCast: MC_USE_STYLE: no style \(id) here") }
         }
         #endif
         // a handheld streams at its own screen size unless you chose one (Moonlight's default is 720p)
@@ -290,8 +302,10 @@ final class MCStore: NSObject, ObservableObject, DiscoveryCallback, PairCallback
         MCNativeRes.prepare(cfg, host: g.host)
         // over the internet, Home streams with the Away settings and never more than 100 Mbps (MCAwayStream)
         MCAwayStream.prepare(cfg, host: g.host) { [weak self] plan in
+            // Settings' PyroWave play style: at home, when the PC offers it (MCPyroWave)
+            let note = MCBridge.offerPyroWave(cfg, away: plan.away)
             self?.onStream?(cfg)
-            if let msg = plan.message { MCToast.show(msg) }
+            if let msg = plan.message ?? note { MCToast.show(msg) }
         }
     }
 

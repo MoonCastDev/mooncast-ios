@@ -7,6 +7,10 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		807A1C2E65DD27402D1DF10B /* MCPyroWave.mm in Sources */ = {isa = PBXBuildFile; fileRef = 3BCF53B54D8FFA8014462147 /* MCPyroWave.mm */; settings = {COMPILER_FLAGS = "-std=gnu++17"; }; };
+		151ACF847929A1B555AACAA7 /* pyrowave_common.mm in Sources */ = {isa = PBXBuildFile; fileRef = E97F629F727CCABFAC8A13B7 /* pyrowave_common.mm */; settings = {COMPILER_FLAGS = "-std=gnu++17"; }; };
+		F1245B5E023B8B8A93B716F7 /* pyrowave_decoder.mm in Sources */ = {isa = PBXBuildFile; fileRef = C7D1E8E759A268962C199A4D /* pyrowave_decoder.mm */; settings = {COMPILER_FLAGS = "-std=gnu++17"; }; };
+		03CD7F03B1F0A08F4CFB8272 /* pyrowave_bitstream.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E395074BBC1898218533EB10 /* pyrowave_bitstream.cpp */; settings = {COMPILER_FLAGS = "-std=gnu++17"; }; };
 		693B3A9B218638CD00982F7B /* Settings.bundle in Resources */ = {isa = PBXBuildFile; fileRef = 693B3A9A218638CD00982F7B /* Settings.bundle */; };
 		98181BE92791277400E43572 /* libSDL2.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 98181BE82791275D00E43572 /* libSDL2.a */; };
 		98181BEB2791278F00E43572 /* libSDL2.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 98181BEA2791278300E43572 /* libSDL2.a */; };
@@ -201,6 +205,17 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		A7D77B9F098CE4CADF054CAA /* MCPyroWave.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = MCPyroWave.h; path = MCPyroWave.h; sourceTree = "<group>"; };
+		3BCF53B54D8FFA8014462147 /* MCPyroWave.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; name = MCPyroWave.mm; path = MCPyroWave.mm; sourceTree = "<group>"; };
+		A8C5A2BA52975820C21A6799 /* pyrowave_metal.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = pyrowave_metal.h; path = pyrowave_metal.h; sourceTree = "<group>"; };
+		7EBAA75A5370CF532C13E4F0 /* pyrowave_common.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; name = pyrowave_common.hpp; path = pyrowave_common.hpp; sourceTree = "<group>"; };
+		E97F629F727CCABFAC8A13B7 /* pyrowave_common.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; name = pyrowave_common.mm; path = pyrowave_common.mm; sourceTree = "<group>"; };
+		C7D1E8E759A268962C199A4D /* pyrowave_decoder.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; name = pyrowave_decoder.mm; path = pyrowave_decoder.mm; sourceTree = "<group>"; };
+		FFCDBB08CEFA5190ADC0B2A4 /* pyrowave_bitstream.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; name = pyrowave_bitstream.hpp; path = pyrowave_bitstream.hpp; sourceTree = "<group>"; };
+		E395074BBC1898218533EB10 /* pyrowave_bitstream.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = pyrowave_bitstream.cpp; path = pyrowave_bitstream.cpp; sourceTree = "<group>"; };
+		60B6C08D451A63B7AD996492 /* pyrowave_msl.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = pyrowave_msl.h; path = shaders/pyrowave_msl.h; sourceTree = "<group>"; };
+		B13D7AF76377A84F19255D6E /* LICENSE */ = {isa = PBXFileReference; lastKnownFileType = text; name = LICENSE; path = LICENSE; sourceTree = "<group>"; };
+		600A61017BBCD7F1BCFC0CAD /* SOURCE.txt */ = {isa = PBXFileReference; lastKnownFileType = text; name = SOURCE.txt; path = SOURCE.txt; sourceTree = "<group>"; };
 		566E9D2B2770B23A00EF7BFE /* Moonlight v1.7.xcdatamodel */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcdatamodel; path = "Moonlight v1.7.xcdatamodel"; sourceTree = "<group>"; };
 		693B3A9A218638CD00982F7B /* Settings.bundle */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.plug-in"; path = Settings.bundle; sourceTree = "<group>"; };
 		9803CCAB254F9EAF00EE185E /* ConnectionCallbacks.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ConnectionCallbacks.h; sourceTree = "<group>"; };
@@ -429,6 +444,24 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		E516A024C41581CE61331A0D /* PyroWave */ = {
+			isa = PBXGroup;
+			children = (
+				A7D77B9F098CE4CADF054CAA /* MCPyroWave.h */,
+				3BCF53B54D8FFA8014462147 /* MCPyroWave.mm */,
+				A8C5A2BA52975820C21A6799 /* pyrowave_metal.h */,
+				7EBAA75A5370CF532C13E4F0 /* pyrowave_common.hpp */,
+				E97F629F727CCABFAC8A13B7 /* pyrowave_common.mm */,
+				C7D1E8E759A268962C199A4D /* pyrowave_decoder.mm */,
+				FFCDBB08CEFA5190ADC0B2A4 /* pyrowave_bitstream.hpp */,
+				E395074BBC1898218533EB10 /* pyrowave_bitstream.cpp */,
+				60B6C08D451A63B7AD996492 /* pyrowave_msl.h */,
+				B13D7AF76377A84F19255D6E /* LICENSE */,
+				600A61017BBCD7F1BCFC0CAD /* SOURCE.txt */,
+			);
+			path = PyroWave;
+			sourceTree = "<group>";
+		};
 		9896219423D15C2900211983 /* X1Kit */ = {
 			isa = PBXGroup;
 			children = (
@@ -521,6 +554,7 @@
 				FB290D0219B2C406004C83CF /* AppDelegate.h */,
 				FB290D0319B2C406004C83CF /* AppDelegate.m */,
 				5E34F220FEBEF6D9522FF9ED /* MoonCast */,
+				E516A024C41581CE61331A0D /* PyroWave */,
 				FBDE86DE19F7A837001C18A8 /* UIComputerView.h */,
 				FBDE86DF19F7A837001C18A8 /* UIComputerView.m */,
 				FBDE86E419F82297001C18A8 /* UIAppView.h */,
@@ -997,6 +1031,10 @@
 				718BB6E7E9DB524121A6CABF /* MCFsrRtc.swift in Sources */,
 				64865257E4CAF602A1D0BBC8 /* MCPip.swift in Sources */,
 				921EC5A166FC0945D40A0245 /* MCStatsPill.swift in Sources */,
+				807A1C2E65DD27402D1DF10B /* MCPyroWave.mm in Sources */,
+				151ACF847929A1B555AACAA7 /* pyrowave_common.mm in Sources */,
+				F1245B5E023B8B8A93B716F7 /* pyrowave_decoder.mm in Sources */,
+				03CD7F03B1F0A08F4CFB8272 /* pyrowave_bitstream.cpp in Sources */,
 				B758096E7BF0B7341DD7196B /* MCSettingsCards.swift in Sources */,
 				E67EBC0246EFFC5B6C3AB181 /* MCStyles.swift in Sources */,
 				195E6C6249A905795B9DCD31 /* MCNative.swift in Sources */,
@@ -1338,6 +1376,7 @@
 		FB290D2119B2C406004C83CF /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				EXCLUDED_RECURSIVE_SEARCH_PATH_SUBDIRECTORIES = "*.nib *.lproj *.framework *.gch *.xcode* *.xcassets (*) .DS_Store CVS .svn .git .hg *.pbproj *.pbxproj libavutil";
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-lchiaki-all",
@@ -1396,6 +1435,7 @@
 		FB290D2219B2C406004C83CF /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				EXCLUDED_RECURSIVE_SEARCH_PATH_SUBDIRECTORIES = "*.nib *.lproj *.framework *.gch *.xcode* *.xcassets (*) .DS_Store CVS .svn .git .hg *.pbproj *.pbxproj libavutil";
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-lchiaki-all",

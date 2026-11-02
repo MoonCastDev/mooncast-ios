@@ -16,6 +16,7 @@
 #import "StreamFrameViewController.h"
 #import "CryptoManager.h"
 #import "Utils.h"
+#import "MCPyroWave.h"
 
 #include <openssl/pem.h>
 #include <openssl/x509.h>
@@ -147,6 +148,37 @@
             config.supportedVideoFormats |= VIDEO_FORMAT_H265_REXT10_444;
         }
     }
+}
+
++ (nullable NSString*) offerPyroWave:(StreamConfiguration*)config away:(BOOL)away {
+    if (!MCPyroWave.wanted) {
+        return nil;
+    }
+    if (away) {
+        Log(LOG_I, @"PyroWave: not away from home (the usual codec plays)");
+        return nil;
+    }
+    if (!MCPyroWave.deviceSupported) {
+        Log(LOG_I, @"PyroWave: this device doesn't decode it (the usual codec plays)");
+        return nil;
+    }
+    int scm = config.serverCodecModeSupport;
+    if (!(scm & SCM_PYROWAVE)) {
+        Log(LOG_I, @"PyroWave asked for, but the PC doesn't offer it (codec modes 0x%x)", scm);
+        return @"This PC doesn't offer PyroWave, so the stream uses your usual codec";
+    }
+    TemporarySettings* settings = [[[DataManager alloc] init] getSettings];
+    BOOL tenBit = settings.enableHdr;
+    BOOL yuv444 = MCPyroWave.want444;
+    int formats = VIDEO_FORMAT_PYROWAVE;
+    if (tenBit && (scm & SCM_PYROWAVE_10BIT)) formats |= VIDEO_FORMAT_PYROWAVE_10BIT;
+    if (yuv444 && (scm & SCM_PYROWAVE_444)) formats |= VIDEO_FORMAT_PYROWAVE_444;
+    if (tenBit && yuv444 && (scm & SCM_PYROWAVE_10BIT_444)) formats |= VIDEO_FORMAT_PYROWAVE_10BIT_444;
+    config.supportedVideoFormats |= formats;
+    Log(LOG_I, @"Asking the PC for PyroWave (formats 0x%x; recommended at %dx%d %d fps: %d Mbps, set %d Mbps)", formats,
+        config.width, config.height, config.frameRate,
+        [MCPyroWave recommendedKbpsWidth:config.width height:config.height fps:config.frameRate] / 1000, config.bitRate / 1000);
+    return nil;
 }
 
 + (nullable NSString*) refreshServerInfo:(TemporaryHost*)host discovery:(DiscoveryManager*)disc {

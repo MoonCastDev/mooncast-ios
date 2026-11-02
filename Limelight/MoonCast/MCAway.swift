@@ -143,7 +143,8 @@ enum MCNetwork {
 ///    frame rate, bitrate, codec and HDR. When Away was never set up, Home's values stay (with a bitrate picked in
 ///    the Quick menu while away, if any).
 ///  - Whatever the profile: at most [capKbps], unless the Away profile itself sets a higher bitrate on purpose (then
-///    that is respected). iOS has no PyroWave, so there is nothing else to turn off.
+///    that is respected).
+///  - Never PyroWave away from home (MCBridge offerPyroWave): the internet path can't carry its bitrate.
 @objc(MCAwayStream)
 final class MCAwayStream: NSObject {
     /// Away bitrate cap, kbps: the internet path rarely carries more than 20-50 Mbps.
@@ -245,6 +246,12 @@ final class MCAwayStream: NSObject {
 
 extension Array {
     subscript(safe i: Int) -> Element? { i >= 0 && i < count ? self[i] : nil }
+}
+
+/// MCToast for Objective-C (the stream's codec notes).
+@objc(MCToastObjC)
+final class MCToastObjC: NSObject {
+    @objc static func show(_ text: String) { MCToast.show(text) }
 }
 
 /// A short note over everything for a few seconds (Android's toast), e.g. at the start of an away stream.

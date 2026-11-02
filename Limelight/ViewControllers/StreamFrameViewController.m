@@ -402,7 +402,11 @@
 #if DEBUG
     dispatch_async(dispatch_get_main_queue(), ^{
         // MoonCast: Settings → Picture in picture
-        if (MCPip.enabled && self->_mcPip == nil) {
+        if (MCPip.enabled && self->_mcPip == nil && [self->_streamMan mcPyroWave]) {
+            // PyroWave's picture is a Metal layer, which picture in picture can't show
+            [MCToastObjC show:@"Picture in picture is off for PyroWave streams"];
+        }
+        else if (MCPip.enabled && self->_mcPip == nil) {
             AVSampleBufferDisplayLayer* layer = [self->_streamMan mcDisplayLayer];
             if (layer != nil) {
                 self->_mcPip = [[MCPip alloc] initWithLayer:layer];

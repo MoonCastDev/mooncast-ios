@@ -9,6 +9,7 @@
 #import "VideoDecoderRenderer.h"
 #import "Moonlight-Swift.h"
 #import "StreamView.h"
+#import "MCPyroWave.h"
 
 #include <libavcodec/avcodec.h>
 #include <libavcodec/cbs.h>
@@ -39,6 +40,8 @@ extern int ff_isom_write_av1c(AVIOContext *pb, const uint8_t *buf, int size,
     // MoonCast: Ultra low latency takes each frame as it arrives (no wait for the screen refresh)
     BOOL mcUltra;
     volatile BOOL mcFrameThreadRunning;
+    // MoonCast: a PyroWave stream skips VideoToolbox and the display layer: PyroWave's Metal decoder and a CAMetalLayer
+    MCPyroWaveRenderer* mcPyro;
     
     CADisplayLink* _displayLink;
     BOOL framePacing;
@@ -97,10 +100,29 @@ extern int ff_isom_write_av1c(AVIOContext *pb, const uint8_t *buf, int size,
     return self;
 }
 
-- (void)setupWithVideoFormat:(int)videoFormat width:(int)videoWidth height:(int)videoHeight frameRate:(int)frameRate
+- (int)setupWithVideoFormat:(int)videoFormat width:(int)videoWidth height:(int)videoHeight frameRate:(int)frameRate
 {
     self->videoFormat = videoFormat;
     self->frameRate = frameRate;
+    // MoonCast: PyroWave draws on its own Metal layer, in the display layer's place (Super resolution doesn't apply)
+    if (videoFormat & VIDEO_FORMAT_MASK_PYROWAVE) {
+        __block MCPyroWaveRenderer* pw = nil;
+        void (^make)(void) = ^{
+            pw = [[MCPyroWaveRenderer alloc] initWithView:self->_view above:self->displayLayer videoFormat:videoFormat
+                                                    width:videoWidth height:videoHeight fps:frameRate];
+        };
+        if ([NSThread isMainThread]) make(); else dispatch_sync(dispatch_get_main_queue(), make);
+        if (pw == nil) {
+            [MCToastObjC show:@"PyroWave didn't start on this device"];
+            return -1;
+        }
+        __weak id<ConnectionCallbacks> callbacks = _callbacks;
+        pw.onFirstFrame = ^{ [callbacks videoContentShown]; };
+        // the PC may have said it's in HDR before the decoder was set up
+        [pw setHdr:LiGetCurrentHostDisplayHdrMode()];
+        mcPyro = pw;
+        return 0;
+    }
     // FSR for 8-bit streams clearly smaller than the screen (HDR keeps the display layer)
     if (!(videoFormat & (VIDEO_FORMAT_MASK_10BIT | VIDEO_FORMAT_MASK_YUV444)) && [MCFsr wantedWithVideoHeight:videoHeight]) {
         void (^make)(void) = ^{
@@ -113,12 +135,14 @@ extern int ff_isom_write_av1c(AVIOContext *pb, const uint8_t *buf, int size,
         };
         if ([NSThread isMainThread]) make(); else dispatch_sync(dispatch_get_main_queue(), make);
     }
+    return 0;
 }
 
 - (void)start
 {
     mcUltra = MCUltraLowLatency.enabled;
-    if (mcUltra) {
+    // MoonCast: PyroWave frames are decoded and shown as they arrive, newest first (no wait for the refresh)
+    if (mcUltra || mcPyro != nil) {
         mcFrameThreadRunning = YES;
         NSThread* t = [[NSThread alloc] initWithBlock:^{
             VIDEO_FRAME_HANDLE handle;
@@ -173,7 +197,17 @@ int DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
 
 - (AVSampleBufferDisplayLayer*)mcDisplayLayer
 {
-    return mcFsr != nil ? nil : displayLayer;
+    return mcFsr != nil || mcPyro != nil ? nil : displayLayer;
+}
+
+- (BOOL)mcPyroWave
+{
+    return mcPyro != nil;
+}
+
+- (double)mcDecodeMs
+{
+    return mcPyro != nil ? mcPyro.decodeMs : -1;
 }
 
 - (void)mcRelayout
@@ -182,11 +216,13 @@ int DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
     displayLayer.position = CGPointMake(CGRectGetMidX(_view.bounds), CGRectGetMidY(_view.bounds));
     displayLayer.bounds = CGRectMake(0, 0, videoSize.width, videoSize.height);
     mcFsr.frame = displayLayer.frame;
+    [mcPyro layoutInFrame:displayLayer.frame];
 }
 
 - (void)stop
 {
     mcFrameThreadRunning = NO;
+    [mcPyro stop];
     [_displayLink invalidate];
     [mcFsrDecoder invalidate];
     mcFsrDecoder = nil;
@@ -456,6 +492,16 @@ int DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
 {
     OSStatus status;
     
+    // MoonCast: PyroWave frames are one picture-data buffer each, every frame a keyframe
+    if (mcPyro != nil) {
+        if (bufferType != BUFFER_TYPE_PICDATA) {
+            return DR_OK;
+        }
+        int ret = [mcPyro submitFrame:data length:length];
+        free(data);
+        return ret;
+    }
+    
     // Construct a new format description object each time we receive an IDR frame
     if (du->frameType == FRAME_TYPE_IDR) {
         if (bufferType != BUFFER_TYPE_PICDATA) {
@@ -681,6 +727,11 @@ int DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
 }
 
 - (void)setHdrMode:(BOOL)enabled {
+    // MoonCast: PyroWave switches its layer to PQ (an EDR screen) or tone maps
+    if (mcPyro != nil) {
+        [mcPyro setHdr:enabled];
+        return;
+    }
     SS_HDR_METADATA hdrMetadata;
     
     BOOL hasMetadata = enabled && LiGetHdrMetadata(&hdrMetadata);

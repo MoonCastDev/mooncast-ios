@@ -25,5 +25,7 @@
 - (void) mcRelayout;
 /// MoonCast: the picture's display layer (nil while Super resolution draws it)
 - (nullable AVSampleBufferDisplayLayer*) mcDisplayLayer;
+/// MoonCast: this stream is PyroWave (its picture is a Metal layer: no picture in picture)
+- (BOOL) mcPyroWave;
 
 @end

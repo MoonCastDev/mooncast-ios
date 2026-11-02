@@ -44,6 +44,12 @@ NS_ASSUME_NONNULL_BEGIN
 /// The video formats to offer for a codec preference (CODEC_PREF_*), HDR and YUV 4:4:4, as streamConfigForApp does.
 + (void) setVideoFormats:(StreamConfiguration*)config codec:(uint32_t)codec hdr:(BOOL)hdr yuv444:(BOOL)yuv444;
 
+/// Settings' PyroWave play style: offers the PyroWave formats on top of [config]'s usual ones when this device decodes
+/// PyroWave, the stream is at home ([away] NO) and the PC offers it (SCM_PYROWAVE); 10-bit with HDR on, 4:4:4 with
+/// the style's 4:4:4 on, each only when the PC has it. Returns the note to show when the style is in use but the
+/// PC doesn't offer PyroWave (the stream then uses the usual codec), else nil.
++ (nullable NSString*) offerPyroWave:(StreamConfiguration*)config away:(BOOL)away;
+
 /// Asks the PC for its server info and fills the host in. Nil when it worked, else the error to show.
 + (nullable NSString*) refreshServerInfo:(TemporaryHost*)host discovery:(DiscoveryManager*)disc;
 

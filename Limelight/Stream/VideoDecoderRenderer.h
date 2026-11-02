@@ -16,7 +16,8 @@
 
 - (id)initWithView:(UIView*)view callbacks:(id<ConnectionCallbacks>)callbacks streamAspectRatio:(float)aspectRatio useFramePacing:(BOOL)useFramePacing;
 
-- (void)setupWithVideoFormat:(int)videoFormat width:(int)videoWidth height:(int)videoHeight frameRate:(int)frameRate;
+/// 0 when the decoder is ready (MoonCast: non-zero when PyroWave's didn't start)
+- (int)setupWithVideoFormat:(int)videoFormat width:(int)videoWidth height:(int)videoHeight frameRate:(int)frameRate;
 - (void)start;
 - (void)stop;
 - (void)setHdrMode:(BOOL)enabled;
@@ -24,6 +25,10 @@
 - (void)mcRelayout;
 /// MoonCast: the display layer the picture goes to (nil while Super resolution draws it), for picture in picture
 - (nullable AVSampleBufferDisplayLayer*)mcDisplayLayer;
+/// MoonCast: this stream is PyroWave (decoded with Metal on a CAMetalLayer, not the display layer)
+- (BOOL)mcPyroWave;
+/// MoonCast: PyroWave's GPU decode time per frame over the last second, ms (-1: none)
+- (double)mcDecodeMs;
 
 - (int)submitDecodeBuffer:(unsigned char *)data length:(int)length bufferType:(int)bufferType decodeUnit:(PDECODE_UNIT)du;
 

@@ -107,13 +107,18 @@ final class MCQuickModel: ObservableObject {
         let lostFrames = (d["lostFrames"] as? NSNumber)?.intValue
         let mbps = (d["mbps"] as? NSNumber)?.floatValue ?? 0
         let codec = d["codec"] as? String ?? ""
-        stats = [
+        var now: [(String, String)] = [
             (fps.map { String(format: "%.0f", $0) } ?? "…", "fps"),
             (rtt >= 0 ? "\(rtt) ms" : "…", "delay"),
             (String(format: mbps < 10 ? "%.1f" : "%.0f", mbps), "Mbps"),
             (lostFrames.map { "\($0)" } ?? loss.map { String(format: "%.1f%%", $0) } ?? "…", "lost"),
             (codec.isEmpty ? "…" : MCQuickModel.shortCodec(codec), "codec"),
         ]
+        // PyroWave: its decode time on the GPU
+        if let dec = (d["decode"] as? NSNumber)?.doubleValue, dec >= 0 {
+            now.insert((String(format: "%.1f ms", dec), "decode"), at: now.count - 1)
+        }
+        stats = now
     }
 
     /// "HEVC Main 10 SDR (4:4:4)" → "HEVC 10-bit 4:4:4": short enough for a stat tile.

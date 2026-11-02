@@ -8,6 +8,7 @@
 
 #import "Connection.h"
 #import "Utils.h"
+#import "Moonlight-Swift.h"
 
 #import <VideoToolbox/VideoToolbox.h>
 
@@ -45,9 +46,20 @@ static int audioFrameSize;
 
 static VideoDecoderRenderer* renderer;
 
+// MoonCast: the stream offered PyroWave (MCBridge offerPyroWave)
+static BOOL offeredPyroWave;
+
 int DrDecoderSetup(int videoFormat, int width, int height, int redrawRate, void* context, int drFlags)
 {
-    [renderer setupWithVideoFormat:videoFormat width:width height:height frameRate:redrawRate];
+    // MoonCast: offered PyroWave, but the PC's answer picked another codec: the usual one plays, and says so once
+    if (offeredPyroWave && !(videoFormat & VIDEO_FORMAT_MASK_PYROWAVE)) {
+        Log(LOG_W, @"PyroWave offered, but the PC streams format 0x%x", videoFormat);
+        [MCToastObjC show:@"The PC didn't start PyroWave, so the stream uses your usual codec"];
+    }
+    int err = [renderer setupWithVideoFormat:videoFormat width:width height:height frameRate:redrawRate];
+    if (err != 0) {
+        return err;
+    }
     lastFrameNumber = 0;
     activeVideoFormat = videoFormat;
     memset(&currentVideoStats, 0, sizeof(currentVideoStats));
@@ -82,6 +94,17 @@ void DrStop(void)
 
 -(NSString*) getActiveCodecName
 {
+    // MoonCast: "PyroWave", with "4:4:4", and "10-bit" (SDR) or "HDR" (the PC's display in HDR)
+    if (activeVideoFormat & VIDEO_FORMAT_MASK_PYROWAVE) {
+        NSString* name = @"PyroWave";
+        if (activeVideoFormat & VIDEO_FORMAT_MASK_YUV444) {
+            name = [name stringByAppendingString:@" 4:4:4"];
+        }
+        if (activeVideoFormat & VIDEO_FORMAT_MASK_10BIT) {
+            name = [name stringByAppendingString:LiGetCurrentHostDisplayHdrMode() ? @" HDR" : @" 10-bit"];
+        }
+        return name;
+    }
     switch (activeVideoFormat)
     {
         case VIDEO_FORMAT_H264:
@@ -445,6 +468,12 @@ void ClSetControllerLED(uint16_t controllerNumber, uint8_t r, uint8_t g, uint8_t
     // MoonCast: Settings → Picture → Full range colour (the decoder reads the range from the stream itself)
     if ([[NSUserDefaults standardUserDefaults] boolForKey:@"mc_full_range"]) {
         _streamConfig.colorRange = COLOR_RANGE_FULL;
+    }
+    // MoonCast: PyroWave is encoded in the colour space asked for (BT.709; BT.2020 while the PC is in HDR) and
+    // always full range (moonlight-common-c asks for that itself)
+    offeredPyroWave = (config.supportedVideoFormats & VIDEO_FORMAT_MASK_PYROWAVE) != 0;
+    if (offeredPyroWave) {
+        _streamConfig.colorSpace = COLORSPACE_REC_709;
     }
     
     // Since we require iOS 12 or above, we're guaranteed to be running
