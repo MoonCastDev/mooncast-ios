@@ -303,7 +303,7 @@ enum MCPcStyles {
         if (m["hdr"] as? NSNumber)?.boolValue == true { l2.append("HDR") }
         if (m["ull"] as? NSNumber)?.boolValue == true { l2.append("lowest delay") }
         let f = m["fps"] as? String ?? "native"
-        return ["\(resLabel(m["res"] as? String ?? "native")) · \(f == "native" ? "Native \(MCSettings.nativeHz)" : f) fps", l2.joined(separator: " · ")]
+        return ["\(resLabel(m["res"] as? String ?? "native")) · \(f == "native" ? "\(MCSettings.nativeHz)" : f) fps", l2.joined(separator: " · ")]
     }
 }
 
