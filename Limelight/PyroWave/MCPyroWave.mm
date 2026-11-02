@@ -22,6 +22,10 @@
 #include <thread>
 #include <pthread.h>
 
+// MoonCast's PyroWave log lines go to the unified log and to stderr (which devicectl --console shows)
+#define PWLog(...) do { NSString* pwLine_ = [NSString stringWithFormat:__VA_ARGS__]; NSLog(@"%@", pwLine_); \
+    fprintf(stderr, "%s\n", pwLine_.UTF8String); } while (0)
+
 namespace {
 
 // MARK: record framing
@@ -87,7 +91,7 @@ bool pushRecords(const uint8_t* data, size_t size, Push push) {
 
 // MARK: the shared PyroWave device
 
-void logMessage(void*, const char* msg) { NSLog(@"MoonCast: PyroWave: %s", msg); }
+void logMessage(void*, const char* msg) { PWLog(@"MoonCast: PyroWave: %s", msg); }
 
 std::mutex gDeviceLock;
 id<MTLDevice> gMtl;
@@ -102,7 +106,7 @@ pyrowave_device sharedDevice() {
     @autoreleasepool {
         id<MTLDevice> mtl = MTLCreateSystemDefaultDevice();
         if (!mtl || !pyrowave_device_is_supported((__bridge void*)mtl)) {
-            NSLog(@"MoonCast: PyroWave: %@ isn't an Apple7-family GPU", mtl.name ?: @"no Metal device");
+            PWLog(@"MoonCast: PyroWave: %@ isn't an Apple7-family GPU", mtl.name ?: @"no Metal device");
             return nullptr;
         }
         pyrowave_device_create_info info = {};
@@ -111,7 +115,7 @@ pyrowave_device sharedDevice() {
         pyrowave_device dev = nullptr;
         pyrowave_result r = pyrowave_device_create(&info, &dev);
         if (r != PYROWAVE_SUCCESS) {
-            NSLog(@"MoonCast: PyroWave: device didn't start: %s", pyrowave_result_to_string(r));
+            PWLog(@"MoonCast: PyroWave: device didn't start: %s", pyrowave_result_to_string(r));
             return nullptr;
         }
         gMtl = mtl;
@@ -150,7 +154,7 @@ public:
                 id<MTLFunction> fn = [lib newFunctionWithName:@"kb"];
                 id<MTLComputePipelineState> ps = fn ? [dev newComputePipelineStateWithFunction:fn error:&err] : nil;
                 if (!ps) {
-                    NSLog(@"MoonCast: PyroWave: GPU boost didn't start: %@", err);
+                    PWLog(@"MoonCast: PyroWave: GPU boost didn't start: %@", err);
                     return;
                 }
                 const int groups = 4;
@@ -333,7 +337,7 @@ static BOOL probeDevice(void) {
         // "probing" left behind means the probe took the app down last time (a GPU driver crash): never again
         BOOL ok = [[cached substringFromIndex:bar.location + 1] isEqualToString:@"1"];
         if (!ok) {
-            NSLog(@"MoonCast: PyroWave: not on this device (%@)", cached);
+            PWLog(@"MoonCast: PyroWave: not on this device (%@)", cached);
         }
         return ok;
     }
@@ -356,7 +360,7 @@ static BOOL probeDevice(void) {
         }
     }
     [d setObject:[key stringByAppendingString:ok ? @"|1" : @"|0"] forKey:@"mc_pyrowave_probe"];
-    NSLog(@"MoonCast: PyroWave probe on %@: %@", gMtl.name ?: @"this GPU", ok ? @"yes" : @"no");
+    PWLog(@"MoonCast: PyroWave probe on %@: %@", gMtl.name ?: @"this GPU", ok ? @"yes" : @"no");
     return ok;
 }
 
@@ -474,7 +478,7 @@ static BOOL boolDefault(NSString* key, BOOL def) {
     di.chroma = _chroma444 ? PYROWAVE_CHROMA_SUBSAMPLING_444 : PYROWAVE_CHROMA_SUBSAMPLING_420;
     pyrowave_result r = pyrowave_decoder_create(&di, &_decoder);
     if (r != PYROWAVE_SUCCESS) {
-        NSLog(@"MoonCast: PyroWave: decoder for %dx%d didn't start: %s", width, height, pyrowave_result_to_string(r));
+        PWLog(@"MoonCast: PyroWave: decoder for %dx%d didn't start: %s", width, height, pyrowave_result_to_string(r));
         _decoder = nullptr;
         return nil;
     }
@@ -492,7 +496,7 @@ static BOOL boolDefault(NSString* key, BOOL def) {
             td.storageMode = MTLStorageModePrivate;
             _planes[s][p] = [_mtl newTextureWithDescriptor:td];
             if (!_planes[s][p]) {
-                NSLog(@"MoonCast: PyroWave: no memory for %dx%d planes", width, height);
+                PWLog(@"MoonCast: PyroWave: no memory for %dx%d planes", width, height);
                 pyrowave_decoder_destroy(_decoder);
                 _decoder = nullptr;
                 return nil;
@@ -503,7 +507,7 @@ static BOOL boolDefault(NSString* key, BOOL def) {
     NSError* err = nil;
     _library = [_mtl newLibraryWithSource:@(kPictureSource) options:nil error:&err];
     if (!_library) {
-        NSLog(@"MoonCast: PyroWave: picture shader didn't compile: %@", err);
+        PWLog(@"MoonCast: PyroWave: picture shader didn't compile: %@", err);
         pyrowave_decoder_destroy(_decoder);
         _decoder = nullptr;
         return nil;
@@ -565,7 +569,7 @@ static BOOL boolDefault(NSString* key, BOOL def) {
         if (me->_boostWanted && me->_boost) me->_boost->start();
     }];
 
-    NSLog(@"MoonCast: PyroWave decoding %dx%d %d fps%s%s on %@, chroma %s, dither %d, GPU boost %d", width, height, fps,
+    PWLog(@"MoonCast: PyroWave decoding %dx%d %d fps%s%s on %@, chroma %s, dither %d, GPU boost %d", width, height, fps,
           _tenBit ? " 10-bit" : "", _chroma444 ? " 4:4:4" : " 4:2:0", _mtl.name,
           _chroma444 ? "full" : _centerChroma ? "centered" : "left-sited", _dither, (int)_boostWanted);
     return self;
@@ -635,7 +639,7 @@ static BOOL boolDefault(NSString* key, BOOL def) {
     }
     const BOOL pq = hdr && edr;
     _hdrActive = hdr;
-    NSLog(@"MoonCast: PyroWave HDR %s%s", hdr ? "on" : "off", hdr ? (pq ? ", PQ on an EDR screen" : ", tone mapped to SDR") : "");
+    PWLog(@"MoonCast: PyroWave HDR %s%s", hdr ? "on" : "off", hdr ? (pq ? ", PQ on an EDR screen" : ", tone mapped to SDR") : "");
     dispatch_async(dispatch_get_main_queue(), ^{
         if (self->_stopped) return;
         [self configureLayerForHdr:pq];
@@ -652,7 +656,7 @@ static BOOL boolDefault(NSString* key, BOOL def) {
     NSError* err = nil;
     p = [_mtl newRenderPipelineStateWithDescriptor:d error:&err];
     if (!p) {
-        NSLog(@"MoonCast: PyroWave: picture pipeline for format %d failed: %@", (int)format, err);
+        PWLog(@"MoonCast: PyroWave: picture pipeline for format %d failed: %@", (int)format, err);
         return nil;
     }
     _pipelines[@(format)] = p;
@@ -698,7 +702,7 @@ static BOOL boolDefault(NSString* key, BOOL def) {
     }
     _rateStart = now;
 #if DEBUG
-    NSLog(@"MoonCast: PyroWave %.2f s: %d received, %d decoded, %d presented, %d skipped (newer waiting), %d bad, GPU decode %.2f ms",
+    PWLog(@"MoonCast: PyroWave %.2f s: %d received, %d decoded, %d presented, %d skipped (newer waiting), %d bad, GPU decode %.2f ms",
           t, rec, dec, pres, skip, bad, self.decodeMs);
 #endif
 }
@@ -718,7 +722,7 @@ static BOOL boolDefault(NSString* key, BOOL def) {
     _nBad++;
     if (!_loggedBadFrame) {
         _loggedBadFrame = YES;
-        NSLog(@"MoonCast: PyroWave: frame dropped: %s", why);
+        PWLog(@"MoonCast: PyroWave: frame dropped: %s", why);
     }
 }
 
@@ -874,7 +878,7 @@ static BOOL boolDefault(NSString* key, BOOL def) {
         [link invalidate];
         [layer removeFromSuperlayer];
     });
-    if (_badFrames) NSLog(@"MoonCast: PyroWave: %llu frames dropped as bad", (unsigned long long)_badFrames);
+    if (_badFrames) PWLog(@"MoonCast: PyroWave: %llu frames dropped as bad", (unsigned long long)_badFrames);
 }
 
 @end

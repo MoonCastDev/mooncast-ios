@@ -10,6 +10,9 @@
 #import "Utils.h"
 #import "Moonlight-Swift.h"
 
+#include <signal.h>
+#include <dlfcn.h>
+
 #import <VideoToolbox/VideoToolbox.h>
 
 #define SDL_MAIN_HANDLED
@@ -183,7 +186,7 @@ int DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit)
 #if DEBUG
             // MoonCast: what the stats are made of, for PyroWave streams (one line a second)
             if (activeVideoFormat & VIDEO_FORMAT_MASK_PYROWAVE) {
-                Log(LOG_I, @"Video window %.2f s: %d frames received, %d counted lost, frame numbers %u..%u, steps %d..%d, %d odd steps",
+                fprintf(stderr, "MoonCast: video window %.2f s: %d frames received, %d counted lost, frame numbers %u..%u, steps %d..%d, %d odd steps\n",
                     now - currentVideoStats.startTime, currentVideoStats.receivedFrames, currentVideoStats.networkDroppedFrames,
                     windowFirstFrame, (uint32_t)lastFrameNumber, windowMinStep, windowMaxStep, windowOddSteps);
             }
@@ -257,6 +260,30 @@ int DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit)
                              decodeUnit:decodeUnit];
 }
 
+// MoonCast: something in the stream's libraries installs a SIGTERM/SIGINT handler (SDL's events did, before
+// SDL_HINT_NO_SIGNAL_HANDLERS), and the app then ignores a terminate for the length of the stream. Says who did,
+// and puts the default back.
+static void mcRestoreDefaultSignals(const char* where)
+{
+    int sigs[] = { SIGTERM, SIGINT };
+    for (int i = 0; i < 2; i++) {
+        struct sigaction now;
+        if (sigaction(sigs[i], NULL, &now) != 0) {
+            continue;
+        }
+        void* h = (now.sa_flags & SA_SIGINFO) ? (void*)now.sa_sigaction : (void*)now.sa_handler;
+        if (h == (void*)SIG_DFL) {
+            continue;
+        }
+        Dl_info info = {0};
+        const char* who = h == (void*)SIG_IGN ? "SIG_IGN" : (dladdr(h, &info) && info.dli_sname) ? info.dli_sname : "?";
+        const char* image = info.dli_fname ? strrchr(info.dli_fname, '/') : NULL;
+        fprintf(stderr, "MoonCast: %s: %s had a handler (%s%s%s), back to the default\n", where, sigs[i] == SIGTERM ? "SIGTERM" : "SIGINT",
+                who, image ? " in " : "", image ? image + 1 : "");
+        signal(sigs[i], SIG_DFL);
+    }
+}
+
 int ArInit(int audioConfiguration, POPUS_MULTISTREAM_CONFIGURATION opusConfig, void* context, int flags)
 {
     int err;
@@ -276,6 +303,7 @@ int ArInit(int audioConfiguration, POPUS_MULTISTREAM_CONFIGURATION opusConfig, v
     want.channels = opusConfig->channelCount;
     want.samples = opusConfig->samplesPerFrame;
 
+    mcRestoreDefaultSignals("audio start");
     audioDevice = SDL_OpenAudioDevice(NULL, 0, &want, &have, 0);
     if (audioDevice == 0) {
         Log(LOG_E, @"Failed to open audio device: %s\n", SDL_GetError());
@@ -377,6 +405,7 @@ void ClStageFailed(int stage, int errorCode)
 
 void ClConnectionStarted(void)
 {
+    mcRestoreDefaultSignals("stream started");
     [_callbacks connectionStarted];
 }
 
@@ -512,6 +541,10 @@ void ClSetControllerLED(uint16_t controllerNumber, uint8_t r, uint8_t g, uint8_t
     // MoonCast: PyroWave is encoded in the colour space asked for (BT.709; BT.2020 while the PC is in HDR) and
     // always full range (moonlight-common-c asks for that itself)
     offeredPyroWave = (config.supportedVideoFormats & VIDEO_FORMAT_MASK_PYROWAVE) != 0;
+#if DEBUG
+    // MoonCast: high-bitrate streams log their receive path once a second (packets, Mbps, gaps, socket backlog)
+    LiSetVideoReceiveDiagnostics(offeredPyroWave || config.bitRate >= 100000);
+#endif
     if (offeredPyroWave) {
         _streamConfig.colorSpace = COLORSPACE_REC_709;
     }
