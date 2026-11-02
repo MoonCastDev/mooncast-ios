@@ -48,6 +48,11 @@ static VideoDecoderRenderer* renderer;
 
 // MoonCast: the stream offered PyroWave (MCBridge offerPyroWave)
 static BOOL offeredPyroWave;
+#if DEBUG
+// MoonCast: the frame numbers of the stats window (logged for PyroWave streams)
+static uint32_t windowFirstFrame;
+static int windowMinStep = INT_MAX, windowMaxStep = INT_MIN, windowOddSteps;
+#endif
 
 int DrDecoderSetup(int videoFormat, int width, int height, int redrawRate, void* context, int drFlags)
 {
@@ -175,14 +180,36 @@ int DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit)
             [videoStatsLock lock];
             lastVideoStats = currentVideoStats;
             [videoStatsLock unlock];
+#if DEBUG
+            // MoonCast: what the stats are made of, for PyroWave streams (one line a second)
+            if (activeVideoFormat & VIDEO_FORMAT_MASK_PYROWAVE) {
+                Log(LOG_I, @"Video window %.2f s: %d frames received, %d counted lost, frame numbers %u..%u, steps %d..%d, %d odd steps",
+                    now - currentVideoStats.startTime, currentVideoStats.receivedFrames, currentVideoStats.networkDroppedFrames,
+                    windowFirstFrame, (uint32_t)lastFrameNumber, windowMinStep, windowMaxStep, windowOddSteps);
+            }
+            windowFirstFrame = decodeUnit->frameNumber;
+            windowMinStep = INT_MAX;
+            windowMaxStep = INT_MIN;
+            windowOddSteps = 0;
+#endif
             
             memset(&currentVideoStats, 0, sizeof(currentVideoStats));
             currentVideoStats.startTime = now;
         }
         
-        // Any frame number greater than m_LastFrameNumber + 1 represents a dropped frame
-        currentVideoStats.networkDroppedFrames += decodeUnit->frameNumber - (lastFrameNumber + 1);
-        currentVideoStats.totalFrames += decodeUnit->frameNumber - (lastFrameNumber + 1);
+        // Any frame number greater than m_LastFrameNumber + 1 represents a dropped frame. MoonCast: as on Android,
+        // only a step forward counts (the same number again, or one going back, isn't frames lost and used to take
+        // frames off the counts), and a jump of thousands is a renumbering, not loss.
+        int step = (int)((uint32_t)decodeUnit->frameNumber - (uint32_t)lastFrameNumber);
+        if (step > 1 && step < 1000) {
+            currentVideoStats.networkDroppedFrames += step - 1;
+            currentVideoStats.totalFrames += step - 1;
+        }
+#if DEBUG
+        if (step < windowMinStep) windowMinStep = step;
+        if (step > windowMaxStep) windowMaxStep = step;
+        if (step < 1 || step >= 1000) windowOddSteps++;
+#endif
         lastFrameNumber = decodeUnit->frameNumber;
     }
     
@@ -235,6 +262,9 @@ int ArInit(int audioConfiguration, POPUS_MULTISTREAM_CONFIGURATION opusConfig, v
     int err;
     SDL_AudioSpec want, have;
     
+    // MoonCast: SDL's audio brings in its events, which by default catch SIGINT and SIGTERM (to turn them into an
+    // SDL_QUIT nobody reads here): the app then ignored a terminate for the whole stream
+    SDL_SetHint(SDL_HINT_NO_SIGNAL_HANDLERS, "1");
     if (SDL_InitSubSystem(SDL_INIT_AUDIO) < 0) {
         Log(LOG_E, @"Failed to initialize audio subsystem: %s\n", SDL_GetError());
         return -1;
@@ -405,10 +435,20 @@ void ClSetControllerLED(uint16_t controllerNumber, uint8_t r, uint8_t g, uint8_t
     // We dispatch this async to get out because this can be invoked
     // on a thread inside common and we don't want to deadlock. It also avoids
     // blocking on the caller's thread waiting to acquire initLock.
+    // MoonCast: going to the background ends the stream; a little background time lets the PC hear the goodbye
+    // (RTSP teardown, ENet disconnect) before iOS suspends the app
+    __block UIBackgroundTaskIdentifier task = [[UIApplication sharedApplication] beginBackgroundTaskWithName:@"MoonCast stream stop" expirationHandler:^{
+        [[UIApplication sharedApplication] endBackgroundTask:task];
+        task = UIBackgroundTaskInvalid;
+    }];
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_HIGH, 0), ^{
         [initLock lock];
         LiStopConnection();
         [initLock unlock];
+        if (task != UIBackgroundTaskInvalid) {
+            [[UIApplication sharedApplication] endBackgroundTask:task];
+            task = UIBackgroundTaskInvalid;
+        }
     });
 }
 

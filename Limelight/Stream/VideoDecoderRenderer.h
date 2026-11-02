@@ -29,6 +29,9 @@
 - (BOOL)mcPyroWave;
 /// MoonCast: PyroWave's GPU decode time per frame over the last second, ms (-1: none)
 - (double)mcDecodeMs;
+/// MoonCast: PyroWave's frame rates over the last second: "received", "decoded", "presented", "skipped" (nil: not
+/// PyroWave, or before the first second)
+- (nullable NSDictionary*)mcPyroRates;
 
 - (int)submitDecodeBuffer:(unsigned char *)data length:(int)length bufferType:(int)bufferType decodeUnit:(PDECODE_UNIT)du;
 

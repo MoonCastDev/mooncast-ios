@@ -143,6 +143,11 @@ final class MCStatsPill: UIView {
             if let m = num("mbps") { rows.append(("Bitrate", String(format: m < 10 ? "%.1f Mbps" : "%.0f Mbps", m))) }
             if let r = rtt { rows.append(("Network delay", String(format: "%.0f ms", r) + (num("rttVar").map { String(format: " ± %.0f", $0) } ?? ""))) }
             if let dec = num("decode") { rows.append(("Decode", String(format: "%.1f ms", dec))) }
+            // PyroWave: frames that arrived, and those skipped because a newer one was waiting (the frame rate above
+            // is the ones on screen)
+            if let r = num("receivedFps") {
+                rows.append(("Received", String(format: "%.0f fps", r) + (num("skippedFps").map { $0 >= 0.5 ? String(format: " · %.0f skipped", $0) : "" } ?? "")))
+            }
             if let h = num("host") {
                 rows.append(("Host processing", num("hostMin").flatMap { mn in num("hostMax").map { mx in
                     String(format: "%.1f / %.1f / %.1f ms", mn, h, mx) } } ?? String(format: "%.1f ms", h)))

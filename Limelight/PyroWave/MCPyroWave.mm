@@ -435,6 +435,10 @@ static BOOL boolDefault(NSString* key, BOOL def) {
     int _gpuFrames;
     CFTimeInterval _windowStart;
     double _decodeMs;
+    // frame counts in the current one-second window, and the rates of the last one
+    std::atomic<int> _nReceived, _nSkipped, _nDecoded, _nPresented, _nBad;
+    CFTimeInterval _rateStart;
+    double _rates[4];
 
     std::unique_ptr<GpuBoost> _boost;
     BOOL _boostWanted;
@@ -461,6 +465,7 @@ static BOOL boolDefault(NSString* key, BOOL def) {
     _dither = MCPyroWave.ditherMode;
     _peakNits = 1000.0f;
     _decodeMs = -1;
+    for (int i = 0; i < 4; i++) _rates[i] = -1;
 
     pyrowave_decoder_create_info di = {};
     di.device = dev;
@@ -656,8 +661,13 @@ static BOOL boolDefault(NSString* key, BOOL def) {
 
 - (int)submitFrame:(const uint8_t*)data length:(size_t)length {
     if (_stopped || _background) return DR_OK;
+    _nReceived++;
+    [self tickRates];
     // Every frame stands alone, so with a newer one waiting this one is just skipped: the newest is shown
-    if (LiGetPendingVideoFrames() > 0) return DR_OK;
+    if (LiGetPendingVideoFrames() > 0) {
+        _nSkipped++;
+        return DR_OK;
+    }
     [_frameLock lock];
     if (!_stopped && _decoder) {
         @autoreleasepool {
@@ -668,8 +678,44 @@ static BOOL boolDefault(NSString* key, BOOL def) {
     return DR_OK;
 }
 
+// Once a second (on the frame thread): the last second's rates, and a log line in debug builds
+- (void)tickRates {
+    const CFTimeInterval now = CACurrentMediaTime();
+    if (_rateStart == 0) {
+        _rateStart = now;
+        return;
+    }
+    const double t = now - _rateStart;
+    if (t < 1.0) return;
+    const int rec = _nReceived.exchange(0), skip = _nSkipped.exchange(0), dec = _nDecoded.exchange(0);
+    const int pres = _nPresented.exchange(0), bad = _nBad.exchange(0);
+    {
+        std::lock_guard<std::mutex> lock(_statsLock);
+        _rates[0] = rec / t;
+        _rates[1] = dec / t;
+        _rates[2] = pres / t;
+        _rates[3] = skip / t;
+    }
+    _rateStart = now;
+#if DEBUG
+    NSLog(@"MoonCast: PyroWave %.2f s: %d received, %d decoded, %d presented, %d skipped (newer waiting), %d bad, GPU decode %.2f ms",
+          t, rec, dec, pres, skip, bad, self.decodeMs);
+#endif
+}
+
+- (double)rate:(int)i {
+    std::lock_guard<std::mutex> lock(_statsLock);
+    return _rates[i];
+}
+
+- (double)receivedFps { return [self rate:0]; }
+- (double)decodedFps { return [self rate:1]; }
+- (double)presentedFps { return [self rate:2]; }
+- (double)skippedFps { return [self rate:3]; }
+
 - (void)badFrame:(const char*)why {
     _badFrames++;
+    _nBad++;
     if (!_loggedBadFrame) {
         _loggedBadFrame = YES;
         NSLog(@"MoonCast: PyroWave: frame dropped: %s", why);
@@ -767,9 +813,16 @@ static BOOL boolDefault(NSString* key, BOOL def) {
         [enc setFragmentBytes:&pc length:sizeof(pc) atIndex:0];
         [enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:3];
         [enc endEncoding];
+        // counted when it's really on screen
+        __weak MCPyroWaveRenderer* counter = self;
+        [drawable addPresentedHandler:^(id<MTLDrawable> d) {
+            MCPyroWaveRenderer* me = counter;
+            if (me && d.presentedTime > 0) me->_nPresented++;
+        }];
         [drawCb presentDrawable:drawable];
     }
     [drawCb commit];
+    _nDecoded++;
 
     if (pipe && !_shown) {
         _shown = YES;

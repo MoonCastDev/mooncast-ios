@@ -210,6 +210,13 @@ int DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
     return mcPyro != nil ? mcPyro.decodeMs : -1;
 }
 
+- (NSDictionary*)mcPyroRates
+{
+    MCPyroWaveRenderer* pw = mcPyro;
+    if (pw == nil || pw.presentedFps < 0) return nil;
+    return @{ @"received": @(pw.receivedFps), @"decoded": @(pw.decodedFps), @"presented": @(pw.presentedFps), @"skipped": @(pw.skippedFps) };
+}
+
 - (void)mcRelayout
 {
     CGSize videoSize = [MCPictureShape sizeIn:_view.bounds.size aspect:_streamAspectRatio];
@@ -222,6 +229,10 @@ int DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
 - (void)stop
 {
     mcFrameThreadRunning = NO;
+    if (mcPyro != nil) {
+        // the frame thread may be waiting for a frame that won't come
+        LiWakeWaitForVideoFrame();
+    }
     [mcPyro stop];
     [_displayLink invalidate];
     [mcFsrDecoder invalidate];

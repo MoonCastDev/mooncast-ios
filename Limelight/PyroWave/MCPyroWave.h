@@ -56,6 +56,12 @@ NS_ASSUME_NONNULL_BEGIN
 
 /// The GPU's decode time per frame over the last second, in ms (-1 before the first second).
 @property (readonly) double decodeMs;
+/// Frames per second over the last second (-1 before the first second): handed to the renderer, decoded, actually
+/// presented on screen (the drawable's presented handler), and skipped because a newer one was already waiting.
+@property (readonly) double receivedFps;
+@property (readonly) double decodedFps;
+@property (readonly) double presentedFps;
+@property (readonly) double skippedFps;
 /// Called once, on the main thread, when the first frame is on screen.
 @property (nullable, copy) void (^onFirstFrame)(void);
 

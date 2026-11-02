@@ -174,7 +174,13 @@
     BOOL haveRtt = LiGetEstimatedRttInfo(&rtt, &variance);
     float host = stats.framesWithHostProcessingLatency != 0
         ? (float)stats.totalHostProcessingLatency / stats.framesWithHostProcessingLatency / 10.f : -1;
-    return @{ @"fps": @(stats.totalFrames / interval),
+    // MoonCast: a PyroWave stream's frame rate is the frames really on screen; what arrived and what was skipped
+    // for a newer one (it shows the newest) are beside it
+    NSDictionary* pyro = [_mcRenderer mcPyroRates];
+    float fps = pyro != nil ? [pyro[@"presented"] floatValue] : stats.totalFrames / interval;
+    return @{ @"fps": @(fps),
+              @"receivedFps": pyro != nil ? pyro[@"received"] : @(-1),
+              @"skippedFps": pyro != nil ? pyro[@"skipped"] : @(-1),
               @"rtt": haveRtt ? @(rtt) : @(-1),
               @"host": @(host),
               @"hostMin": @(stats.framesWithHostProcessingLatency != 0 ? stats.minHostProcessingLatency / 10.f : -1),
