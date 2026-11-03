@@ -327,14 +327,20 @@ final class MCLink: NSObject {
 
     private static var timer: Timer?
     private static var reconnects: [Date] = []
+    /// Each watch() is one controller run; its number is on every log line, so a new run shows.
+    private static var runs = 0
 
     enum Health { case good, strained, congested }
 
     /// Watches the stream of [game] that just started with [cfg] and moves its bitrate with the network.
     static func watch(_ game: MCGame, cfg: StreamConfiguration) {
+        if timer != nil { log("MoonCast: auto bitrate: run \(runs) replaced by a new stream") }
         timer?.invalidate()
         timer = nil
         guard enabled, !forced, let host = game.host else { return }
+        runs += 1
+        let run = runs
+        log("MoonCast: auto bitrate: run \(run) watches \(game.title) at \(cfg.bitRate / 1000) of \(ceiling / 1000) Mbps")
         let w = Int(cfg.width), h = Int(cfg.height), fps = Int(cfg.frameRate)
         let floor = floorKbps(w, h, fps)
         let rec = Int(MCPyroWave.recommendedKbpsWidth(cfg.width, height: cfg.height, fps: cfg.frameRate))
@@ -365,12 +371,18 @@ final class MCLink: NSObject {
             MCToast.show(text, seconds: 5)
         }
 
+        /// The minute of good starts again, and says why.
+        func resetGood(_ why: String) {
+            if good > 0 { fputs("MoonCast: auto bitrate: run \(run): good \(good) -> 0 (\(why))\n", stderr) }
+            good = 0
+        }
+
         func moved(_ kbps: Int) {
             current = kbps
             liveKbps = kbps
             lastChange = Date()
             congested = 0
-            good = 0
+            resetGood("bitrate changed to \(kbps / 1000) Mbps")
             samples = []
         }
 
@@ -411,6 +423,7 @@ final class MCLink: NSObject {
         timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { t in
             guard McVideoRunning() else {
                 if activeSince != nil || -started.timeIntervalSinceNow > 30 {
+                    log("MoonCast: auto bitrate: run \(run) ends (video stopped)")
                     t.invalidate()
                     liveKbps = 0
                 }
@@ -431,10 +444,20 @@ final class MCLink: NSObject {
             if activeSince == nil { activeSince = nowT }
             defer { last = s; lastT = nowT }
             guard !busy, let l = last, nowT.timeIntervalSince(activeSince!) >= settleSeconds,
-                  nowT.timeIntervalSince(lastChange) >= settleSeconds else { return }
+                  nowT.timeIntervalSince(lastChange) >= settleSeconds else {
+                #if DEBUG
+                fputs("MoonCast: auto bitrate: run \(run): skipped (\(busy ? "a change in flight" : last == nil ? "first sample" : "settling"))\n", stderr)
+                #endif
+                return
+            }
             let dt = nowT.timeIntervalSince(lastT)
             let dp = (s["packets"] ?? 0) - (l["packets"] ?? 0), dm = max(0, (s["missing"] ?? 0) - (l["missing"] ?? 0))
-            guard dt > 0.2, dp > 0 else { return }
+            guard dt > 0.2, dp > 0 else {
+                #if DEBUG
+                fputs("MoonCast: auto bitrate: run \(run): skipped (\(dp <= 0 ? "no packets: totals \(Int(l["packets"] ?? 0)) -> \(Int(s["packets"] ?? 0))" : "tick \(dt) s"))\n", stderr)
+                #endif
+                return
+            }
             let wireKbps = Int(((s["bytes"] ?? 0) - (l["bytes"] ?? 0)) * 8 / 1000 / dt)
             let loss = dm / (dp + dm)
             let lostFrames = max(0, (s["unrecoverable"] ?? 0) - (l["unrecoverable"] ?? 0))
@@ -467,10 +490,10 @@ final class MCLink: NSObject {
                 samples = []
             }
             // a second strained only by RTT pauses the minute of good; loss restarts it
-            if health == .good { good += 1 } else if why != "rtt rising" { good = 0 }
+            if health == .good { good += 1 } else if why != "rtt rising" { resetGood(why) }
             #if DEBUG
-            fputs(String(format: "MoonCast: auto bitrate: %@%@ · %.2f%% missing, %.0f frames lost, rtt %.0f (base %.0f, var %.0f) ms, %ld Mbps in, at %ld of %ld Mbps, good %ld/%ld\n",
-                         health == .good ? "good" : health == .strained ? "strained" : "congested", why.isEmpty ? "" : " (\(why))",
+            fputs(String(format: "MoonCast: auto bitrate: run %ld: %@%@ · %.2f%% missing, %.0f frames lost, rtt %.0f (base %.0f, var %.0f) ms, %ld Mbps in, at %ld of %ld Mbps, good %ld/%ld\n",
+                         run, health == .good ? "good" : health == .strained ? "strained" : "congested", why.isEmpty ? "" : " (\(why))",
                          loss * 100, lostFrames, rtt, rttBase.isFinite ? rttBase : -1, rttVar, wireKbps / 1000, current / 1000, ceiling / 1000,
                          good, goodSeconds), stderr)
             #endif
@@ -507,7 +530,7 @@ final class MCLink: NSObject {
 
             // 60 s good below the ceiling: a fifth up, at most once per back-off
             guard good >= goodSeconds else { return }
-            good = 0
+            resetGood("a minute of good, checking a step up")
             if wireFor(current) > (capacity(host, net) ?? 0) { remember(host, net, wireKbps: wireFor(current)) }
             guard current < ceiling, nowT.timeIntervalSince(lastUp ?? .distantPast) >= backoff else {
                 if nowT.timeIntervalSince(lastUp ?? .distantPast) > 120 { backoff = 60 }

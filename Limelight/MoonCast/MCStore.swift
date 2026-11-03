@@ -322,6 +322,7 @@ final class MCStore: NSObject, ObservableObject, DiscoveryCallback, PairCallback
 
     private func stream(_ g: MCGame) {
         guard let a = g.app else { return }
+        fputs("MoonCast: stream start: \(g.title)\n", stderr)
         MCRecents.touch(g.key)
         playing = g
         MCUsage.used("pc")
