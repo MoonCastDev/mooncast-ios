@@ -470,7 +470,8 @@ static BOOL boolDefault(NSString* key, BOOL def) {
     int _drawingSlot;
     uint64_t _latestSeq;
     uint64_t _drawnSeq;
-    bool _presentInFlight;
+    // presented drawables not on screen yet (two at most, of three)
+    int _presentsInFlight;
     CFTimeInterval _presentSince;
     std::atomic<int> _nDrawn;
     // per-stage times over the stats window (ms): waiting for a drawable, drawing on the GPU, commit to on
@@ -563,12 +564,13 @@ static BOOL boolDefault(NSString* key, BOOL def) {
 
     _layer = [CAMetalLayer layer];
     _layer.device = _mtl;
+    // eligible to go straight to the display: opaque, drawn only by us, no transaction, pixel exact (layoutInFrame)
     _layer.framebufferOnly = YES;
     _layer.opaque = YES;
+    _layer.presentsWithTransaction = NO;
     _layer.backgroundColor = UIColor.blackColor.CGColor;
     _layer.contentsScale = view.window.screen.nativeScale ?: UIScreen.mainScreen.nativeScale;
-    // Three, so taking a drawable never waits for a refresh: at most one presented frame waits to go on screen
-    // (presentLatest), so this adds no delay
+    // Three, so taking a drawable never waits for a refresh while two presented frames wait for the screen
     _layer.maximumDrawableCount = 3;
     [self configureLayerForHdr:NO];
     // over the (hidden) display layer, under everything drawn on top of the picture
@@ -627,6 +629,12 @@ static BOOL boolDefault(NSString* key, BOOL def) {
     [CATransaction commit];
     const CGFloat k = layer.contentsScale;
     layer.drawableSize = CGSizeMake(MAX(1, round(frame.size.width * k)), MAX(1, round(frame.size.height * k)));
+    const CGSize screen = UIScreen.mainScreen.nativeBounds.size;
+    PWLog(@"MoonCast: PyroWave layer %.1fx%.1f pt at %.1f,%.1f, scale %.2f, drawable %.0fx%.0f, screen %.0fx%.0f px%@", frame.size.width,
+          frame.size.height, frame.origin.x, frame.origin.y, k, layer.drawableSize.width, layer.drawableSize.height,
+          MAX(screen.width, screen.height), MIN(screen.width, screen.height),
+          (fabs(MAX(layer.drawableSize.width, layer.drawableSize.height) - MAX(screen.width, screen.height)) < 1 &&
+           fabs(MIN(layer.drawableSize.width, layer.drawableSize.height) - MIN(screen.width, screen.height)) < 1) ? @" (pixel exact, full screen)" : @"");
 }
 
 // SDR: the stream's own precision in sRGB. HDR on a screen with EDR: PQ BT.2100, as the host sends it. Main thread.
@@ -832,8 +840,8 @@ static BOOL boolDefault(NSString* key, BOOL def) {
     dispatch_async(_presentQueue, ^{ [weakSelf presentLatest]; });
 }
 
-/// Draws the newest decoded frame and presents it, unless a presented one isn't on screen yet: then this runs again
-/// when it is, with whatever is newest by then (so a frame never waits behind more than one). Present queue.
+/// Draws the newest decoded frame and presents it, unless two presented ones aren't on screen yet: then this runs
+/// again when one is, with whatever is newest by then. Present queue.
 - (void)presentLatest {
     if (_stopped || _background) return;
     const CFTimeInterval start = CACurrentMediaTime();
@@ -841,13 +849,15 @@ static BOOL boolDefault(NSString* key, BOOL def) {
     uint64_t seq;
     {
         std::lock_guard<std::mutex> lock(_presentLock);
-        // a drawable that never says it was presented doesn't hold the picture up for long
-        if (_presentInFlight && start - _presentSince < 0.1) return;
+        // two presented frames may wait for the screen (one for this refresh, one for the next); a drawable
+        // that never says it was presented doesn't hold the picture up for long
+        if (_presentsInFlight >= 2 && start - _presentSince < 0.1) return;
+        if (_presentsInFlight >= 2) _presentsInFlight = 1;
         if (_latestSlot < 0 || _latestSeq == _drawnSeq) return;
         s = _latestSlot;
         seq = _latestSeq;
         _drawingSlot = s;
-        _presentInFlight = true;
+        _presentsInFlight++;
         _presentSince = start;
     }
     id<CAMetalDrawable> drawable = [_layer nextDrawable];
@@ -855,7 +865,7 @@ static BOOL boolDefault(NSString* key, BOOL def) {
     id<MTLRenderPipelineState> pipe = drawable ? [self pipelineFor:drawable.texture.pixelFormat] : nil;
     if (!pipe) {
         std::lock_guard<std::mutex> lock(_presentLock);
-        _presentInFlight = false;
+        if (_presentsInFlight > 0) _presentsInFlight--;
         _drawingSlot = -1;
         return;
     }
@@ -918,7 +928,7 @@ static BOOL boolDefault(NSString* key, BOOL def) {
         if (!me) return;
         {
             std::lock_guard<std::mutex> lock(me->_presentLock);
-            me->_presentInFlight = false;
+            if (me->_presentsInFlight > 0) me->_presentsInFlight--;
         }
         if (d.presentedTime > 0) {
             me->_nPresented++;
@@ -928,6 +938,7 @@ static BOOL boolDefault(NSString* key, BOOL def) {
         // a newer frame may have been decoded while this one waited for the screen
         dispatch_async(me->_presentQueue, ^{ [weakSelf presentLatest]; });
     }];
+    // presented as soon as the GPU is scheduled to draw it (presentDrawable's own timing, without a handler hop)
     [drawCb presentDrawable:drawable];
     committed = CACurrentMediaTime();
     [drawCb commit];
