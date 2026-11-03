@@ -128,6 +128,8 @@ struct MCTvControllerView: View {
             focus.preferred["tvcmenu"] = "tvc:here"
             s.begin()
             NotificationCenter.default.addObserver(s, selector: #selector(MCTvSession.hookPads), name: .GCControllerDidConnect, object: nil)
+            // the screen doesn't lock while this iPad is the TV's controller (from the start, not only after menu mode)
+            UIApplication.shared.isIdleTimerDisabled = true
         }
         .onDisappear {
             focus.popScope()

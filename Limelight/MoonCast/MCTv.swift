@@ -272,7 +272,10 @@ final class MCPadServer {
 
     func start() {
         q.async { [self] in
-            guard listener == nil, let l = try? NWListener(using: .tcp, on: NWEndpoint.Port(rawValue: UInt16(MCTvFinder.port))!) else { return }
+            // no Nagle on the pad's socket (as Android's): each button press goes out at once
+            let tcp = NWProtocolTCP.Options()
+            tcp.noDelay = true
+            guard listener == nil, let l = try? NWListener(using: NWParameters(tls: nil, tcp: tcp), on: NWEndpoint.Port(rawValue: UInt16(MCTvFinder.port))!) else { return }
             l.newConnectionHandler = { [weak self] c in self?.accept(c) }
             l.start(queue: q)
             listener = l
