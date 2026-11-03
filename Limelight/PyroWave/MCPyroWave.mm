@@ -387,6 +387,10 @@ static std::atomic<double> gPresentedFps{-1};
 
 + (double)lastPresentedFps { return gStreamActive ? gPresentedFps.load() : -1; }
 
+static std::atomic<double> gDecodeMs{-1};
+
++ (double)lastDecodeMs { return gStreamActive ? gDecodeMs.load() : -1; }
+
 + (NSDictionary<NSString*, NSNumber*>*)receiveTotals {
     uint64_t packets = 0, bytes = 0, missing = 0;
     LiGetVideoReceiveTotals(&packets, &bytes, &missing);
@@ -972,6 +976,7 @@ static BOOL boolDefault(NSString* key, BOOL def) {
     // a one second window, like the other stream stats
     if (now - _windowStart >= 1.0) {
         _decodeMs = _gpuMsSum / _gpuFrames;
+        gDecodeMs = _decodeMs;
         _gpuMsSum = 0;
         _gpuFrames = 0;
         _windowStart = now;

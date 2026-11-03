@@ -29,6 +29,8 @@ NS_ASSUME_NONNULL_BEGIN
 /// The PyroWave style's spatial dithering: 0 off, 1 low, 2 high (default low).
 @property (class, readonly) int ditherMode;
 
+/// The PyroWave stream's GPU decode time per frame over the last second, ms (-1: none).
+@property (class, readonly) double lastDecodeMs;
 /// The PyroWave stream's frames on screen per second over the last second (-1: none).
 @property (class, readonly) double lastPresentedFps;
 
