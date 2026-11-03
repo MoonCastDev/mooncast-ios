@@ -714,6 +714,12 @@
 - (NSDictionary*) mcStats {
     NSMutableDictionary* d = [[_streamMan mcStats] mutableCopy] ?: [NSMutableDictionary dictionary];
     d[@"mbps"] = @(self.streamConfig.bitRate / 1000.0f);
+    // MoonCast: Automatic bitrate: the rate the stream runs at now, and the Wi-Fi limit learnt (MCLink)
+    if (MCLink.liveKbps > 0) {
+        d[@"mbps"] = @(MCLink.liveKbps / 1000.0f);
+        d[@"bitrateAuto"] = @YES;
+        if (MCLink.liveLimitKbps > 0) d[@"limitMbps"] = @(MCLink.liveLimitKbps / 1000.0f);
+    }
     d[@"size"] = [NSString stringWithFormat:@"%dx%d", self.streamConfig.width, self.streamConfig.height];
     d[@"targetFps"] = @(self.streamConfig.frameRate);
     return d;

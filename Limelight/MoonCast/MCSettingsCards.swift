@@ -918,6 +918,15 @@ extension MCRoot {
         // the PyroWave style: its Auto is its recommended bitrate, which follows the resolution and frame rate
         let pyro = style?.pyro == true
         rows.append(AnyView(bitrateRow(v, recommended: pyro ? MCPcStyles.pyroRecommended(MCPcStyles.values("pyro")) : nil, m, p)))
+        // Fine-tune (the live settings): Automatic bitrate, per profile (MCLink)
+        if style == nil {
+            let auto = MCLink.enabled
+            let limit = MCLink.displayCapKbps.map { " Wi-Fi here: ~\($0 / 1000) Mbps." } ?? ""
+            rows.append(AnyView(vrow("autoRate", "Automatic bitrate", onOff(auto),
+                                     sub: "Steps down when Wi-Fi drops packets, back up when it's clean." + (auto ? limit : ""), m, p) {
+                UserDefaults.standard.set(!auto, forKey: "mc_auto_bitrate"); settingsRev += 1
+            }))
+        }
         // a play style: PyroWave is its codec; the other styles pick theirs
         if !pyro {
             let codec = v.i("codec", 0)

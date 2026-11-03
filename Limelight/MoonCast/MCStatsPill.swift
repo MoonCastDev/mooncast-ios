@@ -140,7 +140,12 @@ final class MCStatsPill: UIView {
             if let s = d["size"] as? String, !s.isEmpty { rows.append(("Video", s.replacingOccurrences(of: "x", with: " × "))) }
             rows.append(("Frame rate", fpsText + " fps"))
             if let c = d["codec"] as? String, !c.isEmpty { rows.append(("Codec", c)) }
-            if let m = num("mbps") { rows.append(("Bitrate", String(format: m < 10 ? "%.1f Mbps" : "%.0f Mbps", m))) }
+            if let m = num("mbps") {
+                // Automatic bitrate: "(auto)", and the Wi-Fi limit learnt
+                let auto = (d["bitrateAuto"] as? NSNumber)?.boolValue == true
+                let limit = num("limitMbps").map { String(format: " · limit %.0f", $0) } ?? ""
+                rows.append(("Bitrate", String(format: m < 10 ? "%.1f Mbps" : "%.0f Mbps", m) + (auto ? " (auto)" + limit : "")))
+            }
             if let r = rtt { rows.append(("Network delay", String(format: "%.0f ms", r) + (num("rttVar").map { String(format: " ± %.0f", $0) } ?? ""))) }
             if let dec = num("decode") { rows.append(("Decode", String(format: "%.1f ms", dec))) }
             // PyroWave: frames that arrived, and those skipped because a newer one was waiting (the frame rate above

@@ -25,7 +25,32 @@
 #import <VideoToolbox/VideoToolbox.h>
 #include <Limelight.h>
 
+/// The raw answer to a request (Polaris's JSON rather than Moonlight's XML).
+@interface MCRawResponse : NSObject <Response>
+@end
+
+@implementation MCRawResponse
+@synthesize statusCode, statusMessage, data;
+- (void) populateWithData:(NSData*)d { self.data = d; self.statusCode = 200; }
+@end
+
 @implementation MCBridge
+
++ (nullable NSDictionary*) polarisJSON:(TemporaryHost*)host path:(NSString*)path body:(nullable NSDictionary*)body {
+    NSData* json = nil;
+    if (body != nil) {
+        json = [NSJSONSerialization dataWithJSONObject:body options:0 error:nil];
+        if (json == nil) return nil;
+    }
+    HttpManager* hMan = [[HttpManager alloc] initWithHost:host];
+    NSURLRequest* req = [hMan newPolarisRequest:path jsonBody:json];
+    if (req == nil) return nil;
+    MCRawResponse* resp = [[MCRawResponse alloc] init];
+    [hMan executeRequestSynchronously:[HttpRequest requestForResponse:resp withUrlRequest:req]];
+    if (resp.data == nil) return nil;
+    id parsed = [NSJSONSerialization JSONObjectWithData:resp.data options:0 error:nil];
+    return [parsed isKindOfClass:[NSDictionary class]] ? parsed : nil;
+}
 
 + (NSDictionary<NSString*, NSData*>*) clientIdentity {
     NSData* cert = [CryptoManager readCertFromFile];

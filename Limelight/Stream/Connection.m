@@ -76,13 +76,21 @@ int DrDecoderSetup(int videoFormat, int width, int height, int redrawRate, void*
     return 0;
 }
 
+// MoonCast: the stream's video is running (MCLink watches it)
+static volatile BOOL videoRunning;
+
+int McActiveVideoFormat(void) { return activeVideoFormat; }
+BOOL McVideoRunning(void) { return videoRunning; }
+
 void DrStart(void)
 {
     [renderer start];
+    videoRunning = YES;
 }
 
 void DrStop(void)
 {
+    videoRunning = NO;
     [renderer stop];
 }
 

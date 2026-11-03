@@ -286,6 +286,21 @@
     return [self createRequestFromString:urlString timeout:LONG_TIMEOUT_SEC];
 }
 
+- (NSURLRequest*) newPolarisRequest:(NSString*)path jsonBody:(NSData*)jsonBody {
+    if (![self ensureHttpsUrlPopulated:NO]) {
+        return nil;
+    }
+    NSString* urlString = [NSString stringWithFormat:@"%@%@?uniqueid=%@", _baseHTTPSURL, path, _uniqueId];
+    NSMutableURLRequest* request = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:urlString]];
+    [request setTimeoutInterval:SHORT_TIMEOUT_SEC];
+    if (jsonBody != nil) {
+        request.HTTPMethod = @"POST";
+        request.HTTPBody = jsonBody;
+        [request setValue:@"application/json" forHTTPHeaderField:@"Content-Type"];
+    }
+    return request;
+}
+
 - (NSURLRequest*) newQuitAppRequest {
     if (![self ensureHttpsUrlPopulated:NO]) {
         return nil;

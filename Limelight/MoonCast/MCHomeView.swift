@@ -1062,6 +1062,9 @@ struct MCRoot: View {
                 }
                 settings.save { $0.bitrate = i == 0 ? auto : rates[i - 1] }
             }
+            toggle("s:autorate", "Automatic bitrate", "Steps down when Wi-Fi drops packets, back up when it's clean", MCLink.enabled, m, p) {
+                UserDefaults.standard.set(!MCLink.enabled, forKey: "mc_auto_bitrate")
+            }
             choice("s:codec", "Video codec", "HEVC and AV1 look better at the same bitrate", ["Auto", "H.264", "HEVC", "AV1"],
                    Int(v.codec), m, p) { i in settings.save { $0.codec = UInt32(i) } }
             let fsrOn = UserDefaults.standard.string(forKey: "mc_super_resolution") == "fsr1"

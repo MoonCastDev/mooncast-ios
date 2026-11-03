@@ -30,6 +30,9 @@
 - (NSURLRequest*) newQuitAppRequest;
 - (NSURLRequest*) newAppAssetRequestWithAppId:(NSString*)appId;
 - (void) executeRequestSynchronously:(HttpRequest*)request;
+/// MoonCast: a Polaris endpoint on the paired HTTPS port (client certificate, pinned server certificate): GET when
+/// [jsonBody] is nil, else POST with it as application/json.
+- (NSURLRequest*) newPolarisRequest:(NSString*)path jsonBody:(NSData*)jsonBody;
 
 @end
 
