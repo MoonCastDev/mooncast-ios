@@ -45,15 +45,35 @@ enum MCHostCaps {
     static let liveBitrate: [LiveBitrate] = [
         // Polaris: the paired stream owner sets a live bitrate (docs/live-tuning.md; nvhttp.cpp
         // /polaris/v1/session/bitrate), applied by its encoders mid-stream, PyroWave from the next frame
+        // its encoder can change live only where status says adaptive_runtime_update_supported (VAAPI, QSV, AMF and
+        // software encoders can't), and bitrate_kbps is the ENCODER's rate: status's bitrate_units says how the
+        // host split our launch request (split_kbps) into the encoder's (encoder_kbps)
         LiveBitrate(name: "Polaris live bitrate",
-                    probe: { h in MCBridge.polarisJSON(h, path: "/polaris/v1/session/status", body: nil)?["app_session_id"] != nil },
+                    probe: { h in
+                        guard let st = MCBridge.polarisJSON(h, path: "/polaris/v1/session/status", body: nil), st["app_session_id"] != nil else { return false }
+                        let live = (st["adaptive_runtime_update_supported"] as? Bool) == true
+                        if !live { MCLink.log("MoonCast: auto bitrate: Polaris's encoder can't change bitrate live (\(st["adaptive_bitrate_reason"] ?? "no reason"))") }
+                        return live
+                    },
                     set: { h, kbps in
                         guard let st = MCBridge.polarisJSON(h, path: "/polaris/v1/session/status", body: nil),
                               let session = st["app_session_id"] as? String, !session.isEmpty,
-                              let gen = (st["session_generation"] as? NSNumber)?.int64Value, gen > 0 else { return false }
+                              let gen = (st["session_generation"] as? NSNumber)?.int64Value, gen > 0,
+                              (st["adaptive_runtime_update_supported"] as? Bool) == true else { return false }
+                        var encoder = kbps
+                        if let u = st["bitrate_units"] as? [String: Any], let enc = (u["encoder_kbps"] as? NSNumber)?.doubleValue, enc > 0 {
+                            if let split = (u["split_kbps"] as? NSNumber)?.doubleValue, split > 0 {
+                                encoder = Int(Double(kbps) * enc / split)
+                            }
+                            // the host capped our request: never above the encoder rate it settled on
+                            if u["cap_kbps"] is NSNumber { encoder = min(encoder, Int(enc)) }
+                        }
                         let a = MCBridge.polarisJSON(h, path: "/polaris/v1/session/bitrate",
-                                                     body: ["bitrate_kbps": kbps, "session_generation": gen, "app_session_id": session])
-                        return (a?["status"] as? Bool) == true
+                                                     body: ["bitrate_kbps": max(1000, encoder), "session_generation": gen, "app_session_id": session])
+                        let ok = (a?["status"] as? Bool) == true
+                        MCLink.log("MoonCast: auto bitrate: Polaris: \(kbps) kbps requested = \(encoder) kbps at the encoder: " +
+                                   (ok ? "target \(a?["bitrate_kbps"] ?? "?") kbps" : "refused (\(a?["error"] ?? a?["state"] ?? "no answer"))"))
+                        return ok
                     }),
     ]
 
@@ -420,9 +440,16 @@ final class MCLink: NSObject {
             let lostFrames = max(0, (s["unrecoverable"] ?? 0) - (l["unrecoverable"] ?? 0))
             let rtt = s["rtt"] ?? -1
             if rtt > 0 && loss < strainedLoss { rttBase = min(rttBase, rtt) }
-            let rttRising = rtt > 0 && rttBase.isFinite && rtt > rttBase * 1.5 + 10
-            let health: Health = loss > congestedLoss || lostFrames >= max(1, Double(fps) * 0.02) ? .congested
-                : (loss > strainedLoss || rttRising ? .strained : .good)
+            let rttVar = s["rttVar"] ?? 0
+            // a queue building: RTT well over its clean baseline, beyond its usual spread
+            let rttRising = rtt > 0 && rttBase.isFinite && rtt > rttBase * 1.5 + max(10, 2 * rttVar)
+            let health: Health
+            let why: String
+            if loss > congestedLoss { health = .congested; why = "loss" }
+            else if lostFrames >= max(1, Double(fps) * 0.02) { health = .congested; why = "frames lost" }
+            else if loss > strainedLoss { health = .strained; why = "some loss" }
+            else if rttRising { health = .strained; why = "rtt rising" }
+            else { health = .good; why = "" }
 
             // the device, not the network: frames waiting to be decoded, or PyroWave showing fewer than arrive
             let pres = MCPyroWave.lastPresentedFps
@@ -439,7 +466,14 @@ final class MCLink: NSObject {
                 congested = 0
                 samples = []
             }
-            good = health == .good ? good + 1 : 0
+            // a second strained only by RTT pauses the minute of good; loss restarts it
+            if health == .good { good += 1 } else if why != "rtt rising" { good = 0 }
+            #if DEBUG
+            fputs(String(format: "MoonCast: auto bitrate: %@%@ · %.2f%% missing, %.0f frames lost, rtt %.0f (base %.0f, var %.0f) ms, %ld Mbps in, at %ld of %ld Mbps, good %ld/%ld\n",
+                         health == .good ? "good" : health == .strained ? "strained" : "congested", why.isEmpty ? "" : " (\(why))",
+                         loss * 100, lostFrames, rtt, rttBase.isFinite ? rttBase : -1, rttVar, wireKbps / 1000, current / 1000, ceiling / 1000,
+                         good, goodSeconds), stderr)
+            #endif
             let cautious = nowT.timeIntervalSince(lastChange) < cautiousWindow
 
             // congested: step down to 80% of what arrived, never below the floor
