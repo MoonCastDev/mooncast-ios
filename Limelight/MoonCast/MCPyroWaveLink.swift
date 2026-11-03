@@ -22,6 +22,16 @@ final class MCPyroWaveLink: NSObject {
     static let lossThreshold = 0.02
     /// Seconds in a row over the threshold before acting, and seconds ignored at the start.
     static let lossSeconds = 3
+    /// A stream started by a step-down needs more to step down again (a dip after the resume isn't the link):
+    /// this share missing for this many seconds.
+    static let repeatLossThreshold = 0.05
+    static let repeatLossSeconds = 5
+    /// A capped stream this clean (share missing) for this long raises what's remembered by [stepUp], for the next start.
+    static let cleanThreshold = 0.005
+    static let cleanSeconds = 60
+    static let stepUp = 1.2
+    /// A capacity learnt longer ago than this counts as unknown.
+    static let maxAge: TimeInterval = 24 * 3600
     static let settleSeconds = 3.0
 
     private static var d: UserDefaults { .standard }
@@ -65,6 +75,10 @@ final class MCPyroWaveLink: NSObject {
     /// The link's measured capacity for [host] on this network, kbps on the wire.
     static func capacity(_ host: TemporaryHost) -> Int? {
         guard let k = key(host), let e = d.dictionary(forKey: "mc_pw_link")?[k] as? [String: Any] else { return nil }
+        if let at = e["at"] as? Double, Date().timeIntervalSince1970 - at > maxAge {
+            log("MoonCast: PyroWave: the remembered link (~\((e["kbps"] as? Int ?? 0) / 1000) Mbps) is over a day old: unknown again")
+            return nil
+        }
         return e["kbps"] as? Int
     }
 
@@ -82,7 +96,9 @@ final class MCPyroWaveLink: NSObject {
     /// network (the style is shared by all PCs), kbps; nil when none is known here.
     static var displayCapKbps: Int? {
         guard let net = subnet(), let all = d.dictionary(forKey: "mc_pw_link") else { return nil }
+        let fresh = Date().timeIntervalSince1970 - maxAge
         let here = all.filter { $0.key.hasSuffix("|\(net)") }.compactMap { $0.value as? [String: Any] }
+            .filter { ($0["at"] as? Double ?? 0) >= fresh }
         let latest = here.max { ($0["at"] as? Double ?? 0) < ($1["at"] as? Double ?? 0) }
         return (latest?["kbps"] as? Int).map(capKbps)
     }
@@ -127,11 +143,13 @@ final class MCPyroWaveLink: NSObject {
             log("MoonCast: PyroWave: MC_PW_KBPS: \(f / 1000) Mbps")
             return Plan()
         }
+        lastCapped = false
         guard let wire = capacity(host) else { return Plan() }
         let cap = capKbps(wire)
         let byHand = userSetRate && decision(host) != "down"
         let capped = Int(cfg.bitRate) > cap && !byHand
         if capped { cfg.bitRate = Int32(cap) }
+        lastCapped = capped
         // 4:4:4 carries twice the chroma of 4:2:0: below two thirds of the recommended (4:4:4) rate, 4:2:0 spends
         // the bits better
         let rec = Int(MCPyroWave.recommendedKbpsWidth(cfg.width, height: cfg.height, fps: cfg.frameRate))
@@ -146,12 +164,22 @@ final class MCPyroWaveLink: NSObject {
     // MARK: a stream running
 
     private static var timer: Timer?
+    /// The stream prepare() set up last was held down by the link.
+    private static var lastCapped = false
     private static var stepDowns: [Date] = []
 
-    /// Watches the PyroWave stream of [game] that just started at [kbps] for a full link.
-    static func watch(_ game: MCGame, kbps: Int) {
+    /// Watches the PyroWave stream of [game] that just started at [kbps] ([recKbps]: the style's Recommended at
+    /// its size and frame rate) for a full link, and a capped one for a link that carries more after all.
+    static func watch(_ game: MCGame, kbps: Int, recKbps: Int) {
         timer?.invalidate()
         guard let host = game.host else { return }
+        let capped = lastCapped
+        // just stepped down: a dip after the resume isn't enough to step down again
+        let cautious = stepDowns.contains { -$0.timeIntervalSinceNow < 120 }
+        let threshold = cautious ? repeatLossThreshold : lossThreshold
+        let needSeconds = cautious ? repeatLossSeconds : lossSeconds
+        var clean = 0
+        var steppedUp = false
         let started = Date()
         var activeSince: Date?
         var last: (p: UInt64, b: UInt64, m: UInt64, t: Date)?
@@ -173,24 +201,44 @@ final class MCPyroWaveLink: NSObject {
             guard dt > 0.2, dp > 0 else { return }
             let wireKbps = Int(Double(now.b - l.b) * 8 / 1000 / dt)
             let loss = dm / (dp + dm)
-            if loss > lossThreshold {
+            if loss > threshold {
                 streak += 1
                 samples.append(wireKbps)
             } else {
                 streak = 0
                 samples = []
             }
-            guard streak >= lossSeconds else { return }
+            clean = loss < cleanThreshold ? clean + 1 : 0
+            if capped && !steppedUp && clean >= cleanSeconds {
+                steppedUp = true
+                raise(host, recKbps: recKbps, kbps: kbps)
+            }
+            guard streak >= needSeconds else { return }
             t.invalidate()
             let carried = samples.reduce(0, +) / samples.count
-            linkFull(game, host: host, kbps: kbps, carriedKbps: carried, loss: loss)
+            linkFull(game, host: host, kbps: kbps, carriedKbps: carried, loss: loss, cautious: cautious)
         }
     }
 
-    private static func linkFull(_ game: MCGame, host: TemporaryHost, kbps: Int, carriedKbps: Int, loss: Double) {
+    /// A capped stream ran clean for a minute: the link may carry more than was learnt. What's remembered goes up
+    /// by a fifth (never above what the style's Recommended needs), for the next start; this stream keeps its rate.
+    private static func raise(_ host: TemporaryHost, recKbps: Int, kbps: Int) {
+        guard let wire = capacity(host) else { return }
+        let top = Int(Double(recKbps) * wireOverhead / share)
+        let up = min(Int(Double(wire) * stepUp), top)
+        guard up > wire else {
+            log("MoonCast: PyroWave: clean for \(cleanSeconds) s at \(kbps / 1000) Mbps; the link limit is already at Recommended")
+            return
+        }
+        remember(host, wireKbps: up)
+        log("MoonCast: PyroWave: clean for \(cleanSeconds) s at \(kbps / 1000) Mbps: link limit ~\(wire / 1000) -> ~\(up / 1000) Mbps, " +
+            "next start \(capKbps(up) / 1000) Mbps")
+    }
+
+    private static func linkFull(_ game: MCGame, host: TemporaryHost, kbps: Int, carriedKbps: Int, loss: Double, cautious: Bool) {
         remember(host, wireKbps: carriedKbps)
         let cap = capKbps(carriedKbps)
-        log("MoonCast: PyroWave link full at \(kbps / 1000) Mbps: \(carriedKbps / 1000) Mbps arrived, \(Int(loss * 100))% missing; " +
+        log("MoonCast: PyroWave link full (\(cautious ? "after a step-down: >5% missing for 5 s" : ">2% missing for 3 s")) at \(kbps / 1000) Mbps: \(carriedKbps / 1000) Mbps arrived, \(Int(loss * 100))% missing; " +
             "this PC on this network now gets \(cap / 1000) Mbps")
         if forcedKbps != nil { return }
         // already at (or under) what the link carries: something else is losing packets

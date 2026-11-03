@@ -309,7 +309,10 @@ final class MCStore: NSObject, ObservableObject, DiscoveryCallback, PairCallback
             let note = MCBridge.offerPyroWave(cfg, away: plan.away, allow444: link.allow444)
             self?.onStream?(cfg)
             if let msg = plan.message ?? note ?? link.note { MCToast.show(msg) }
-            if !plan.away && MCPyroWave.wanted { MCPyroWaveLink.watch(g, kbps: Int(cfg.bitRate)) }
+            if !plan.away && MCPyroWave.wanted {
+                MCPyroWaveLink.watch(g, kbps: Int(cfg.bitRate),
+                                     recKbps: Int(MCPyroWave.recommendedKbpsWidth(cfg.width, height: cfg.height, fps: cfg.frameRate)))
+            }
         }
     }
 
