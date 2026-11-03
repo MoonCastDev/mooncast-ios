@@ -211,12 +211,14 @@ struct MCQuickMenuView: View {
     /// cap), so a pick saves it and reconnects to the same game, which keeps running.
     private func bitrateNow(_ kind: String) -> String {
         switch kind {
-        case "ps5": return MCPs5Store.bitrate == 0 ? "Auto" : "\(MCPs5Store.bitrate) Mbps"
+        case "ps5":
+            let b = MCPs5StreamController.streamingAway ? MCPs5Store.awayBitrate : MCPs5Store.bitrate
+            return (b == 0 ? "Auto" : "\(b) Mbps") + (MCPs5StreamController.streamingAway ? " · away" : "")
         case "xbox": return MCXbox.maxMbps == 0 ? "Auto" : "Up to \(MCXbox.maxMbps) Mbps"
         default:
             // the stream's own (an away stream may differ from the settings)
-            let k = MCAwayStream.current.map { $0.kbps } ?? MCSettings().load().bitrate
-            return String(format: "%.0f Mbps", Double(k) / 1000) + (MCAwayStream.current?.away == true ? " · away" : "")
+            let k = MCLink.liveKbps > 0 ? MCLink.liveKbps : MCAwayStream.current.map { $0.kbps } ?? MCSettings().load().bitrate
+            return String(format: "%.0f Mbps", Double(k) / 1000) + (MCLink.liveKbps > 0 ? " (auto)" : "") + (MCAwayStream.current?.away == true ? " · away" : "")
         }
     }
 
@@ -226,20 +228,26 @@ struct MCQuickMenuView: View {
         // away from home (MCAwayStream): only the steps up to the cap; Home switched to Away saves into Away
         let plan = kind == "pc" ? MCAwayStream.current : nil
         let away = plan?.away == true, auto = plan?.autoAway == true
-        let pcSteps = away ? MCSettings.pcSteps.filter { $0 * 1000 <= plan!.capKbps } : MCSettings.pcSteps
-        let steps: [Int] = kind == "pc" ? pcSteps : kind == "ps5" ? [0, 10, 15, 20, 30, 50, 80, 100] : [0, 5, 10, 15, 20, 30]
-        let pcNow = auto ? (MCSettings.awayValue("bitrate") as? Int ?? MCSettings().load().bitrate) : MCSettings().load().bitrate
-        let cur: Int = kind == "pc" ? pcNow / 1000 : kind == "ps5" ? MCPs5Store.bitrate : MCXbox.maxMbps
+        // PC: Auto (the default for the size and frame rate) first, as Android
+        let pcSteps = [0] + (away ? MCSettings.pcSteps.filter { $0 * 1000 <= plan!.capKbps } : MCSettings.pcSteps)
+        // a PS5 stream over PlayStation Network sets its Away bitrate, with the Away steps (as Android)
+        let psAway = kind == "ps5" && MCPs5StreamController.streamingAway
+        let steps: [Int] = kind == "pc" ? pcSteps : kind == "ps5" ? (psAway ? [0, 8, 10, 15, 30, 50] : [0, 10, 15, 20, 30, 50, 80, 100]) : [0, 5, 10, 15, 20, 30]
+        let live = MCSettings().load()
+        let pcNow = auto ? (MCSettings.awayValue("bitrate") as? Int ?? live.bitrate) : live.bitrate
+        let pcAuto = pcNow == MCRoot.defaultBitrate(live.width, live.height, live.framerate)
+        let cur: Int = kind == "pc" ? (pcAuto ? 0 : pcNow / 1000) : kind == "ps5" ? (psAway ? MCPs5Store.awayBitrate : MCPs5Store.bitrate) : MCXbox.maxMbps
         let note = away ? "Away from home" + (auto ? ", so this sets your Away profile" : "") : nil
         return [Item(icon: "chevron.left", label: "Back", detail: note) { model.page = "main" }] + steps.map { n in
             Item(icon: n == cur ? "checkmark" : "speedometer", label: n == 0 ? "Auto" : "\(n) Mbps",
                  detail: n == cur ? "Now" : "Reconnects in a moment; the game keeps running") {
                 guard n != cur, let g = MCStore.shared.playing else { model.page = "main"; return }
                 switch kind {
-                case "ps5": UserDefaults.standard.set(n, forKey: "ps5_bitrate")
+                case "ps5": UserDefaults.standard.set(n, forKey: psAway ? "ps5_away_bitrate" : "ps5_bitrate")
                 case "xbox": UserDefaults.standard.set(n, forKey: "xbox_bitrate")
                 default:
-                    if auto { MCSettings.setAwayValue("bitrate", n * 1000) } else { MCSettings().save { $0.bitrate = n * 1000 } }
+                    let k = n == 0 ? MCRoot.defaultBitrate(live.width, live.height, live.framerate) : n * 1000
+                    if auto { MCSettings.setAwayValue("bitrate", k) } else { MCSettings().save { $0.bitrate = k } }
                 }
                 model.close()
                 if let keep = a.mcLeaveKeepOn { keep() } else { a.mcDisconnect() }
@@ -248,10 +256,32 @@ struct MCQuickMenuView: View {
         }
     }
 
+    /// Controllers: the pads connected (with their battery) and Pair a controller, as Android's.
+    private func padItems(_ a: MCQuickActions) -> [Item]? {
+        guard model.page == "pads" else { return nil }
+        let kind = a.mcKind?() ?? "pc"
+        let note = kind == "ps5" ? "The PS5 takes one controller, so every pad is player 1"
+            : kind == "xbox" ? (MCXbox.coop ? "Two players: the first two pads" : "Every pad is player 1")
+            : MCSettings().load().multi ? "Each pad is its own player on the PC" : "All pads control player 1 (Settings, Controllers)"
+        var list = [Item(icon: "chevron.left", label: "Back", detail: note) { model.page = "main" }]
+        for (i, c) in GCController.controllers().enumerated() {
+            let battery = c.battery.map { "battery \(Int($0.batteryLevel * 100))%" + ($0.batteryState == .charging ? ", charging" : "") }
+            list.append(Item(icon: "gamecontroller", label: "\(i + 1). \(c.vendorName ?? "Controller")", detail: battery ?? "Connected") {})
+        }
+        if GCController.controllers().isEmpty { list.append(Item(icon: "gamecontroller", label: "No controller connected", detail: nil) {}) }
+        // iOS opens MoonCast's own page in Settings; Bluetooth is one step up from there
+        list.append(Item(icon: "plus.circle", label: "Pair a controller", detail: "Pairing mode on the pad, then Settings → Bluetooth") {
+            model.close()
+            if let u = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(u) }
+        })
+        return list
+    }
+
     private func items() -> [Item] {
         let a = model.actions
         let pads = GCController.controllers().count
         if let p = powerItems(a) { return p }
+        if let c = padItems(a) { return c }
         if let b = bitrateItems(a) { return b }
         if let t = tvItems(a) { return t }
         let bitrate = Item(icon: "speedometer", label: "Bitrate", detail: bitrateNow(a.mcKind?() ?? "pc") + " · change it here") { model.page = "bitrate" }
@@ -261,7 +291,7 @@ struct MCQuickMenuView: View {
                 Item(icon: "xbox.logo", label: "Xbox button", detail: "Opens the guide") { a.mcPsButton?(); model.flash("Xbox button", "Pressed") },
                 Item(icon: "info.circle", label: "Streaming status", detail: MCStatsLevel.label(MCStatsLevel.current) + " · Off, Lite, Detailed") { a.mcToggleStats(); model.rev += 1 },
                 bitrate,
-                Item(icon: "gamecontroller", label: "Controllers", detail: pads == 1 ? "1 connected" : "\(pads) connected") {},
+                Item(icon: "gamecontroller", label: "Controllers", detail: pads == 1 ? "1 connected" : "\(pads) connected") { model.page = "pads" },
             ] + move + [
                 Item(icon: "arrow.left", label: "Disconnect", detail: "The game keeps running") { model.close(); a.mcDisconnect() },
                 Item(icon: "power", label: "Turn off the Xbox", detail: "Ends the game", danger: true) { model.close(); a.mcRestMode?() },
@@ -271,7 +301,7 @@ struct MCQuickMenuView: View {
             return [
                 Item(icon: "info.circle", label: "Streaming status", detail: MCStatsLevel.label(MCStatsLevel.current) + " · Off, Lite, Detailed") { a.mcToggleStats(); model.rev += 1 },
                 bitrate,
-                Item(icon: "gamecontroller", label: "Controllers", detail: pads == 1 ? "1 connected" : "\(pads) connected") {},
+                Item(icon: "gamecontroller", label: "Controllers", detail: pads == 1 ? "1 connected" : "\(pads) connected") { model.page = "pads" },
                 Item(icon: "playstation.logo", label: "PS button", detail: "Pads without one: L2 + Start") { a.mcPsButton?(); model.flash("PS button", "Pressed") },
             ] + move + [
                 Item(icon: "arrow.left", label: "Disconnect", detail: "Ask, rest mode or keep it on (Settings → PlayStation)") { model.close(); a.mcDisconnect() },
@@ -282,7 +312,7 @@ struct MCQuickMenuView: View {
             Item(icon: "keyboard", label: "Keyboard", detail: "On-screen") { a.mcToggleKeyboard(); model.close() },
             Item(icon: "info.circle", label: "Streaming status", detail: MCStatsLevel.label(MCStatsLevel.current) + " · Off, Lite, Detailed") { a.mcToggleStats(); model.rev += 1 },
             bitrate,
-            Item(icon: "gamecontroller", label: "Controllers", detail: pads == 1 ? "1 connected" : "\(pads) connected") {},
+            Item(icon: "gamecontroller", label: "Controllers", detail: pads == 1 ? "1 connected" : "\(pads) connected") { model.page = "pads" },
             Item(icon: "list.bullet.rectangle", label: "Task Manager", detail: "Windows: Ctrl + Shift + Esc") { a.mcTaskManager(); model.flash("Task Manager", "Opened on the PC") },
             Item(icon: "power", label: "Power", detail: "Hibernate, restart or shut down the PC") { model.page = "power" },
         ] + move + [

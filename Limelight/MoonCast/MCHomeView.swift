@@ -1338,7 +1338,8 @@ struct MCRoot: View {
                 break
             }
         }
-        return min(Int((res * fpsFactor).rounded()) * 1000, 150000)
+        // no cap (as Android): Automatic bitrate holds a stream within what the network carries
+        return Int((res * fpsFactor).rounded()) * 1000
     }
 
     // MARK: dialogs

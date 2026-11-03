@@ -81,6 +81,8 @@ enum MCPs5Store {
 
 /// The PS5 stream screen.
 final class MCPs5StreamController: UIViewController, MCPs5SessionDelegate, MCQuickActions {
+    /// The PS5 stream running now goes over PlayStation Network (away): its bitrate is the Away one.
+    static var streamingAway = false
     let console: MCPs5Console
     private var session: MCPs5Session?
     private let status = UILabel()
@@ -180,6 +182,7 @@ final class MCPs5StreamController: UIViewController, MCPs5SessionDelegate, MCQui
         }
         tries += 1
         let away = remote != nil
+        MCPs5StreamController.streamingAway = away
         setStatus(away ? "Connecting to \(console.name) over PlayStation Network… (up to a minute)"
                        : tries == 1 ? "Connecting to \(console.name)…" : "Connecting to \(console.name)… (try \(tries))")
         session?.stop()
