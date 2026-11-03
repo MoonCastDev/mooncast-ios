@@ -399,9 +399,8 @@
 }
 
 - (void) connectionStarted {
-#if DEBUG
     dispatch_async(dispatch_get_main_queue(), ^{
-        // MoonCast: Settings → Picture in picture
+        // MoonCast: Settings → Picture in picture (in every build; only the test steps are debug-only)
         if (MCPip.enabled && self->_mcPip == nil && [self->_streamMan mcPyroWave]) {
             // PyroWave's picture is a Metal layer, which picture in picture can't show
             [MCToastObjC show:@"Picture in picture is off for PyroWave streams"];
@@ -414,9 +413,10 @@
                 self->_mcPip.onClosedInBackground = ^{ [weakSelf returnToMainFrame]; };
             }
         }
+#if DEBUG
         [MCQuickMenu runTestStepsIn:self];
-    });
 #endif
+    });
     Log(LOG_I, @"Connection started");
     dispatch_async(dispatch_get_main_queue(), ^{
         // Leave the spinner spinning until it's obscured by
