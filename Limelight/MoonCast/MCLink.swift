@@ -39,8 +39,9 @@ enum MCHostCaps {
 
     struct Probe {
         let name: String
-        /// The live call for this stream, or nil when the host doesn't offer it. Blocks; not on the main thread.
-        let run: (TemporaryHost) -> LiveBitrate?
+        /// The live call for this stream ([requestedKbps]: the bitrate it started at), or nil when the host doesn't
+        /// offer it. Blocks; not on the main thread.
+        let run: (TemporaryHost, Int) -> LiveBitrate?
     }
 
     /// Polaris (papi-ux/polaris de8d152, src/nvhttp.cpp; docs/live-tuning.md): GET /polaris/v1/session/status gives the
@@ -49,8 +50,14 @@ enum MCHostCaps {
     /// /polaris/v1/session/bitrate takes the ENCODER's rate (our request less FEC, audio and overhead, as the handshake
     /// split it), for the session's sole owner. Another host's call is a new row.
     static let probes: [Probe] = [
-        Probe(name: "polaris /polaris/v1/session/bitrate") { h in
+        Probe(name: "polaris /polaris/v1/session/bitrate") { h, requestedKbps in
             guard let st = MCBridge.polarisJSON(h, path: "/polaris/v1/session/status", body: nil) else { return nil }
+            #if DEBUG
+            // once a stream: what this Polaris build's status holds (bitrate_units is newer than some builds)
+            let enc0 = st["encoder"] as? [String: Any]
+            fputs("MoonCast: auto bitrate: Polaris status keys: \(st.keys.map { "\($0)" }.sorted().joined(separator: ","))\n" +
+                  "MoonCast: auto bitrate: Polaris bitrate_units: \(st["bitrate_units"].map { "\($0)" } ?? "absent"); encoder: \(enc0.map { "bitrate_kbps \($0["bitrate_kbps"] ?? "?")" } ?? "absent")\n", stderr)
+            #endif
             let id = st["app_session_id"] as? String ?? ""
             let gen = (st["session_generation"] as? NSNumber)?.int64Value ?? 0
             let owned = st["owned_by_client"] as? Bool ?? true
@@ -59,12 +66,20 @@ enum MCHostCaps {
             let split = (u?["split_kbps"] as? NSNumber)?.doubleValue ?? 0
             let asked = (u?["requested_kbps"] as? NSNumber)?.doubleValue ?? 0
             let req = split > 0 ? split : asked
-            let enc = (u?["encoder_kbps"] as? NSNumber)?.doubleValue ?? 0
+            var enc = (u?["encoder_kbps"] as? NSNumber)?.doubleValue ?? 0
+            var source = "bitrate_units"
+            if u == nil {
+                // a build without bitrate_units (older than de8d152): the encoder's own rate against what we asked for
+                let e = ((st["encoder"] as? [String: Any])?["bitrate_kbps"] as? NSNumber)?.doubleValue ?? 0
+                if e > 0 && requestedKbps > 0 { enc = e; source = "encoder.bitrate_kbps of our \(requestedKbps) kbps" } else { source = "none (0.8)" }
+            }
+            let reqKbps = req > 0 ? req : Double(requestedKbps)
             // the share of a request the encoder gets, as the handshake split it
-            let share = req > 0 && enc > 0 ? min(1.0, max(0.3, enc / req)) : 0.8
+            let share = reqKbps > 0 && enc > 0 ? min(1.0, max(0.3, enc / reqKbps)) : 0.8
             // the host capped our request: never ask its encoder for more than it gave
             let hostCap = split > 0 && asked > split ? Int(enc) : 0
-            MCLink.log("MoonCast: auto bitrate: Polaris session: generation \(gen), owned \(owned), runtime bitrate \(runtime), encoder \(Int(enc)) of \(Int(req)) kbps")
+            MCLink.log("MoonCast: auto bitrate: Polaris session: generation \(gen), owned \(owned), runtime bitrate \(runtime), " +
+                       "encoder \(Int(enc)) of \(Int(reqKbps)) kbps, share \(String(format: "%.2f", share)) (from \(source))")
             guard !id.isEmpty, gen > 0, owned, runtime else { return nil }
             return LiveBitrate(name: "Polaris session bitrate") { kbps in
                 var e = Int(Double(kbps) * share)
@@ -81,9 +96,9 @@ enum MCHostCaps {
     ]
 
     /// Runs the probes in order; the first that answers wins. Remembers the PC's mode for Settings.
-    static func probe(_ host: TemporaryHost) -> LiveBitrate? {
+    static func probe(_ host: TemporaryHost, requestedKbps: Int) -> LiveBitrate? {
         for p in probes {
-            if let c = p.run(host) {
+            if let c = p.run(host, requestedKbps) {
                 MCLink.log("MoonCast: auto bitrate: host offers live bitrate (\(p.name))")
                 setMode(host, "live")
                 return c
@@ -172,7 +187,10 @@ final class MCLink: NSObject {
     static let congestedSeconds = 3
     static let cautiousSeconds = 5
     static let cautiousWindow: TimeInterval = 120
+    /// Step up when at least [goodNeeded] of the last [goodSeconds] judged seconds were good and no congested streak
+    /// (2 seconds in a row) is among them; a lone bad second only costs the window a second.
     static let goodSeconds = 60
+    static let goodNeeded = 57
     static let stepUp = 1.2
     static let upHold: TimeInterval = 60
     static let upHoldMax: TimeInterval = 900
@@ -389,7 +407,12 @@ final class MCLink: NSObject {
         var settleUntil: Date?
         var last: [String: Double]?
         var lastT = Date()
-        var congested = 0, good = 0, slow = 0
+        var congested = 0, slow = 0
+        /// The last [goodSeconds] judged seconds (quiet ones, under 40% of the rate in use, aren't judged)
+        var window: [Health] = []
+        var retryUp = false
+        var good: Int { window.filter { $0 == .good }.count }
+        func streakInWindow() -> Bool { zip(window, window.dropFirst()).contains { $0 == .congested && $1 == .congested } }
         var samples: [Int] = []
         var rttBase = Double.infinity
         var working = false
@@ -398,8 +421,8 @@ final class MCLink: NSObject {
         log("MoonCast: auto bitrate: run \(run) watching \(game.title) at \(current / 1000) Mbps (ceiling \(plan.ceiling / 1000), floor \(plan.floor / 1000))")
 
         func resetGood(_ why: String) {
-            if good > 0 { fputs("MoonCast: auto bitrate: run \(run): good \(good) -> 0 (\(why))\n", stderr) }
-            good = 0
+            if !window.isEmpty { fputs("MoonCast: auto bitrate: run \(run): window cleared at good \(good)/\(window.count) (\(why))\n", stderr) }
+            window.removeAll()
         }
 
         func store(rate: Int, wire: Int) {
@@ -434,7 +457,7 @@ final class MCLink: NSObject {
         func reconnectOrSuggest(_ from: Int, _ kbps: Int, _ note: String, down: Bool) {
             if MCQuickMenu.isOpen {
                 log("MoonCast: auto bitrate: the Quick menu is open: asking again in a moment")
-                if down { congested = congestedSeconds - 1 } else { good = goodSeconds - 1 }
+                if down { congested = congestedSeconds - 1 } else { retryUp = true }
                 return
             }
             let now = Date()
@@ -520,9 +543,9 @@ final class MCLink: NSObject {
         }
 
         func stepUpNow() {
-            resetGood("a minute of good: stepping up")
+            resetGood("stepping up")
             let to = min(plan.ceiling, max(current + 1000, Int(Double(current) * stepUp) / 1000 * 1000))
-            log("MoonCast: auto bitrate: good for \(goodSeconds) s at \(current / 1000) Mbps: up to \(to / 1000) Mbps (ceiling \(plan.ceiling / 1000))")
+            log("MoonCast: auto bitrate: good \(good)/\(goodSeconds) in window at \(current / 1000) Mbps: up to \(to / 1000) Mbps (ceiling \(plan.ceiling / 1000))")
             // the memory takes it once it has held for a minute
             unprovenUp = (to, Int(Double(to) * wireOverhead / share))
             apply(to, note: "Network clear: \(to / 1000) Mbps", down: false)
@@ -541,7 +564,7 @@ final class MCLink: NSObject {
             if !probed && live == nil {
                 probed = true
                 DispatchQueue.global(qos: .utility).async {
-                    let found = MCHostCaps.probe(host)
+                    let found = MCHostCaps.probe(host, requestedKbps: plan.start)
                     DispatchQueue.main.async {
                         live = found
                         probeDone = true
@@ -585,18 +608,23 @@ final class MCLink: NSObject {
             let health: Health
             let why: String
             if lossNow > loss { health = .congested; why = "loss" }
-            else if du > 0 && !deviceBound { health = .congested; why = "frames lost" }
+            // frames FEC gave up on with under 2% missing: strained (a step down needs >2% missing for 3 s)
+            else if du > 0 && !deviceBound { health = .strained; why = "frames lost" }
             else if lossNow > 0 { health = .strained; why = "some loss" }
             else if rttRising { health = .strained; why = "rtt rising" }
             else { health = .good; why = "" }
             if health == .congested { congested += 1; samples.append(wireKbps) } else { congested = 0; samples = [] }
-            // good while the stream uses its bitrate (a quiet picture proves nothing about the link)
-            if health != .good { resetGood(why) } else if wireKbps * 10 >= current * 4 { good += 1 }
+            // a sliding window of judged seconds; a good second only counts while the stream uses its bitrate (a quiet
+            // picture proves nothing about the link)
+            if health != .good || wireKbps * 10 >= current * 4 {
+                window.append(health)
+                if window.count > goodSeconds { window.removeFirst(window.count - goodSeconds) }
+            }
             #if DEBUG
-            fputs(String(format: "MoonCast: auto bitrate: run %ld: %@%@ · %.2f%%%% missing, %.0f frames lost, rtt %.0f (base %.0f) ms, %ld Mbps in, at %ld of %ld Mbps, good %ld/%ld\n",
+            fputs(String(format: "MoonCast: auto bitrate: run %ld: %@%@ · %.2f%%%% missing, %.0f frames lost, rtt %.0f (base %.0f) ms, %ld Mbps in, at %ld of %ld Mbps, good %ld/%ld in window%@\n",
                          run, health == .good ? "good" : health == .strained ? "strained" : "congested", why.isEmpty ? "" : " (\(why))",
                          lossNow * 100, du, rtt, rttBase.isFinite ? rttBase : -1, wireKbps / 1000, current / 1000, plan.ceiling / 1000,
-                         good, goodSeconds).replacingOccurrences(of: "%%", with: "%"), stderr)
+                         good, window.count, streakInWindow() ? " (a congested streak in it)" : "").replacingOccurrences(of: "%%", with: "%"), stderr)
             #endif
             if health != .good && now.timeIntervalSince(lastLogAt) > 5 {
                 lastLogAt = now
@@ -618,7 +646,9 @@ final class MCLink: NSObject {
                 }
                 unprovenUp = nil
             }
-            if good >= goodSeconds && current < plan.ceiling && now.timeIntervalSince(max(lastChangeAt ?? startedAt, startedAt)) >= hold {
+            let windowGood = window.count >= goodSeconds && good >= goodNeeded && !streakInWindow()
+            if (windowGood || retryUp) && current < plan.ceiling && now.timeIntervalSince(max(lastChangeAt ?? startedAt, startedAt)) >= hold {
+                retryUp = false
                 stepUpNow()
             }
         }
