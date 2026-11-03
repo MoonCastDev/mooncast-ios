@@ -92,13 +92,16 @@ final class MCStore: NSObject, ObservableObject, DiscoveryCallback, PairCallback
         if UserDefaults.standard.bool(forKey: "mc_pyrowave") && MCPcStyles.inUseId != "pyro" {
             UserDefaults.standard.set(false, forKey: "mc_pyrowave")
         }
+        MCStore.migrateLinkCap()
         DispatchQueue.global(qos: .utility).async { _ = MCPyroWave.deviceSupported }
         Task { await MCTvFinder.testTarget(); await MCTvFinder.checkTarget(); self.bump() }
         #if DEBUG
         // test runs: MC_SET="key=value;key=value" sets settings (numbers and true/false as such)
         for kv in (ProcessInfo.processInfo.environment["MC_SET"] ?? "").split(separator: ";") {
-            let p = kv.split(separator: "=", maxSplits: 1).map(String.init)
+            let p = kv.split(separator: "=", maxSplits: 1, omittingEmptySubsequences: false).map(String.init)
             guard p.count == 2 else { continue }
+            // "key=" removes the key
+            if p[1].isEmpty { UserDefaults.standard.removeObject(forKey: p[0]); continue }
             // Moonlight's own store: ml_fps=120, ml_res=1920x1080, ml_stats=true
             if p[0] == "ml_fps", let f = Int(p[1]) { MCSettings().save { $0.framerate = f; $0.bitrate = MCRoot.defaultBitrate($0.width, $0.height, f) }; continue }
             if p[0] == "ml_res" {
@@ -113,6 +116,13 @@ final class MCStore: NSObject, ObservableObject, DiscoveryCallback, PairCallback
             if let i = Int(p[1]) { UserDefaults.standard.set(i, forKey: p[0]) }
             else if p[1] == "true" || p[1] == "false" { UserDefaults.standard.set(p[1] == "true", forKey: p[0]) }
             else { UserDefaults.standard.set(p[1], forKey: p[0]) }
+        }
+        // MC_LINK_RESET=1 forgets what Automatic bitrate learnt about every network (mc_pw_link, mc_pw_link_user)
+        if ProcessInfo.processInfo.environment["MC_LINK_RESET"] == "1" {
+            UserDefaults.standard.removeObject(forKey: "mc_pw_link")
+            UserDefaults.standard.removeObject(forKey: "mc_pw_link_user")
+            NSLog("MoonCast: MC_LINK_RESET: link memory cleared")
+            fputs("MoonCast: MC_LINK_RESET: link memory cleared\n", stderr)
         }
         // MC_USE_STYLE=battery|balanced|sharpest|fastest|pyro picks that PC play style, as its card's A does (pyro:
         // the PyroWave style, where this device decodes PyroWave)
@@ -245,6 +255,23 @@ final class MCStore: NSObject, ObservableObject, DiscoveryCallback, PairCallback
         guard let img = UIImage(contentsOfFile: path) else { return nil }
         art.setObject(img, forKey: path as NSString)
         return img
+    }
+
+    /// Once: builds from 84e901a to 41d212b let the Wi-Fi limit into the PyroWave style's Recommended bitrate, which
+    /// then went into the live bitrate when the style was picked or fine-tuned, so the limit became the target.
+    /// The style's own bitrate (Recommended, or one set on its page, which is kept as is) goes back into the live
+    /// bitrate while it's in use. The other styles never read the limit.
+    static func migrateLinkCap() {
+        let d = UserDefaults.standard
+        guard !d.bool(forKey: "mc_link_migrated_1") else { return }
+        d.set(true, forKey: "mc_link_migrated_1")
+        guard MCPcStyles.inUseId == "pyro", MCPcStyles.style("pyro") != nil, let k = MCPcStyles.values("pyro")["kbps"] else { return }
+        let was = MCSettings().load().bitrate
+        MCPcStyles.putLive("kbps", k)
+        let line = "MoonCast: PyroWave style bitrate put back: live \(was / 1000) -> \((k as? Int ?? 0) / 1000) Mbps" +
+            (MCPcStyles.pyroRecommendedRate ? " (Recommended)" : " (set on its page)")
+        NSLog("%@", line)
+        fputs(line + "\n", stderr)
     }
 
     // MARK: playing

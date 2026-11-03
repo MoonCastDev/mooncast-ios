@@ -999,7 +999,7 @@ extension MCRoot {
         let kbps = recommended != nil && MCPcStyles.pyroRecommendedRate ? 0 : v.i("kbps", 0)
         let at = steps.firstIndex(of: kbps) ?? steps.indices.min { abs(steps[$0] - kbps) < abs(steps[$1] - kbps) } ?? 0
         let wifi = recommended != nil && MCPcStyles.pyroWifiLimited(MCPcStyles.values("pyro"))
-        let auto = recommended.map { "Recommended · \(MCPcStyles.mbps($0))" + (wifi ? " (Wi-Fi limit)" : "") } ?? "Auto"
+        let auto = recommended.map { "Recommended · \(MCPcStyles.mbps($0))" + (wifi ? " (Wi-Fi ~\((MCLink.displayCapKbps ?? 0) / 1000))" : "") } ?? "Auto"
         let value = kbps == 0 ? auto : steps.contains(kbps) ? MCPcStyles.mbps(kbps) : "\(MCPcStyles.mbps(kbps)) (exact)"
         let exact = {
             askText("Exact bitrate", "0.5 to \(MCSettings.pcMaxMbps) Mbps") { t in

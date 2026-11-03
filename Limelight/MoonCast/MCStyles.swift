@@ -91,9 +91,9 @@ enum MCPcStyles {
         let wh = r.split(separator: "x").compactMap { Int($0) }
         let (w, h) = r == "native" || wh.count != 2 ? MCSettings.native : (wh[0], wh[1])
         let f = m["fps"] as? String ?? "native"
-        let rec = Int(MCPyroWave.recommendedKbpsWidth(Int32(w), height: Int32(h), fps: Int32(f == "native" ? MCSettings.nativeHz : Int(f) ?? 60)))
-        // what this network was found to carry (MCLink, Automatic bitrate)
-        return MCLink.displayCapKbps.map { min(rec, $0) } ?? rec
+        // The style's own target. What this network carries is Automatic bitrate's business (MCLink): it stays in
+        // the link memory and only holds a stream below this, never this.
+        return Int(MCPyroWave.recommendedKbpsWidth(Int32(w), height: Int32(h), fps: Int32(f == "native" ? MCSettings.nativeHz : Int(f) ?? 60)))
     }
 
     /// The PyroWave style's Recommended bitrate is held down by this network's measured limit.
