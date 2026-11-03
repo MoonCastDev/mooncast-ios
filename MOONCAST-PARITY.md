@@ -1,28 +1,29 @@
-# MoonCast for iPad: parity with the Android handheld
+# MoonCast for iPad and iPhone: parity with Android
 
-What the handheld app (MoonCastDev/moonlight-android, `app/src/handheld`) does, and where each piece stands here.
+This file used to keep a feature table by hand, and it fell behind the code (for example it said there was no
+identity transfer and no deadzone or motion setting, though all three were in the app). The current comparison is
+the code-level review of 2026-11-03, with file and line evidence for every row:
 
-| Area | Handheld feature | iPad |
-|---|---|---|
-| Home | Row of big tiles: running, last played, consoles, then PC games A to Z | Done |
-| Home | Box art, PC/PS5/Xbox badge, Running pill, colour wash, name line | Done |
-| Home | Entrance animation, breathing cyan ring, hint bar with a pad | Done |
-| Home | Round buttons: Consoles, Play on TV, Controllers, Network test, Settings, Exit | Consoles, Controllers, Network test, Settings (Play on TV to do; Exit: iPadOS has none) |
-| Home | Add apps tile / This device's apps | Not possible on iPadOS (no launching other apps) |
-| Games | All games grid, tabs per source (L/R), A to Z or Recent (X) | Done (PC tabs) |
-| Games | Game menu: Start/Resume, Quit, Change picture, Hide, Add to home screen | Done except Add to home screen (iPadOS can't pin; Siri Shortcuts later) |
-| Consoles | PCs: pair with PIN, wake, quit, hidden games, remove, add by address, away address | Done |
-| Consoles | PS5: register, PSN sign-in, wake, play at home and away | Play at home, wake, PSN sign-in, linking with the 8-digit code, live status and away over PSN built (untested) |
-| Consoles | Xbox: sign-in, consoles list, play | Built over WebRTC (untested) |
-| Stream | Moonlight PC stream | Done (Moonlight's own) |
-| Stream | Quick menu: stats, Keyboard, Streaming status, Touch Off/Mouse/Touch, Controllers, Task Manager, Disconnect, Quit | Done, tested on a stream (2420x1668 60 fps H.265) |
-| Stream | Hibernate PC | Hidden (as in the Android release) |
-| Stream | Rumble (PS5, Xbox), PS5 touchpad | Built (untested) |
-| Stream | Ultra low latency | Built (PC frames immediate, less audio queued) |
-| Stream | FSR 1.0 super resolution | Built in Metal for PC, PS5, Xbox (untested) |
-| Settings | Picture: resolution (Native default), fps, bitrate, codec, HDR, frame pacing, stats | Done |
-| Settings | Sound, Controls (touch default, on-screen pad, players, swap, mouse), Theme, About | Done |
-| Settings | Screen size, rotate, menu sounds, controller test, deadzone, motion | Done except deadzone and motion (Moonlight iOS has neither yet) |
-| TV | Play on a MoonCast TV, handheld as the TV's controller | Built (untested); no identity transfer yet |
-| Other | Opt-in usage check-in (TelemetryDeck) | To do |
-| Other | Obtainium updates | Not possible on iPadOS (TestFlight instead) |
+- `workspace/reports/2026-11-03-mooncast-android-vs-ios.md` (Android `feat/auto-bitrate` e1977c9a against iOS
+  `feat/pyrowave`), sections 2 (features by area), 3a (what to port or fix on iOS) and 4 (exact values).
+
+Since that review, on `feat/pyrowave`:
+
+- Picture in picture works in Release builds too (it was set up only in Debug builds); PyroWave and Super resolution
+  streams still have none.
+- Automatic bitrate follows the design (docs/auto-bitrate-design.md, MoonCastDev/moonlight-android#139) with
+  Android's values where the design gives none: floor 5 Mbps at 720p60, any loss is "strained", any frame FEC gave
+  up on is "congested", RTT rising over its lowest by max(15 ms, that lowest), a good minute needs 40% of the rate
+  arriving and 100 packets a second, step-ups +20% (at least 1 Mbps) with a back-off kept per network, budgets
+  2 reconnects a minute and 1 for step-ups, a suggestion at most every 2 minutes, a memory of 64 entries with
+  away streams kept per place, and Polaris's live bitrate in encoder units. A step-up only raises the remembered
+  limit once it has held for a minute.
+- moonlight-common-c no longer counts packets it dropped itself (an old frame's FEC shards, runts, failed
+  decryption) as missing (Android's skippedSinceSeq).
+- The Quick menu's Controllers item lists the pads (with battery) and Pair a controller; a PS5 stream over PSN
+  changes its Away bitrate, with the Away steps; the PC bitrate list starts with Auto.
+- The Auto bitrate base has no 150 Mbps cap any more (as Android).
+- The TV controller screen keeps the iPad awake from the start, and the pad socket sends without Nagle delay.
+
+Not done yet: the rest of the review's list 3a (Balanced frame pacing, Xbox and PS5 robustness items, Unpair, the
+Automatic bitrate row on style pages, DirectPad, PS4 and others).
