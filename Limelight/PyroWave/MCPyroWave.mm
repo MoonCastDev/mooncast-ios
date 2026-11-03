@@ -311,6 +311,13 @@ fragment float4 pw_frag(VOut in [[stage_in]],
 }
 )MSL";
 
+// One stage's times over a stats window, ms
+struct Stage {
+    double sum = 0, max = 0;
+    int n = 0;
+    void add(double v) { sum += v; n++; if (v > max) max = v; }
+};
+
 struct PictureParams {
     float uvClamp[4];
     float params[4];
@@ -319,7 +326,8 @@ struct PictureParams {
 };
 
 constexpr float kSdrWhiteNits = 203.0f;
-constexpr int kFramesInFlight = 2;
+// Decoded frames: one on screen or being drawn, the newest decoded, one decoding
+constexpr int kFramesInFlight = 3;
 
 }  // namespace
 
@@ -454,6 +462,21 @@ static BOOL boolDefault(NSString* key, BOOL def) {
     CFTimeInterval _rateStart;
     double _rates[4];
 
+    // MoonCast presenting: the newest decoded frame (its slot and number), the one last drawn, and whether a
+    // drawable is presented but not on screen yet (then a newer frame waits for it and replaces any older one)
+    dispatch_queue_t _presentQueue;
+    std::mutex _presentLock;
+    int _latestSlot;
+    int _drawingSlot;
+    uint64_t _latestSeq;
+    uint64_t _drawnSeq;
+    bool _presentInFlight;
+    CFTimeInterval _presentSince;
+    std::atomic<int> _nDrawn;
+    // per-stage times over the stats window (ms): waiting for a drawable, drawing on the GPU, commit to on
+    // screen, and the frame thread's own work per frame
+    Stage _stWait, _stDraw, _stLatency, _stCpu;
+
     std::unique_ptr<GpuBoost> _boost;
     BOOL _boostWanted;
     id _backgroundObserver;
@@ -480,6 +503,10 @@ static BOOL boolDefault(NSString* key, BOOL def) {
     _peakNits = 1000.0f;
     _decodeMs = -1;
     for (int i = 0; i < 4; i++) _rates[i] = -1;
+    _latestSlot = -1;
+    _drawingSlot = -1;
+    _presentQueue = dispatch_queue_create("MoonCast PyroWave present",
+                                          dispatch_queue_attr_make_with_qos_class(DISPATCH_QUEUE_SERIAL, QOS_CLASS_USER_INTERACTIVE, 0));
 
     pyrowave_decoder_create_info di = {};
     di.device = dev;
@@ -540,8 +567,9 @@ static BOOL boolDefault(NSString* key, BOOL def) {
     _layer.opaque = YES;
     _layer.backgroundColor = UIColor.blackColor.CGColor;
     _layer.contentsScale = view.window.screen.nativeScale ?: UIScreen.mainScreen.nativeScale;
-    // Two: a frame waits for at most one on screen (the lowest delay)
-    _layer.maximumDrawableCount = 2;
+    // Three, so taking a drawable never waits for a refresh: at most one presented frame waits to go on screen
+    // (presentLatest), so this adds no delay
+    _layer.maximumDrawableCount = 3;
     [self configureLayerForHdr:NO];
     // over the (hidden) display layer, under everything drawn on top of the picture
     if (below.superlayer == view.layer) [view.layer insertSublayer:_layer above:below];
@@ -686,7 +714,10 @@ static BOOL boolDefault(NSString* key, BOOL def) {
     [_frameLock lock];
     if (!_stopped && _decoder) {
         @autoreleasepool {
+            const CFTimeInterval t0 = CACurrentMediaTime();
             [self decode:data length:length];
+            std::lock_guard<std::mutex> slock(_statsLock);
+            _stCpu.add((CACurrentMediaTime() - t0) * 1e3);
         }
     }
     [_frameLock unlock];
@@ -703,17 +734,22 @@ static BOOL boolDefault(NSString* key, BOOL def) {
     const double t = now - _rateStart;
     if (t < 1.0) return;
     const int rec = _nReceived.exchange(0), skip = _nSkipped.exchange(0), dec = _nDecoded.exchange(0);
-    const int pres = _nPresented.exchange(0), bad = _nBad.exchange(0);
+    const int pres = _nPresented.exchange(0), bad = _nBad.exchange(0), drawn = _nDrawn.exchange(0);
+    Stage wait, draw, lat, cpu;
     {
         std::lock_guard<std::mutex> lock(_statsLock);
         _rates[0] = rec / t;
         _rates[1] = dec / t;
         _rates[2] = pres / t;
         _rates[3] = skip / t;
+        wait = _stWait; draw = _stDraw; lat = _stLatency; cpu = _stCpu;
+        _stWait = _stDraw = _stLatency = _stCpu = Stage();
     }
+    auto avg = [](const Stage& st) { return st.n ? st.sum / st.n : 0.0; };
     _rateStart = now;
-    PWLog(@"MoonCast: PyroWave %.2f s: %d received, %d decoded, %d presented, %d skipped (newer waiting), %d bad, GPU decode %.2f ms",
-          t, rec, dec, pres, skip, bad, self.decodeMs);
+    PWLog(@"MoonCast: PyroWave %.2f s: %d received, %d decoded, %d drawn, %d presented, %d skipped (newer waiting), %d bad; "
+          "ms avg/max: frame thread %.2f/%.2f, GPU decode %.2f, drawable wait %.2f/%.2f, GPU draw %.2f, commit to screen %.1f/%.1f",
+          t, rec, dec, drawn, pres, skip, bad, avg(cpu), cpu.max, self.decodeMs, avg(wait), wait.max, avg(draw), avg(lat), lat.max);
 }
 
 - (double)rate:(int)i {
@@ -755,14 +791,18 @@ static BOOL boolDefault(NSString* key, BOOL def) {
         return;
     }
 
-    // Two frames on the GPU at most; a GPU that stopped answering drops frames rather than queueing them
+    // Three frames on the GPU at most; a GPU that stopped answering drops frames rather than queueing them
     if (dispatch_semaphore_wait(_inflight, dispatch_time(DISPATCH_TIME_NOW, 100 * NSEC_PER_MSEC)) != 0) {
         [self badFrame:"GPU busy"];
         return;
     }
-    const int s = _slot;
-    _slot = (_slot + 1) % kFramesInFlight;
     dispatch_semaphore_t inflight = _inflight;
+    // a slot that's neither the newest decoded frame nor the one being drawn
+    int s = 0;
+    {
+        std::lock_guard<std::mutex> lock(_presentLock);
+        while (s == _latestSlot || s == _drawingSlot) s++;
+    }
 
     id<MTLCommandBuffer> decodeCb = [_queue commandBuffer];
     decodeCb.label = @"PyroWave decode";
@@ -779,16 +819,49 @@ static BOOL boolDefault(NSString* key, BOOL def) {
         if (cb.status == MTLCommandBufferStatusCompleted) {
             [weakSelf addGpuMs:(cb.GPUEndTime - cb.GPUStartTime) * 1e3];
         }
+        dispatch_semaphore_signal(inflight);
     }];
-    // The decode starts on the GPU while we wait for a drawable
     [decodeCb commit];
+    {
+        // the draw that shows it goes on the same queue after it, so it sees the whole frame
+        std::lock_guard<std::mutex> lock(_presentLock);
+        _latestSlot = s;
+        _latestSeq++;
+    }
+    _nDecoded++;
+    dispatch_async(_presentQueue, ^{ [weakSelf presentLatest]; });
+}
 
+/// Draws the newest decoded frame and presents it, unless a presented one isn't on screen yet: then this runs again
+/// when it is, with whatever is newest by then (so a frame never waits behind more than one). Present queue.
+- (void)presentLatest {
+    if (_stopped || _background) return;
+    const CFTimeInterval start = CACurrentMediaTime();
+    int s;
+    uint64_t seq;
+    {
+        std::lock_guard<std::mutex> lock(_presentLock);
+        // a drawable that never says it was presented doesn't hold the picture up for long
+        if (_presentInFlight && start - _presentSince < 0.1) return;
+        if (_latestSlot < 0 || _latestSeq == _drawnSeq) return;
+        s = _latestSlot;
+        seq = _latestSeq;
+        _drawingSlot = s;
+        _presentInFlight = true;
+        _presentSince = start;
+    }
     id<CAMetalDrawable> drawable = [_layer nextDrawable];
+    const double waitMs = (CACurrentMediaTime() - start) * 1e3;
+    id<MTLRenderPipelineState> pipe = drawable ? [self pipelineFor:drawable.texture.pixelFormat] : nil;
+    if (!pipe) {
+        std::lock_guard<std::mutex> lock(_presentLock);
+        _presentInFlight = false;
+        _drawingSlot = -1;
+        return;
+    }
     id<MTLCommandBuffer> drawCb = [_queue commandBuffer];
     drawCb.label = @"PyroWave picture";
-    [drawCb addCompletedHandler:^(id<MTLCommandBuffer>) { dispatch_semaphore_signal(inflight); }];
-    id<MTLRenderPipelineState> pipe = drawable ? [self pipelineFor:drawable.texture.pixelFormat] : nil;
-    if (pipe) {
+    {
         const MTLPixelFormat fmt = drawable.texture.pixelFormat;
         const bool hdr = _hdrActive;
         // the layer is PQ (EDR) only while HDR is on and the screen has EDR; otherwise HDR is tone mapped
@@ -826,18 +899,48 @@ static BOOL boolDefault(NSString* key, BOOL def) {
         [enc setFragmentBytes:&pc length:sizeof(pc) atIndex:0];
         [enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:3];
         [enc endEncoding];
-        // counted when it's really on screen
-        __weak MCPyroWaveRenderer* counter = self;
-        [drawable addPresentedHandler:^(id<MTLDrawable> d) {
-            MCPyroWaveRenderer* me = counter;
-            if (me && d.presentedTime > 0) me->_nPresented++;
-        }];
-        [drawCb presentDrawable:drawable];
     }
+    __weak MCPyroWaveRenderer* weakSelf = self;
+    __block CFTimeInterval committed = 0;
+    [drawCb addCompletedHandler:^(id<MTLCommandBuffer> cb) {
+        MCPyroWaveRenderer* me = weakSelf;
+        if (!me) return;
+        std::lock_guard<std::mutex> lock(me->_presentLock);
+        // the GPU is done reading the slot
+        if (me->_drawingSlot == s) me->_drawingSlot = -1;
+        if (cb.status == MTLCommandBufferStatusCompleted) {
+            std::lock_guard<std::mutex> slock(me->_statsLock);
+            me->_stDraw.add((cb.GPUEndTime - cb.GPUStartTime) * 1e3);
+        }
+    }];
+    [drawable addPresentedHandler:^(id<MTLDrawable> d) {
+        MCPyroWaveRenderer* me = weakSelf;
+        if (!me) return;
+        {
+            std::lock_guard<std::mutex> lock(me->_presentLock);
+            me->_presentInFlight = false;
+        }
+        if (d.presentedTime > 0) {
+            me->_nPresented++;
+            std::lock_guard<std::mutex> slock(me->_statsLock);
+            me->_stLatency.add((d.presentedTime - committed) * 1e3);
+        }
+        // a newer frame may have been decoded while this one waited for the screen
+        dispatch_async(me->_presentQueue, ^{ [weakSelf presentLatest]; });
+    }];
+    [drawCb presentDrawable:drawable];
+    committed = CACurrentMediaTime();
     [drawCb commit];
-    _nDecoded++;
-
-    if (pipe && !_shown) {
+    {
+        std::lock_guard<std::mutex> lock(_presentLock);
+        _drawnSeq = seq;
+    }
+    _nDrawn++;
+    {
+        std::lock_guard<std::mutex> slock(_statsLock);
+        _stWait.add(waitMs);
+    }
+    if (!_shown) {
         _shown = YES;
         void (^first)(void) = self.onFirstFrame;
         if (first) dispatch_async(dispatch_get_main_queue(), first);
@@ -868,6 +971,10 @@ static BOOL boolDefault(NSString* key, BOOL def) {
     if (_stopped.exchange(true) || !_inflight) return;
     gStreamActive = false;
     [_frameLock lock];
+    // nothing more is drawn after this
+    if (_presentQueue && strcmp(dispatch_queue_get_label(DISPATCH_CURRENT_QUEUE_LABEL), dispatch_queue_get_label(_presentQueue)) != 0) {
+        dispatch_sync(_presentQueue, ^{});
+    }
     // the GPU finishes with the frames it has before the decoder goes
     for (int i = 0; i < kFramesInFlight; i++) dispatch_semaphore_wait(_inflight, dispatch_time(DISPATCH_TIME_NOW, NSEC_PER_SEC));
     for (int i = 0; i < kFramesInFlight; i++) dispatch_semaphore_signal(_inflight);
