@@ -29,6 +29,13 @@ NS_ASSUME_NONNULL_BEGIN
 /// The PyroWave style's spatial dithering: 0 off, 1 low, 2 high (default low).
 @property (class, readonly) int ditherMode;
 
+/// A PyroWave stream is decoding now.
+@property (class, readonly) BOOL streamActive;
+
+/// The video stream's totals so far (moonlight-common-c): "packets" and "bytes" that reached the socket, and
+/// "missing" packets by RTP sequence (lost before the socket, on the network or the Wi-Fi link).
++ (NSDictionary<NSString*, NSNumber*>*)receiveTotals;
+
 /// The bitrate PyroWave looks good at, in kbps: 400 Mbps at 1440p120 scaled by pixels and frame rate (Moonlight X).
 + (int)recommendedKbpsWidth:(int)width height:(int)height fps:(int)fps;
 

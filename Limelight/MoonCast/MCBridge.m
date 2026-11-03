@@ -150,7 +150,7 @@
     }
 }
 
-+ (nullable NSString*) offerPyroWave:(StreamConfiguration*)config away:(BOOL)away {
++ (nullable NSString*) offerPyroWave:(StreamConfiguration*)config away:(BOOL)away allow444:(BOOL)allow444 {
     if (!MCPyroWave.wanted) {
         return nil;
     }
@@ -169,7 +169,7 @@
     }
     TemporarySettings* settings = [[[DataManager alloc] init] getSettings];
     BOOL tenBit = settings.enableHdr;
-    BOOL yuv444 = MCPyroWave.want444;
+    BOOL yuv444 = MCPyroWave.want444 && allow444;
     int formats = VIDEO_FORMAT_PYROWAVE;
     if (tenBit && (scm & SCM_PYROWAVE_10BIT)) formats |= VIDEO_FORMAT_PYROWAVE_10BIT;
     if (yuv444 && (scm & SCM_PYROWAVE_444)) formats |= VIDEO_FORMAT_PYROWAVE_444;

@@ -164,6 +164,7 @@
 		718BB6E7E9DB524121A6CABF /* MCFsrRtc.swift in Sources */ = {isa = PBXBuildFile; fileRef = E768DDE95ABD7645347E8360 /* MCFsrRtc.swift */; };
 		64865257E4CAF602A1D0BBC8 /* MCPip.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61F7ABBAD484211679DD7F5D /* MCPip.swift */; };
 		921EC5A166FC0945D40A0245 /* MCStatsPill.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C8E77FA16777CC1B051C6CE /* MCStatsPill.swift */; };
+		FD493D5D9536B9D6F8C27D54 /* MCPyroWaveLink.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D85952DB7FB77D502D002F3 /* MCPyroWaveLink.swift */; };
 		B758096E7BF0B7341DD7196B /* MCSettingsCards.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9884395C1F6BAFBB7226581A /* MCSettingsCards.swift */; };
 		E67EBC0246EFFC5B6C3AB181 /* MCStyles.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7C86825391A6ABDE6569C3D /* MCStyles.swift */; };
 		195E6C6249A905795B9DCD31 /* MCNative.swift in Sources */ = {isa = PBXBuildFile; fileRef = 13E8911994C23DC2B0EECAFE /* MCNative.swift */; };
@@ -391,6 +392,7 @@
 		8F4F36483CF5DF6B5A31894B /* MCAbout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCAbout.swift; sourceTree = "<group>"; };
 		C3978CAC59C43325CF6103A6 /* licences.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = licences.txt; sourceTree = "<group>"; };
 		7C8E77FA16777CC1B051C6CE /* MCStatsPill.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCStatsPill.swift; sourceTree = "<group>"; };
+		8D85952DB7FB77D502D002F3 /* MCPyroWaveLink.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCPyroWaveLink.swift; sourceTree = "<group>"; };
 		9884395C1F6BAFBB7226581A /* MCSettingsCards.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCSettingsCards.swift; sourceTree = "<group>"; };
 		E7C86825391A6ABDE6569C3D /* MCStyles.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCStyles.swift; sourceTree = "<group>"; };
 		13E8911994C23DC2B0EECAFE /* MCNative.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCNative.swift; sourceTree = "<group>"; };
@@ -791,6 +793,7 @@
 				E768DDE95ABD7645347E8360 /* MCFsrRtc.swift */,
 				61F7ABBAD484211679DD7F5D /* MCPip.swift */,
 				7C8E77FA16777CC1B051C6CE /* MCStatsPill.swift */,
+				8D85952DB7FB77D502D002F3 /* MCPyroWaveLink.swift */,
 				9884395C1F6BAFBB7226581A /* MCSettingsCards.swift */,
 				E7C86825391A6ABDE6569C3D /* MCStyles.swift */,
 				13E8911994C23DC2B0EECAFE /* MCNative.swift */,
@@ -1031,6 +1034,7 @@
 				718BB6E7E9DB524121A6CABF /* MCFsrRtc.swift in Sources */,
 				64865257E4CAF602A1D0BBC8 /* MCPip.swift in Sources */,
 				921EC5A166FC0945D40A0245 /* MCStatsPill.swift in Sources */,
+				FD493D5D9536B9D6F8C27D54 /* MCPyroWaveLink.swift in Sources */,
 				807A1C2E65DD27402D1DF10B /* MCPyroWave.mm in Sources */,
 				151ACF847929A1B555AACAA7 /* pyrowave_common.mm in Sources */,
 				F1245B5E023B8B8A93B716F7 /* pyrowave_decoder.mm in Sources */,

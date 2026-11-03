@@ -91,7 +91,19 @@ enum MCPcStyles {
         let wh = r.split(separator: "x").compactMap { Int($0) }
         let (w, h) = r == "native" || wh.count != 2 ? MCSettings.native : (wh[0], wh[1])
         let f = m["fps"] as? String ?? "native"
-        return Int(MCPyroWave.recommendedKbpsWidth(Int32(w), height: Int32(h), fps: Int32(f == "native" ? MCSettings.nativeHz : Int(f) ?? 60)))
+        let rec = Int(MCPyroWave.recommendedKbpsWidth(Int32(w), height: Int32(h), fps: Int32(f == "native" ? MCSettings.nativeHz : Int(f) ?? 60)))
+        // what this network was found to carry (MCPyroWaveLink)
+        return MCPyroWaveLink.displayCapKbps.map { min(rec, $0) } ?? rec
+    }
+
+    /// The PyroWave style's Recommended bitrate is held down by this network's measured limit.
+    static func pyroWifiLimited(_ m: [String: Any]) -> Bool {
+        guard let cap = MCPyroWaveLink.displayCapKbps else { return false }
+        let r = m["res"] as? String ?? "native"
+        let wh = r.split(separator: "x").compactMap { Int($0) }
+        let (w, h) = r == "native" || wh.count != 2 ? MCSettings.native : (wh[0], wh[1])
+        let f = m["fps"] as? String ?? "native"
+        return cap < Int(MCPyroWave.recommendedKbpsWidth(Int32(w), height: Int32(h), fps: Int32(f == "native" ? MCSettings.nativeHz : Int(f) ?? 60)))
     }
 
     /// The PyroWave style's bitrate is its recommended one (nothing fine-tuned).

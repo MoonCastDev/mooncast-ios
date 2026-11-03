@@ -48,7 +48,8 @@ NS_ASSUME_NONNULL_BEGIN
 /// PyroWave, the stream is at home ([away] NO) and the PC offers it (SCM_PYROWAVE); 10-bit with HDR on, 4:4:4 with
 /// the style's 4:4:4 on, each only when the PC has it. Returns the note to show when the style is in use but the
 /// PC doesn't offer PyroWave (the stream then uses the usual codec), else nil.
-+ (nullable NSString*) offerPyroWave:(StreamConfiguration*)config away:(BOOL)away;
+/// [allow444] NO: 4:2:0 this time whatever the style says (a slow link, MCPyroWaveLink).
++ (nullable NSString*) offerPyroWave:(StreamConfiguration*)config away:(BOOL)away allow444:(BOOL)allow444;
 
 /// Asks the PC for its server info and fills the host in. Nil when it worked, else the error to show.
 + (nullable NSString*) refreshServerInfo:(TemporaryHost*)host discovery:(DiscoveryManager*)disc;

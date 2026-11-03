@@ -302,10 +302,14 @@ final class MCStore: NSObject, ObservableObject, DiscoveryCallback, PairCallback
         MCNativeRes.prepare(cfg, host: g.host)
         // over the internet, Home streams with the Away settings and never more than 100 Mbps (MCAwayStream)
         MCAwayStream.prepare(cfg, host: g.host) { [weak self] plan in
-            // Settings' PyroWave play style: at home, when the PC offers it (MCPyroWave)
-            let note = MCBridge.offerPyroWave(cfg, away: plan.away)
+            // Settings' PyroWave play style: at home, when the PC offers it (MCPyroWave), within what this network
+            // carries (MCPyroWaveLink)
+            var link = MCPyroWaveLink.Plan()
+            if !plan.away, let h = g.host { link = MCPyroWaveLink.prepare(cfg, host: h) }
+            let note = MCBridge.offerPyroWave(cfg, away: plan.away, allow444: link.allow444)
             self?.onStream?(cfg)
-            if let msg = plan.message ?? note { MCToast.show(msg) }
+            if let msg = plan.message ?? note ?? link.note { MCToast.show(msg) }
+            if !plan.away && MCPyroWave.wanted { MCPyroWaveLink.watch(g, kbps: Int(cfg.bitRate)) }
         }
     }
 

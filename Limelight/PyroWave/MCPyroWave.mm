@@ -371,6 +371,16 @@ static BOOL probeDevice(void) {
     return able;
 }
 
+static std::atomic<bool> gStreamActive{false};
+
++ (BOOL)streamActive { return gStreamActive; }
+
++ (NSDictionary<NSString*, NSNumber*>*)receiveTotals {
+    uint64_t packets = 0, bytes = 0, missing = 0;
+    LiGetVideoReceiveTotals(&packets, &bytes, &missing);
+    return @{ @"packets": @(packets), @"bytes": @(bytes), @"missing": @(missing) };
+}
+
 + (BOOL)wanted { return [NSUserDefaults.standardUserDefaults boolForKey:@"mc_pyrowave"]; }
 
 static BOOL boolDefault(NSString* key, BOOL def) {
@@ -569,6 +579,7 @@ static BOOL boolDefault(NSString* key, BOOL def) {
         if (me->_boostWanted && me->_boost) me->_boost->start();
     }];
 
+    gStreamActive = true;
     PWLog(@"MoonCast: PyroWave decoding %dx%d %d fps%s%s on %@, chroma %s, dither %d, GPU boost %d", width, height, fps,
           _tenBit ? " 10-bit" : "", _chroma444 ? " 4:4:4" : " 4:2:0", _mtl.name,
           _chroma444 ? "full" : _centerChroma ? "centered" : "left-sited", _dither, (int)_boostWanted);
@@ -855,6 +866,7 @@ static BOOL boolDefault(NSString* key, BOOL def) {
 
 - (void)stop {
     if (_stopped.exchange(true) || !_inflight) return;
+    gStreamActive = false;
     [_frameLock lock];
     // the GPU finishes with the frames it has before the decoder goes
     for (int i = 0; i < kFramesInFlight; i++) dispatch_semaphore_wait(_inflight, dispatch_time(DISPATCH_TIME_NOW, NSEC_PER_SEC));
