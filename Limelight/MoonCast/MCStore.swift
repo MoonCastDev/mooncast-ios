@@ -94,6 +94,8 @@ final class MCStore: NSObject, ObservableObject, DiscoveryCallback, PairCallback
         }
         MCStore.migrateLinkCap()
         DispatchQueue.global(qos: .utility).async { _ = MCPyroWave.deviceSupported }
+        // which network this is, for Automatic bitrate (MCLink)
+        MCNetworkId.start()
         Task { await MCTvFinder.testTarget(); await MCTvFinder.checkTarget(); self.bump() }
         #if DEBUG
         // test runs: MC_SET="key=value;key=value" sets settings (numbers and true/false as such)
@@ -117,10 +119,9 @@ final class MCStore: NSObject, ObservableObject, DiscoveryCallback, PairCallback
             else if p[1] == "true" || p[1] == "false" { UserDefaults.standard.set(p[1] == "true", forKey: p[0]) }
             else { UserDefaults.standard.set(p[1], forKey: p[0]) }
         }
-        // MC_LINK_RESET=1 forgets what Automatic bitrate learnt about every network (mc_pw_link, mc_pw_link_user)
+        // MC_LINK_RESET=1 forgets everything Automatic bitrate learnt (mc_link_v2, mc_link_once, mc_link_modes, and the old mc_pw_link*)
         if ProcessInfo.processInfo.environment["MC_LINK_RESET"] == "1" {
-            UserDefaults.standard.removeObject(forKey: "mc_pw_link")
-            UserDefaults.standard.removeObject(forKey: "mc_pw_link_user")
+            MCLink.resetAll()
             NSLog("MoonCast: MC_LINK_RESET: link memory cleared")
             fputs("MoonCast: MC_LINK_RESET: link memory cleared\n", stderr)
         }
@@ -332,7 +333,7 @@ final class MCStore: NSObject, ObservableObject, DiscoveryCallback, PairCallback
             // Automatic bitrate: within what this network carries (MCLink); Settings' PyroWave play style at home,
             // when the PC offers it (MCPyroWave)
             var link = MCLink.Plan()
-            if let h = g.host { link = MCLink.prepare(cfg, host: h) }
+            if let h = g.host { link = MCLink.prepare(cfg, host: h, away: plan.away) }
             let note = MCBridge.offerPyroWave(cfg, away: plan.away, allow444: link.allow444)
             self?.onStream?(cfg)
             if let msg = plan.message ?? note ?? link.note { MCToast.show(msg) }

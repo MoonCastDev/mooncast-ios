@@ -383,6 +383,10 @@ static std::atomic<bool> gStreamActive{false};
 
 + (BOOL)streamActive { return gStreamActive; }
 
+static std::atomic<double> gPresentedFps{-1};
+
++ (double)lastPresentedFps { return gStreamActive ? gPresentedFps.load() : -1; }
+
 + (NSDictionary<NSString*, NSNumber*>*)receiveTotals {
     uint64_t packets = 0, bytes = 0, missing = 0;
     LiGetVideoReceiveTotals(&packets, &bytes, &missing);
@@ -750,6 +754,7 @@ static BOOL boolDefault(NSString* key, BOOL def) {
         _rates[1] = dec / t;
         _rates[2] = pres / t;
         _rates[3] = skip / t;
+        gPresentedFps = pres / t;
         wait = _stWait; draw = _stDraw; lat = _stLatency; cpu = _stCpu;
         _stWait = _stDraw = _stLatency = _stCpu = Stage();
     }

@@ -1062,7 +1062,7 @@ struct MCRoot: View {
                 }
                 settings.save { $0.bitrate = i == 0 ? auto : rates[i - 1] }
             }
-            toggle("s:autorate", "Automatic bitrate", "Steps down when Wi-Fi drops packets, back up when it's clean", MCLink.enabled, m, p) {
+            toggle("s:autorate", "Automatic bitrate", "Steps down when the network drops packets, back up when it's clean. The bitrate is then the most it uses", MCLink.enabled, m, p) {
                 UserDefaults.standard.set(!MCLink.enabled, forKey: "mc_auto_bitrate")
             }
             choice("s:codec", "Video codec", "HEVC and AV1 look better at the same bitrate", ["Auto", "H.264", "HEVC", "AV1"],

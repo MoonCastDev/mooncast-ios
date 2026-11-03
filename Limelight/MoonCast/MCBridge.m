@@ -36,6 +36,17 @@
 
 @implementation MCBridge
 
++ (NSDictionary<NSString*, NSNumber*>*) linkSignals {
+    uint64_t packets = 0, bytes = 0, missing = 0;
+    LiGetVideoReceiveTotals(&packets, &bytes, &missing);
+    uint32_t rtt = 0, var = 0;
+    BOOL haveRtt = LiGetEstimatedRttInfo(&rtt, &var);
+    return @{ @"packets": @(packets), @"bytes": @(bytes), @"missing": @(missing),
+              @"unrecoverable": @(LiGetVideoUnrecoverableFrames()),
+              @"rtt": @(haveRtt ? (int)rtt : -1), @"rttVar": @(haveRtt ? (int)var : -1),
+              @"pending": @(LiGetPendingVideoFrames()) };
+}
+
 + (nullable NSDictionary*) polarisJSON:(TemporaryHost*)host path:(NSString*)path body:(nullable NSDictionary*)body {
     NSData* json = nil;
     if (body != nil) {

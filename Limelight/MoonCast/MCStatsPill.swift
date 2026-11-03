@@ -144,7 +144,7 @@ final class MCStatsPill: UIView {
                 // Automatic bitrate: "(auto)", and the Wi-Fi limit learnt
                 let auto = (d["bitrateAuto"] as? NSNumber)?.boolValue == true
                 let limit = num("limitMbps").map { String(format: " · limit %.0f", $0) } ?? ""
-                rows.append(("Bitrate", String(format: m < 10 ? "%.1f Mbps" : "%.0f Mbps", m) + (auto ? " (auto)" + limit : "")))
+                rows.append(("Bitrate", String(format: m < 10 ? "%.1f Mbps" : "%.0f Mbps", m) + (auto ? " (auto" + limit + ")" : "")))
             }
             if let r = rtt { rows.append(("Network delay", String(format: "%.0f ms", r) + (num("rttVar").map { String(format: " ± %.0f", $0) } ?? ""))) }
             if let dec = num("decode") { rows.append(("Decode", String(format: "%.1f ms", dec))) }

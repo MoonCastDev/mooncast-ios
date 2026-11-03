@@ -44,6 +44,11 @@ FOUNDATION_EXPORT BOOL McVideoRunning(void);
 
 /// Polaris's paired JSON API (/polaris/v1/...): the answer parsed, or nil when it failed or isn't JSON. Blocks; not on
 /// the main thread. [body] nil: GET, else POST.
+/// Automatic bitrate's signals for the stream running now (MCLink), all totals since it started except the last
+/// three: "packets", "bytes", "missing" (by RTP sequence), "unrecoverable" (frames FEC couldn't save), "rtt" and
+/// "rttVar" (ms, -1 unknown), "pending" (decode units waiting).
++ (NSDictionary<NSString*, NSNumber*>*) linkSignals;
+
 + (nullable NSDictionary*) polarisJSON:(TemporaryHost*)host path:(NSString*)path body:(nullable NSDictionary*)body;
 
 /// What MainFrameViewController's prepareToStreamApp builds: the saved settings, clamped to this screen.

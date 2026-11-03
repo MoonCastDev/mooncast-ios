@@ -98,7 +98,7 @@ enum MCPcStyles {
 
     /// The PyroWave style's Recommended bitrate is held down by this network's measured limit.
     static func pyroWifiLimited(_ m: [String: Any]) -> Bool {
-        guard let cap = MCLink.displayCapKbps else { return false }
+        guard let cap = MCLink.displayCapKbps() else { return false }
         let r = m["res"] as? String ?? "native"
         let wh = r.split(separator: "x").compactMap { Int($0) }
         let (w, h) = r == "native" || wh.count != 2 ? MCSettings.native : (wh[0], wh[1])

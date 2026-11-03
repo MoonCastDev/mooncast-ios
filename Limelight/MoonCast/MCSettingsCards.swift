@@ -919,13 +919,22 @@ extension MCRoot {
         let pyro = style?.pyro == true
         rows.append(AnyView(bitrateRow(v, recommended: pyro ? MCPcStyles.pyroRecommended(MCPcStyles.values("pyro")) : nil, m, p)))
         // Fine-tune (the live settings): Automatic bitrate, per profile (MCLink)
+        // what this PC does (Live, Brief reconnects, Suggestions only) and this network's learnt limit, with Forget
         if style == nil {
             let auto = MCLink.enabled
-            let limit = MCLink.displayCapKbps.map { " Wi-Fi here: ~\($0 / 1000) Mbps." } ?? ""
-            rows.append(AnyView(vrow("autoRate", "Automatic bitrate", onOff(auto),
-                                     sub: "Steps down when Wi-Fi drops packets, back up when it's clean." + (auto ? limit : ""), m, p) {
+            let pc = pcOf()
+            let limit = MCLink.displayCapKbps(pc)
+            let here = MCNetworkId.label(MCNetworkId.current())
+            rows.append(AnyView(vrow("autoRate", "Automatic bitrate", auto ? "On · \(MCHostCaps.modeLabel(pc))" : "Off",
+                                     sub: "Steps down when the network drops packets, back up when it's clean." +
+                                        (auto ? " The bitrate above is the most it uses." : ""), m, p) {
                 UserDefaults.standard.set(!auto, forKey: "mc_auto_bitrate"); settingsRev += 1
             }))
+            if auto, let l = limit {
+                rows.append(AnyView(vrow("autoLimit", "Limit on \(here)", "~\(l / 1000) Mbps", sub: "Learnt while playing. A to forget it.", m, p) {
+                    MCLink.forgetThisNetwork(); MCToast.show("Forgot \(here)'s limit"); settingsRev += 1
+                }))
+            }
         }
         // a play style: PyroWave is its codec; the other styles pick theirs
         if !pyro {
@@ -999,7 +1008,7 @@ extension MCRoot {
         let kbps = recommended != nil && MCPcStyles.pyroRecommendedRate ? 0 : v.i("kbps", 0)
         let at = steps.firstIndex(of: kbps) ?? steps.indices.min { abs(steps[$0] - kbps) < abs(steps[$1] - kbps) } ?? 0
         let wifi = recommended != nil && MCPcStyles.pyroWifiLimited(MCPcStyles.values("pyro"))
-        let auto = recommended.map { "Recommended · \(MCPcStyles.mbps($0))" + (wifi ? " (Wi-Fi ~\((MCLink.displayCapKbps ?? 0) / 1000))" : "") } ?? "Auto"
+        let auto = recommended.map { "Recommended · \(MCPcStyles.mbps($0))" + (wifi ? " (network ~\((MCLink.displayCapKbps() ?? 0) / 1000))" : "") } ?? "Auto"
         let value = kbps == 0 ? auto : steps.contains(kbps) ? MCPcStyles.mbps(kbps) : "\(MCPcStyles.mbps(kbps)) (exact)"
         let exact = {
             askText("Exact bitrate", "0.5 to \(MCSettings.pcMaxMbps) Mbps") { t in
@@ -1017,7 +1026,8 @@ extension MCRoot {
         }
         return VStack(alignment: .leading, spacing: m.px(10)) {
             HStack(spacing: m.px(20)) {
-                Text("Bitrate").mcFont(28, m).foregroundColor(p.ink)
+                // the most Automatic bitrate uses, while it's on
+                Text(MCLink.enabled ? "Bitrate (ceiling)" : "Bitrate").mcFont(28, m).foregroundColor(p.ink)
                 Spacer(minLength: m.px(10))
                 // a tap on the value types an exact bitrate, as A on the row does
                 Text(value).mcFont(28, m, weight: .heavy).foregroundColor(p.ring).lineLimit(1)
