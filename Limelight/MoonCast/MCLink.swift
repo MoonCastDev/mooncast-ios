@@ -115,6 +115,12 @@ enum MCHostCaps {
         UserDefaults.standard.set(modes, forKey: "mc_link_modes")
     }
 
+    /// "Live", "Brief reconnects" or "Suggestions only" once this PC has streamed; nil before.
+    static func mode(_ host: TemporaryHost?) -> String? {
+        guard let h = host, let m = UserDefaults.standard.dictionary(forKey: "mc_link_modes")?[h.uuid] as? String else { return nil }
+        return ["live": "Live", "advise": "Suggestions only"][m] ?? "Brief reconnects"
+    }
+
     /// What Settings says this PC does: Live, Brief reconnects or Suggestions only; before it has streamed, that it's
     /// found when you play.
     static func modeLabel(_ host: TemporaryHost?) -> String {
@@ -380,6 +386,18 @@ final class MCLink: NSObject {
     /// A step-up that the controller made (rate, link entry) waits to be proven before the memory takes it.
     private static var unprovenUp: (kbps: Int, wire: Int)?
     private static var lastSuggestAt: Date?
+    /// A new bitrate set while streaming (the Quick menu's Play style), for the running controller to apply live.
+    private static var pendingCeiling: Int?
+    /// The running stream can change its bitrate live (tier A found).
+    @objc private(set) static var liveCapable = false
+
+    /// The bitrate set changed mid-stream (only the bitrate: a play style with the same picture). With a live way to
+    /// the host the running stream takes it as its new ceiling, at min(ceiling, the limit here); false: reconnect.
+    static func changeCeilingLive(_ kbps: Int) -> Bool {
+        guard enabled, liveCapable, timer != nil, kbps > 0 else { return false }
+        pendingCeiling = kbps
+        return true
+    }
     private static var runs = 0
 
     enum Health { case good, strained, congested }
@@ -391,6 +409,8 @@ final class MCLink: NSObject {
         timer = nil
         let plan = self.plan
         guard plan.on, let host = game.host else { return }
+        var ceiling = plan.ceiling
+        pendingCeiling = nil
         runs += 1
         let run = runs
         let w = Int(cfg.width), h = Int(cfg.height), fps = Int(cfg.frameRate)
@@ -418,7 +438,7 @@ final class MCLink: NSObject {
         var working = false
         var deviceHinted = false
         var lastLogAt = Date.distantPast
-        log("MoonCast: auto bitrate: run \(run) watching \(game.title) at \(current / 1000) Mbps (ceiling \(plan.ceiling / 1000), floor \(plan.floor / 1000))")
+        log("MoonCast: auto bitrate: run \(run) watching \(game.title) at \(current / 1000) Mbps (ceiling \(ceiling / 1000), floor \(plan.floor / 1000))")
 
         func resetGood(_ why: String) {
             if !window.isEmpty { fputs("MoonCast: auto bitrate: run \(run): window cleared at good \(good)/\(window.count) (\(why))\n", stderr) }
@@ -427,8 +447,8 @@ final class MCLink: NSObject {
 
         func store(rate: Int, wire: Int) {
             guard let k = plan.key else { return }
-            remember(k, Link(rate: rate >= plan.ceiling ? 0 : rate, wire: wire, at: 0, hold: hold, fails: fails))
-            liveLimitKbps = rate < plan.ceiling ? rate : 0
+            remember(k, Link(rate: rate >= ceiling ? 0 : rate, wire: wire, at: 0, hold: hold, fails: fails))
+            liveLimitKbps = rate < ceiling ? rate : 0
         }
 
         /// A change took: what the stream runs at now.
@@ -514,7 +534,7 @@ final class MCLink: NSObject {
             congested = 0
             samples = []
             resetGood("stepping down")
-            var to = min(plan.ceiling, capKbps(carried))
+            var to = min(ceiling, capKbps(carried))
             let now = Date()
             // a step-up that turned congested within a minute: back to where it was (lower if the link says so),
             // and twice the wait before the next one
@@ -544,8 +564,8 @@ final class MCLink: NSObject {
 
         func stepUpNow() {
             resetGood("stepping up")
-            let to = min(plan.ceiling, max(current + 1000, Int(Double(current) * stepUp) / 1000 * 1000))
-            log("MoonCast: auto bitrate: good \(good)/\(goodSeconds) in window at \(current / 1000) Mbps: up to \(to / 1000) Mbps (ceiling \(plan.ceiling / 1000))")
+            let to = min(ceiling, max(current + 1000, Int(Double(current) * stepUp) / 1000 * 1000))
+            log("MoonCast: auto bitrate: good \(good)/\(goodSeconds) in window at \(current / 1000) Mbps: up to \(to / 1000) Mbps (ceiling \(ceiling / 1000))")
             // the memory takes it once it has held for a minute
             unprovenUp = (to, Int(Double(to) * wireOverhead / share))
             apply(to, note: "Network clear: \(to / 1000) Mbps", down: false)
@@ -558,6 +578,7 @@ final class MCLink: NSObject {
                     t.invalidate()
                     if timer === t { timer = nil }
                     liveKbps = 0
+                    liveCapable = false
                 }
                 return
             }
@@ -567,10 +588,21 @@ final class MCLink: NSObject {
                     let found = MCHostCaps.probe(host, requestedKbps: plan.start)
                     DispatchQueue.main.async {
                         live = found
+                        liveCapable = found != nil
                         probeDone = true
                         log("MoonCast: auto bitrate: " + (found.map { "tier A: live (\($0.name))" } ?? "tier C: brief reconnects (no live bitrate call)"))
                     }
                 }
+            }
+            if let c = pendingCeiling, probeDone, !working {
+                pendingCeiling = nil
+                ceiling = c
+                let limit = plan.key.flatMap { recall($0) }.map { $0.rate }.flatMap { $0 > 0 ? $0 : nil }
+                let to = max(min(c, plan.floor), min(c, limit ?? c))
+                log("MoonCast: auto bitrate: new ceiling \(c / 1000) Mbps (a play style): \(current / 1000) -> \(to / 1000) Mbps")
+                liveLimitKbps = (limit ?? c) < c ? (limit ?? 0) : 0
+                if to != current { apply(to, note: "Bitrate \(to / 1000) Mbps", down: to < current) }
+                return
             }
             let s = MCBridge.linkSignals().mapValues { $0.doubleValue }
             let now = Date()
@@ -623,7 +655,7 @@ final class MCLink: NSObject {
             #if DEBUG
             fputs(String(format: "MoonCast: auto bitrate: run %ld: %@%@ · %.2f%%%% missing, %.0f frames lost, rtt %.0f (base %.0f) ms, %ld Mbps in, at %ld of %ld Mbps, good %ld/%ld in window%@\n",
                          run, health == .good ? "good" : health == .strained ? "strained" : "congested", why.isEmpty ? "" : " (\(why))",
-                         lossNow * 100, du, rtt, rttBase.isFinite ? rttBase : -1, wireKbps / 1000, current / 1000, plan.ceiling / 1000,
+                         lossNow * 100, du, rtt, rttBase.isFinite ? rttBase : -1, wireKbps / 1000, current / 1000, ceiling / 1000,
                          good, window.count, streakInWindow() ? " (a congested streak in it)" : "").replacingOccurrences(of: "%%", with: "%"), stderr)
             #endif
             if health != .good && now.timeIntervalSince(lastLogAt) > 5 {
@@ -642,12 +674,12 @@ final class MCLink: NSObject {
                 lastUpAt = nil
                 if let u = unprovenUp, u.kbps == current {
                     store(rate: u.kbps, wire: u.wire)
-                    log("MoonCast: auto bitrate: the step-up to \(u.kbps / 1000) Mbps held: the limit here is now \(u.kbps >= plan.ceiling ? "gone (at the ceiling)" : "\(u.kbps / 1000) Mbps")")
+                    log("MoonCast: auto bitrate: the step-up to \(u.kbps / 1000) Mbps held: the limit here is now \(u.kbps >= ceiling ? "gone (at the ceiling)" : "\(u.kbps / 1000) Mbps")")
                 }
                 unprovenUp = nil
             }
             let windowGood = window.count >= goodSeconds && good >= goodNeeded && !streakInWindow()
-            if (windowGood || retryUp) && current < plan.ceiling && now.timeIntervalSince(max(lastChangeAt ?? startedAt, startedAt)) >= hold {
+            if (windowGood || retryUp) && current < ceiling && now.timeIntervalSince(max(lastChangeAt ?? startedAt, startedAt)) >= hold {
                 retryUp = false
                 stepUpNow()
             }

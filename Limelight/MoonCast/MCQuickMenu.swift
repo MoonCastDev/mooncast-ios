@@ -277,11 +277,43 @@ struct MCQuickMenuView: View {
         return list
     }
 
+    /// Play style (PC): the PC play styles, the one in use marked; picking one uses it and restarts the stream (the
+    /// game keeps running), or, when only the bitrate changes and the host takes a live bitrate, changes it live.
+    private func styleItems(_ a: MCQuickActions) -> [Item]? {
+        guard model.page == "style" else { return nil }
+        let picked = MCPcStyles.picked()
+        let exact = MCPcStyles.matches(picked.id)
+        var list = [Item(icon: "chevron.left", label: "Back", detail: "Now: " + MCPcStyles.nowLabel()) { model.page = "main" }]
+        for st in MCPcStyles.all {
+            let inUse = st.id == picked.id
+            let l = MCPcStyles.lines(st)
+            list.append(Item(icon: inUse ? "checkmark" : MCPcStyles.symbol(MCPcStyles.icon(st)),
+                             label: MCPcStyles.name(st) + (st.pyro ? " (experimental)" : ""),
+                             detail: inUse ? (exact ? "In use" : "In use, changed") : "\(l[0]) · \(l[1])") {
+                guard !(inUse && exact), let g = MCStore.shared.playing else { model.page = "main"; return }
+                let before = Dictionary(uniqueKeysWithValues: MCPcStyles.keys.map { ($0, MCPcStyles.liveValue($0) as Any?) })
+                MCPcStyles.use(st)
+                let changed = MCPcStyles.keys.filter { !MCPcStyles.same($0, before[$0] ?? nil, MCPcStyles.liveValue($0)) }
+                model.close()
+                MCToast.show("\(MCPcStyles.name(st)): \(l[0]) · \(l[1])")
+                // only the bitrate: live where the host takes it (Automatic bitrate's tier A)
+                if changed.allSatisfy({ $0 == "kbps" }) {
+                    let k = MCSettings().load().bitrate
+                    if changed.isEmpty || MCLink.changeCeilingLive(k) { return }
+                }
+                a.mcDisconnect()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { MCStore.shared.play(g, here: true) }
+            })
+        }
+        return list
+    }
+
     private func items() -> [Item] {
         let a = model.actions
         let pads = GCController.controllers().count
         if let p = powerItems(a) { return p }
         if let c = padItems(a) { return c }
+        if let st = styleItems(a) { return st }
         if let b = bitrateItems(a) { return b }
         if let t = tvItems(a) { return t }
         let bitrate = Item(icon: "speedometer", label: "Bitrate", detail: bitrateNow(a.mcKind?() ?? "pc") + " · change it here") { model.page = "bitrate" }
@@ -311,6 +343,7 @@ struct MCQuickMenuView: View {
         return [
             Item(icon: "keyboard", label: "Keyboard", detail: "On-screen") { a.mcToggleKeyboard(); model.close() },
             Item(icon: "info.circle", label: "Streaming status", detail: MCStatsLevel.label(MCStatsLevel.current) + " · Off, Lite, Detailed") { a.mcToggleStats(); model.rev += 1 },
+            Item(icon: "slider.horizontal.3", label: "Play style", detail: MCPcStyles.nowLabel() + " · change it here") { model.page = "style" },
             bitrate,
             Item(icon: "gamecontroller", label: "Controllers", detail: pads == 1 ? "1 connected" : "\(pads) connected") { model.page = "pads" },
             Item(icon: "list.bullet.rectangle", label: "Task Manager", detail: "Windows: Ctrl + Shift + Esc") { a.mcTaskManager(); model.flash("Task Manager", "Opened on the PC") },
