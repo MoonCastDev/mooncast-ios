@@ -779,6 +779,13 @@ extension MCRoot {
         var t: [MCTile] = []
         t.append(MCTile(id: "hdr", title: "HDR", state: onOff(v.hdr) + (MCPcStyles.screenHdr ? "" : " · screen can't"), on: v.hdr, icon: "sun.max",
                         color: Color(hex: MCPcStyles.orange), click: { settings.save { $0.hdr.toggle() }; settingsRev += 1 }))
+        // Automatic bitrate (MCLink): on/off; X or a long press shows what this PC does, this network's limit and Forget
+        let auto = MCLink.enabled
+        let mode = MCHostCaps.mode(pcOf())
+        t.append(MCTile(id: "autoRate", title: "Automatic bitrate",
+                        state: auto ? (mode.map { "On · \($0)" } ?? "On") : "Off", on: auto, icon: "speedometer", color: MCPalette.green,
+                        click: { UserDefaults.standard.set(!auto, forKey: "mc_auto_bitrate"); settingsRev += 1 },
+                        details: { autoRateDetails() }))
         // YUV 4:4:4 has no tile: it's gone on iOS (PyroWave's on Android)
         let ull = d.bool(forKey: "mc_ultra_low_latency")
         t.append(MCTile(id: "ull", title: "Ultra low latency", state: onOff(ull), on: ull, icon: "bolt", color: MCPalette.cyan,
@@ -799,6 +806,21 @@ extension MCRoot {
         t.append(MCTile(id: "stats", title: "Stats", state: MCStatsLevel.label(lvl), on: lvl != "off", icon: "waveform.path.ecg", color: MCPalette.red,
                         click: { MCStatsLevel.cycle(); settingsRev += 1 }))
         return t
+    }
+
+    /// Automatic bitrate's details: what this PC does, the limit learnt on this network, and Forget.
+    private func autoRateDetails() {
+        let pc = pcOf()
+        let here = MCNetworkId.label(MCNetworkId.current())
+        let limit = MCLink.displayCapKbps(pc)
+        let msg = "Steps down when the network drops packets, back up when it's clean; the bitrate set is the most it uses.\n\n" +
+            "\(pc?.name ?? "This PC"): \(MCHostCaps.modeLabel(pc)).\n" +
+            (limit.map { "Limit on \(here): ~\($0 / 1000) Mbps, learnt while playing." } ?? "No limit learnt on \(here).")
+        var opts: [MCDialog.Opt] = [.init(title: "Close", picked: true) {}]
+        if limit != nil {
+            opts.append(.init(title: "Forget \(here)'s limit") { MCLink.forgetThisNetwork(); MCToast.show("Forgot \(here)'s limit"); settingsRev += 1 })
+        }
+        store.dialog = MCDialog(title: "Automatic bitrate", message: msg, opts: opts)
     }
 
     /// "ps5" or "xbox".
@@ -918,24 +940,7 @@ extension MCRoot {
         // the PyroWave style: its Auto is its recommended bitrate, which follows the resolution and frame rate
         let pyro = style?.pyro == true
         rows.append(AnyView(bitrateRow(v, recommended: pyro ? MCPcStyles.pyroRecommended(MCPcStyles.values("pyro")) : nil, m, p)))
-        // Fine-tune (the live settings): Automatic bitrate, per profile (MCLink)
-        // what this PC does (Live, Brief reconnects, Suggestions only) and this network's learnt limit, with Forget
-        if style == nil {
-            let auto = MCLink.enabled
-            let pc = pcOf()
-            let limit = MCLink.displayCapKbps(pc)
-            let here = MCNetworkId.label(MCNetworkId.current())
-            rows.append(AnyView(vrow("autoRate", "Automatic bitrate", auto ? "On · \(MCHostCaps.modeLabel(pc))" : "Off",
-                                     sub: "Steps down when the network drops packets, back up when it's clean." +
-                                        (auto ? " The bitrate above is the most it uses." : ""), m, p) {
-                UserDefaults.standard.set(!auto, forKey: "mc_auto_bitrate"); settingsRev += 1
-            }))
-            if auto, let l = limit {
-                rows.append(AnyView(vrow("autoLimit", "Limit on \(here)", "~\(l / 1000) Mbps", sub: "Learnt while playing. A to forget it.", m, p) {
-                    MCLink.forgetThisNetwork(); MCToast.show("Forgot \(here)'s limit"); settingsRev += 1
-                }))
-            }
-        }
+        // (Automatic bitrate is a tile in Fine-tune's grid, pcTiles)
         // a play style: PyroWave is its codec; the other styles pick theirs
         if !pyro {
             let codec = v.i("codec", 0)
