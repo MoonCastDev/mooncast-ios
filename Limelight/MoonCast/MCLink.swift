@@ -146,6 +146,14 @@ enum MCNetworkId {
 
     static func start() { _ = monitor }
 
+    /// A link that can't carry a full-size picture. Android reads the Wi-Fi link speed (1...59 Mbps); iOS has no public
+    /// call for it, so this is mobile data only, or Low Data Mode.
+    static var weakLink: Bool {
+        let path = monitor.currentPath
+        let mobileOnly = path.usesInterfaceType(.cellular) && !path.usesInterfaceType(.wifi) && !path.usesInterfaceType(.wiredEthernet)
+        return mobileOnly || path.isConstrained
+    }
+
     static func current() -> String {
         let path = monitor.currentPath
         if path.usesInterfaceType(.cellular) && !path.usesInterfaceType(.wifi) && !path.usesInterfaceType(.wiredEthernet) { return "mobile" }

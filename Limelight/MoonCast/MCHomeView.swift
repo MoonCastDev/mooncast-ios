@@ -81,7 +81,7 @@ struct MCRoot: View {
             .preferredColorScheme(theme == "light" ? .light : .dark)
         }
         .mcCollectFrames()
-        .onAppear { hookButtons(); testStart(); askUsage() }
+        .onAppear { hookButtons(); testStart(); askUsage(); if MCXbox.signedIn { refreshXboxes(loud: false) } }
         .onChange(of: store.dialog?.id) { _, _ in
             if let d = store.dialog {
                 focus.scope = "dialog"
