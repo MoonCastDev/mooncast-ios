@@ -81,7 +81,7 @@ struct MCRoot: View {
             .preferredColorScheme(theme == "light" ? .light : .dark)
         }
         .mcCollectFrames()
-        .onAppear { hookButtons(); testStart(); askUsage() }
+        .onAppear { hookButtons(); testStart(); askUsage(); if MCXbox.signedIn { refreshXboxes(loud: false) } }
         .onChange(of: store.dialog?.id) { _, _ in
             if let d = store.dialog {
                 focus.scope = "dialog"
@@ -725,21 +725,31 @@ struct MCRoot: View {
                                                    UIPasteboard.general.string = dc.userCode
                                                    openXboxLink(dc.userCode)
                                                    // the dialog closes on a press: put it back while we wait
-                                                   DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { if waiting { xboxWaiting(dc) } }
+                                                   DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { if waiting { xboxWaiting(dc) { waiting = false } } }
                                                },
                                                .init(title: "Cancel") { waiting = false }])
                 let end = Date().addingTimeInterval(Double(dc.expiresIn))
                 while Date() < end {
                     try await Task.sleep(nanoseconds: UInt64(max(2, dc.interval)) * 1_000_000_000)
-                    if !waiting && store.dialog == nil { return }
+                    if !waiting { MCXboxLinkController.close(); return }
                     if try await MCXbox.pollSignIn(dc) {
                         waiting = false
                         store.dialog = nil
-                        refreshXboxes(loud: true)
+                        MCXboxLinkController.close()
+                        if MCXbox.unverified {
+                            // Xbox network couldn't be reached to check the account: still signed in
+                            store.dialog = MCDialog(title: "Signed in",
+                                                    message: "Xbox network couldn't be reached to check the account. Try Refresh Xbox consoles in a moment.",
+                                                    opts: [.init(title: "OK") {}])
+                            refreshXboxes(loud: false)
+                        } else { refreshXboxes(loud: true) }
                         return
                     }
                 }
+                // the poll never ended in a sign-in: say so instead of going quiet
+                if waiting { throw MCXbox.CodeExpired() }
             } catch {
+                MCXboxLinkController.close()
                 store.busy = nil
                 settingsRev += 1
                 store.dialog = MCDialog(title: error is MCXbox.NotAllowed ? "Not an Xbox account" : "Xbox sign-in didn't finish",
@@ -748,9 +758,9 @@ struct MCRoot: View {
         }
     }
 
-    func xboxWaiting(_ dc: MCXbox.DeviceCode) {
+    func xboxWaiting(_ dc: MCXbox.DeviceCode, cancel: @escaping () -> Void) {
         store.dialog = MCDialog(title: "Waiting for Microsoft…", message: "Enter the code on the page, then come back here. (It's copied.)",
-                                big: dc.userCode, opts: [.init(title: "Cancel", picked: true) {}])
+                                big: dc.userCode, opts: [.init(title: "Cancel", picked: true) { cancel() }])
     }
 
     func refreshXboxes(loud: Bool) {
@@ -1213,7 +1223,8 @@ struct MCRoot: View {
             let d = UserDefaults.standard
             if MCXbox.signedIn {
                 row("s:xb:acct", icon: "person.crop.circle", color: MCPalette.green, title: "Xbox network",
-                    sub: MCXbox.gamertag.map { "Signed in as \($0)" } ?? "Signed in, no Xbox profile. Sign out and use your Xbox account", right: "Sign out", m, p) {
+                    sub: MCXbox.gamertag.map { "Signed in as \($0)" } ?? (MCXbox.unverified ? "Signed in. Xbox network couldn't be reached to check the account"
+                        : "Signed in, no Xbox profile. Sign out and use your Xbox account"), right: "Sign out", m, p) {
                     confirm("Sign out of Xbox?", "Your Xbox consoles leave this \(MCDevice.name) until you sign in again.", yes: "Sign out") {
                         MCXbox.signOut(); settingsRev += 1
                     }
