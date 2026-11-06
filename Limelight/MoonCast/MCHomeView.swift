@@ -1090,8 +1090,8 @@ struct MCRoot: View {
             let shapes = ["fit", "zoom", "fill", "stretch"]
             choice("s:shape", "Picture shape", "Fit shows all of it. Zoom halves the bars, trimming the sides only slightly. Fill crops the edges to fill the screen. Stretch fills it and changes the shape",
                    ["Fit", "Zoom", "Fill", "Stretch"], shapes.firstIndex(of: MCPictureShape.current) ?? 0, m, p) { i in ud.set(shapes[i], forKey: "mc_picture_shape") }
-            choice("s:pacing", "Frame pacing", "Trade a little delay for smoother motion", ["Lowest delay", "Smoothest"],
-                   v.pacing ? 1 : 0, m, p) { i in settings.save { $0.pacing = i == 1 } }
+            choice("s:pacing", "Frame pacing", "Trade a little delay for smoother motion", MCPacing.names,
+                   MCPacing.mode, m, p) { i in MCPacing.current = MCPacing.ids[i] }
             toggle("s:ull", "Ultra low latency", "Shows each PC frame the moment it's decoded and keeps sound close behind on PS5 and Xbox. A rough Wi-Fi can stutter more",
                    UserDefaults.standard.bool(forKey: "mc_ultra_low_latency"), m, p) {
                 UserDefaults.standard.set(!UserDefaults.standard.bool(forKey: "mc_ultra_low_latency"), forKey: "mc_ultra_low_latency")

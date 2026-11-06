@@ -17,6 +17,7 @@
 #import "CryptoManager.h"
 #import "Utils.h"
 #import "MCPyroWave.h"
+#import "Moonlight-Swift.h"
 
 #include <openssl/pem.h>
 #include <openssl/x509.h>
@@ -121,6 +122,7 @@
     config.optimizeGameSettings = settings.optimizeGames;
     config.playAudioOnPC = settings.playAudioOnPC;
     config.useFramePacing = settings.useFramePacing;
+    config.pacingMode = (int)MCPacing.mode;
     config.swapABXYButtons = settings.swapABXYButtons;
 
     // multiController must be set before calling getConnectedGamepadMask
