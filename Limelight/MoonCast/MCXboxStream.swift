@@ -21,6 +21,12 @@ final class MCXboxStreamController: UIViewController, MCXboxRtc.Listener, MCQuic
     private var connected = false
     private var closed = false
     private var tries = 0
+    /// The first picture arrived (stats show frames); until then a start can still be retried or timed out
+    private var picture = false
+    private var firstFailAt: Date?
+    private var retrying = false
+    private var ending = false
+    private var pictureDeadline = Date.distantFuture
     private var menuOpen = false
     private var comboFired = false
     private var statsOn: Bool { MCStatsLevel.current != "off" }
@@ -94,6 +100,9 @@ final class MCXboxStreamController: UIViewController, MCXboxRtc.Listener, MCQuic
 
     private func begin() {
         tries += 1
+        retrying = false
+        connected = false
+        pictureDeadline = Date().addingTimeInterval(60)
         setStatus(tries == 1 ? "Waking \(console.name)…" : "\(console.name) is still waking up…")
         Task {
             try? await MCXbox.wake(console.id)
@@ -101,15 +110,31 @@ final class MCXboxStreamController: UIViewController, MCXboxRtc.Listener, MCQuic
                 let auth = try await MCXbox.streamAuth()
                 await MainActor.run { self.startRtc(auth) }
             } catch {
-                await MainActor.run { self.xboxFailed("Couldn't sign in for the stream. \(error.localizedDescription)") }
+                await MainActor.run {
+                    if !MCXbox.signedIn { self.endSession("Sign in to Xbox first: Settings → Xbox.") }
+                    else { self.xboxFailed(Self.describe(error)) }
+                }
             }
         }
+    }
+
+    private static func describe(_ e: Error) -> String {
+        (e as? MCXbox.HttpError).map { "HTTP \($0.code): \($0.body.prefix(160))" } ?? e.localizedDescription
+    }
+
+    /// Settings → Xbox → Picture. No bitrate is sent; the Xbox picks quality from the device type this implies:
+    /// 720 = Android, 1080 = Windows, 1081 = Tizen. Auto: 1080, or 720 on a weak link; a 1440p-or-larger panel asks for
+    /// the high-quality profile, like Native.
+    private var resolution: Int {
+        if MCXbox.resolution != 0 { return MCXbox.resolution }
+        let b = UIScreen.main.nativeBounds
+        return MCNetworkId.weakLink ? 720 : min(b.width, b.height) >= 1440 ? 1081 : 1080
     }
 
     private func startRtc(_ auth: MCXbox.StreamAuth) {
         guard !closed else { return }
         rtc?.stop()
-        let r = MCXboxRtc(consoleId: console.id, auth: auth, resolution: MCXbox.resolution == 0 ? 1080 : MCXbox.resolution,
+        let r = MCXboxRtc(consoleId: console.id, auth: auth, resolution: resolution,
                           coop: MCXbox.coop, maxMbps: MCXbox.maxMbps, renderer: fsrRenderer ?? video)
         r.listener = self
         rtc = r
@@ -125,20 +150,45 @@ final class MCXboxStreamController: UIViewController, MCXboxRtc.Listener, MCQuic
         MCQuickMenu.runTestSteps(in: self)
     }
 
+    /// Microsoft answers "Xccs : ErrorCallingWNS : Send command failed : State WaitingForServerToRegister" (and similar)
+    /// while the console is in standby and hasn't registered with Xbox network's streaming service yet.
+    private func notReady(_ reason: String) -> Bool {
+        let r = reason.lowercased()
+        return ["waitingforservertoregister", "errorcallingwns", "xccs", "connectedstandby", "not registered",
+                "offline", "unavailable", "notready", "not ready"].contains { r.contains($0) }
+    }
+
+    /// The session failed: before the first picture, retry a console that isn't ready (wake every 5 s, about 60 s).
     func xboxFailed(_ reason: String) {
         DispatchQueue.main.async { [self] in
             guard !closed else { return }
-            // a console that isn't ready yet: wake it and try again, about a minute in all
-            if !connected && tries < 6 {
+            NSLog("MoonCast: xbox failed: \(reason)")
+            let first = firstFailAt ?? Date()
+            firstFailAt = first
+            if !picture && notReady(reason) && Date().timeIntervalSince(first) < 60 {
+                if retrying { return }
+                retrying = true
                 rtc?.stop(); rtc = nil
-                DispatchQueue.main.asyncAfter(deadline: .now() + 5) { self.begin() }
+                setStatus("Waking your Xbox…")
+                DispatchQueue.main.asyncAfter(deadline: .now() + 5) { if !self.closed { self.begin() } }
                 return
             }
-            setStatus(nil)
-            let a = UIAlertController(title: console.name, message: reason, preferredStyle: .alert)
-            a.addAction(UIAlertAction(title: "OK", style: .default) { _ in self.leave() })
-            present(a, animated: true)
+            endSession(notReady(reason) ? "Your Xbox didn't answer. Turn it on, or check Settings > Devices & connections > Remote features on the Xbox."
+                       : reason.contains("no picture") ? "Your Xbox connected but sent no picture. Turn the Xbox off and on, then try again."
+                       : "The Xbox stream stopped. \(reason)")
         }
+    }
+
+    /// Stop the console session (so it isn't left running) and say why in plain words.
+    private func endSession(_ msg: String) {
+        guard !closed, !ending else { return }
+        ending = true
+        pictureDeadline = .distantFuture
+        rtc?.stop(); rtc = nil
+        setStatus(nil)
+        let a = UIAlertController(title: console.name, message: msg, preferredStyle: .alert)
+        a.addAction(UIAlertAction(title: "OK", style: .default) { _ in self.leave() })
+        present(a, animated: true)
     }
 
     /// Leaving MoonCast ends the Xbox stream (its WebRTC view can't go into picture in picture).
@@ -157,9 +207,14 @@ final class MCXboxStreamController: UIViewController, MCXboxRtc.Listener, MCQuic
     }
 
     private func tick() {
+        // a start that never reaches the picture (the console accepts the session but sends nothing): end it, say so
+        if !picture && !retrying && !closed && Date() > pictureDeadline {
+            endSession("Your Xbox didn't start the picture in time. Try again, or turn the Xbox off and on.")
+        }
         rtc?.stats { [weak self] s in
             guard let self = self else { return }
             self.last = s
+            if s.fps > 0 { self.picture = true; self.pictureDeadline = .distantFuture }
             guard self.statsOn, self.connected else { self.corner?.isHidden = true; return }
             self.corner?.level = MCStatsLevel.current
             var d: [AnyHashable: Any] = ["fps": s.fps, "rtt": s.rttMs, "mbps": s.mbps, "loss": s.lossPct, "codec": "H.264"]

@@ -410,7 +410,7 @@ extension MCRoot {
                           lines: [(xbPictureLabel(MCXbox.resolution), true), (br == 0 ? "Auto bitrate" : "Up to \(br) Mbps", true),
                                   ("Rumble \(UserDefaults.standard.string(forKey: "xbox_rumble") ?? "strong")", false),
                                   ("Swap A/B \(MCXbox.swapAB ? "on" : "off")", false)],
-                          foot: !MCXbox.signedIn ? "Xbox: not signed in" : MCXbox.gamertag == nil ? "No Xbox profile" : "Signed in · Xbox",
+                          foot: !MCXbox.signedIn ? "Xbox: not signed in" : MCXbox.noProfile ? "No Xbox profile" : "Signed in · Xbox",
                           footRing: false, w, h, m, p)
     }
 
@@ -1212,7 +1212,8 @@ extension MCRoot {
     private func xbSignRows(_ m: MCMetrics, _ p: MCPalette) -> some View {
         if MCXbox.signedIn {
             row("s:xb:acct", icon: "person.crop.circle", color: MCPalette.green, title: "Xbox network",
-                sub: MCXbox.gamertag.map { "Signed in as \($0)" } ?? "Signed in, no Xbox profile. Sign out and use your Xbox account", right: "Sign out", m, p) {
+                sub: MCXbox.gamertag.map { "Signed in as \($0)" } ?? (MCXbox.unverified ? "Signed in. Xbox network couldn't be reached to check the account"
+                    : "Signed in, no Xbox profile. Sign out and use your Xbox account"), right: "Sign out", m, p) {
                 confirm("Sign out of Xbox?", "Your Xbox consoles leave this \(MCDevice.name) until you sign in again.", yes: "Sign out") {
                     MCXbox.signOut(); cards.screen = "home"; settingsRev += 1
                 }
