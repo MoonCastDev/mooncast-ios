@@ -409,9 +409,34 @@ final class MCStore: NSObject, ObservableObject, DiscoveryCallback, PairCallback
         }
     }
 
+    /// Unpair: the PC forgets this device and its games leave until it is paired again with a PIN. The PC stays listed.
+    func unpair(_ h: TemporaryHost) {
+        busy = "Unpairing \(h.name)…"
+        DispatchQueue.global(qos: .userInitiated).async {
+            let ok = MCBridge.unpairHost(h, discovery: self.disc)
+            DispatchQueue.main.async {
+                self.busy = nil
+                self.bump()
+                MCToast.show(ok ? "Unpaired \(h.name)" : "Couldn't reach \(h.name) to unpair it")
+            }
+        }
+    }
+
+    /// Remove also unpairs first (when the PC is there to hear it), so no pairing is left behind on the PC.
     func remove(_ h: TemporaryHost) {
+        guard online(h) && paired(h) else { finishRemove(h); return }
+        busy = "Removing \(h.name)…"
+        DispatchQueue.global(qos: .userInitiated).async {
+            _ = MCBridge.unpairHost(h, discovery: self.disc)   // removed either way, as on Android
+            DispatchQueue.main.async { self.busy = nil; self.finishRemove(h) }
+        }
+    }
+
+    private func finishRemove(_ h: TemporaryHost) {
         disc.removeHost(fromDiscovery: h)
         MCBridge.remove(h)
+        UserDefaults.standard.removeObject(forKey: "mc_hidden_\(h.uuid)")
+        UserDefaults.standard.set(MCRecents.list().filter { !$0.hasPrefix("pc:\(h.uuid):") }, forKey: "mc_recents")
         hosts.removeAll { $0 === h }
         bump()
     }
@@ -685,5 +710,15 @@ enum MCRecents {
         var l = list().filter { $0 != key }
         l.insert(key, at: 0)
         UserDefaults.standard.set(Array(l.prefix(30)), forKey: "mc_recents")
+    }
+}
+
+
+/// A PC's name by the address a stream used (for the start watchdog's messages).
+@objc(MCPcName)
+final class MCPcName: NSObject {
+    @objc static func atAddress(_ address: String?) -> String? {
+        guard let a = address else { return nil }
+        return MCStore.shared.host(atAddress: a)?.name
     }
 }

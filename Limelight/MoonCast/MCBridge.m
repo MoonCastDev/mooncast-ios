@@ -233,6 +233,20 @@
     return nil;
 }
 
++ (BOOL) unpairHost:(TemporaryHost*)host discovery:(DiscoveryManager*)disc {
+    HttpManager* hMan = [[HttpManager alloc] initWithHost:host];
+    HttpResponse* resp = [[HttpResponse alloc] init];
+    [disc pauseDiscoveryForHost:host];
+    [hMan executeRequestSynchronously:[HttpRequest requestForResponse:resp withUrlRequest:[hMan newUnpairRequest]]];
+    [disc resumeDiscoveryForHost:host];
+    if (resp.statusCode != 200) return NO;
+    // the PC forgot this device: forget its certificate too, so the next pairing starts clean
+    host.pairState = PairStateUnpaired;
+    host.serverCert = nil;
+    [[[DataManager alloc] init] updateHost:host];
+    return YES;
+}
+
 + (nullable NSString*) quitAppOnHost:(TemporaryHost*)host discovery:(DiscoveryManager*)disc {
     HttpManager* hMan = [[HttpManager alloc] initWithHost:host];
     HttpResponse* quitResponse = [[HttpResponse alloc] init];

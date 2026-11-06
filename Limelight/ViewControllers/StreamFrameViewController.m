@@ -47,6 +47,9 @@
     UILabel *_stageLabel;
     UILabel *_tipLabel;
     UIActivityIndicatorView *_spinner;
+    NSTimer *_mcStartTimer;   // MoonCast: the 15 s start watchdog
+    BOOL _mcConnected;
+    BOOL _mcRetired;          // this attempt was given up (retry or failure): its callbacks are ignored
     StreamView *_streamView;
     CGSize _mcLastSize;
     UIScrollView *_scrollView;
@@ -162,6 +165,10 @@
                                    connectionCallbacks:self];
     NSOperationQueue* opQueue = [[NSOperationQueue alloc] init];
     [opQueue addOperation:_streamMan];
+    
+    // MoonCast: a PC still busy with another device's session can leave the start hanging (Android's start watchdog):
+    // retry once, then give up with a clear message
+    _mcStartTimer = [NSTimer scheduledTimerWithTimeInterval:15 target:self selector:@selector(mcStartTimeout) userInfo:nil repeats:NO];
     
     [[NSNotificationCenter defaultCenter] addObserver:self
                                              selector:@selector(applicationWillResignActive:)
@@ -323,7 +330,35 @@
     }
 }
 
+- (void) mcStartTimeout {
+    _mcStartTimer = nil;
+    if (_mcConnected || _mcRetired) return;
+    NSString* pc = [MCPcName atAddress:self.streamConfig.host] ?: @"The PC";
+    _mcRetired = YES;   // this attempt ends quietly; the new one starts fresh
+    [_streamMan stopStream];
+    if (!self.mcStartRetry) {
+        Log(LOG_W, @"Stream didn't start in 15 s: trying once more");
+        [MCToastObjC show:[pc stringByAppendingString:@" didn't answer yet. Trying again..."]];
+        StreamFrameViewController* again = (StreamFrameViewController*)[MCBridge streamControllerWithConfig:self.streamConfig];
+        again.mcStartRetry = YES;
+        UINavigationController* nav = self.navigationController;
+        NSMutableArray* stack = [nav.viewControllers mutableCopy];
+        NSUInteger i = [stack indexOfObject:self];
+        if (nav != nil && i != NSNotFound) {
+            [stack replaceObjectAtIndex:i withObject:again];
+            [nav setViewControllers:stack animated:NO];
+            return;
+        }
+    }
+    Log(LOG_W, @"Stream didn't start after a retry: giving up");
+    [UIApplication sharedApplication].idleTimerDisabled = NO;
+    [MCToastObjC show:[pc stringByAppendingString:@" didn't start the stream. It may still be busy with another device; try again in a few seconds."]];
+    [self returnToMainFrame];
+}
+
 - (void) returnToMainFrame {
+    [_mcStartTimer invalidate];
+    _mcStartTimer = nil;
     // Reset display mode back to default
     [self updatePreferredDisplayMode:NO];
     
@@ -399,6 +434,10 @@
 }
 
 - (void) connectionStarted {
+    if (_mcRetired) return;
+    _mcConnected = YES;
+    [_mcStartTimer invalidate];
+    _mcStartTimer = nil;
     dispatch_async(dispatch_get_main_queue(), ^{
         // MoonCast: Settings → Picture in picture (in every build; only the test steps are debug-only)
         if (MCPip.enabled && self->_mcPip == nil && [self->_streamMan mcPyroWave]) {
@@ -439,6 +478,7 @@
 }
 
 - (void)connectionTerminated:(int)errorCode {
+    if (_mcRetired) return;
     Log(LOG_I, @"Connection terminated: %d", errorCode);
     
     unsigned int portFlags = LiGetPortFlagsFromTerminationErrorCode(errorCode);
@@ -540,6 +580,7 @@
 }
 
 - (void) stageFailed:(const char*)stageName withError:(int)errorCode portTestFlags:(int)portTestFlags {
+    if (_mcRetired) return;
     Log(LOG_I, @"Stage %s failed: %d", stageName, errorCode);
     
     unsigned int portTestResults = LiTestClientConnectivity(CONN_TEST_SERVER, 443, portTestFlags);
@@ -572,6 +613,7 @@
 }
 
 - (void) launchFailed:(NSString*)message {
+    if (_mcRetired) return;
     Log(LOG_I, @"Launch failed: %@", message);
     
     dispatch_async(dispatch_get_main_queue(), ^{
