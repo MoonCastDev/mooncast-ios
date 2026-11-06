@@ -30,6 +30,8 @@
 @property int supportedVideoFormats;
 @property BOOL multiController;
 @property BOOL useFramePacing;
+// MoonCast: 0 Lowest delay, 1 Balanced, 2 Smoothest (MCPacing); useFramePacing is the old on/off of it
+@property int pacingMode;
 @property NSData* serverCert;
 
 @end

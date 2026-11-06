@@ -51,6 +51,38 @@ final class MCUltraLowLatency: NSObject {
     @objc static var enabled: Bool { UserDefaults.standard.bool(forKey: "mc_ultra_low_latency") }
 }
 
+/// Settings → Picture → Frame pacing, in Android's words: "latency" (Lowest delay: every frame is handed over at once,
+/// the screen shows the newest), "balanced" (one frame of buffer, one frame per refresh, the extras dropped) and
+/// "smoothness" (Smoothest: one frame per refresh, none dropped, so a backlog shows late). It was once an on/off
+/// (Moonlight's useFramePacing, kept in step for old settings): an old "on" reads as Balanced, which is what it did.
+@objc(MCPacing)
+final class MCPacing: NSObject {
+    static let ids = ["latency", "balanced", "smoothness"]
+    static let names = ["Lowest delay", "Balanced", "Smoothest"]
+
+    /// A saved value in the three ids: an old on/off, Android's "cap-fps" or anything unknown never fails.
+    static func norm(_ v: Any?) -> String {
+        if let s = v as? String { return s == "cap-fps" ? "balanced" : (ids.contains(s) ? s : "latency") }
+        if let n = v as? NSNumber { return n.boolValue ? "balanced" : "latency" }
+        return "latency"
+    }
+
+    static var current: String {
+        get {
+            if let s = UserDefaults.standard.string(forKey: "mc_pacing") { return norm(s) }
+            return MCSettings().load().pacing ? "balanced" : "latency"
+        }
+        set {
+            let n = norm(newValue)
+            UserDefaults.standard.set(n, forKey: "mc_pacing")
+            MCSettings().save { $0.pacing = n != "latency" }
+        }
+    }
+
+    /// For the stream: 0 Lowest delay, 1 Balanced, 2 Smoothest.
+    @objc static var mode: Int { ids.firstIndex(of: current) ?? 0 }
+}
+
 /// The picture, drawn through FSR. Feed it decoded frames with display(_:); any thread.
 @objc(MCFsrView)
 final class MCFsrView: UIView {

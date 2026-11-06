@@ -22,7 +22,7 @@ struct MCPcStyle {
 
 /// The PC play styles and the PC settings they set, in their own terms: "res" ("native" or "WxH"), "fps" ("native"
 /// or a number), "kbps" (0 = Auto, the default for the size and frame rate), "codec" (0 Auto, 1 H.264, 2 HEVC,
-/// 3 AV1), "hdr", "shape" (fit, zoom, fill, stretch), "pacing" (true = Smoothest), "fsr" ("off", "fsr1"),
+/// 3 AV1), "hdr", "shape" (fit, zoom, fill, stretch), "pacing" ("latency", "balanced", "smoothness": MCPacing), "fsr" ("off", "fsr1"),
 /// "fsrSharp" (0-100), "range", "ull", and PyroWave's: "pw" (on only in the PyroWave style), "y444", "boost" (GPU
 /// boost), "dither" ("off", "low", "high").
 enum MCPcStyles {
@@ -46,7 +46,7 @@ enum MCPcStyles {
     /// The order values are written in: the size and frame rate before the bitrate (Auto follows them).
     static let keys = ["res", "fps", "kbps", "codec", "hdr", "shape", "pacing", "fsr", "fsrSharp", "range", "ull",
                        "pw", "y444", "boost", "dither"]
-    private static let strings: Set<String> = ["res", "fps", "shape", "fsr", "dither"]
+    private static let strings: Set<String> = ["res", "fps", "shape", "fsr", "dither", "pacing"]
     private static let ints: Set<String> = ["kbps", "codec", "fsrSharp"]
 
     /// The screen shows HDR10.
@@ -58,13 +58,13 @@ enum MCPcStyles {
     static func defaults(_ id: String) -> [String: Any] {
         switch id {
         case "pyro": return ["res": "native", "fps": "native", "y444": true, "boost": true, "dither": "low", "ull": false]
-        case "battery": return ["res": "native", "fps": "native", "kbps": 15000, "codec": 1, "hdr": false, "pacing": true, "ull": false]
-        case "balanced": return ["res": "native", "fps": "native", "kbps": 40000, "codec": 2, "pacing": true, "ull": false]
+        case "battery": return ["res": "native", "fps": "native", "kbps": 15000, "codec": 1, "hdr": false, "pacing": "balanced", "ull": false]
+        case "balanced": return ["res": "native", "fps": "native", "kbps": 40000, "codec": 2, "pacing": "balanced", "ull": false]
         case "sharpest":
-            var m: [String: Any] = ["res": "native", "fps": "native", "kbps": 80000, "codec": 2, "pacing": true, "ull": false]
+            var m: [String: Any] = ["res": "native", "fps": "native", "kbps": 80000, "codec": 2, "pacing": "balanced", "ull": false]
             if screenHdr { m["hdr"] = true }
             return m
-        default: return ["res": "native", "fps": "native", "kbps": 60000, "codec": 2, "pacing": false, "ull": true]
+        default: return ["res": "native", "fps": "native", "kbps": 60000, "codec": 2, "pacing": "latency", "ull": true]
         }
     }
 
@@ -75,6 +75,7 @@ enum MCPcStyles {
     /// no Ultra low latency.
     static func values(_ id: String) -> [String: Any] {
         var m = defaults(id).merging(stored(id)) { $1 }
+        if let p = m["pacing"] { m["pacing"] = MCPacing.norm(p) }
         if id == "pyro" {
             if stored(id)["kbps"] == nil { m["kbps"] = pyroRecommended(m) }
             m["pw"] = true
@@ -112,6 +113,7 @@ enum MCPcStyles {
     /// The same value for [key], whatever type it came back as from the store.
     static func same(_ key: String, _ a: Any?, _ b: Any?) -> Bool {
         guard let a = a, let b = b else { return a == nil && b == nil }
+        if key == "pacing" { return MCPacing.norm(a) == MCPacing.norm(b) }   // an old on/off is Balanced or Lowest delay
         if strings.contains(key) { return (a as? String) == (b as? String) }
         if ints.contains(key) { return (a as? NSNumber)?.intValue == (b as? NSNumber)?.intValue }
         return (a as? NSNumber)?.boolValue == (b as? NSNumber)?.boolValue
@@ -130,7 +132,7 @@ enum MCPcStyles {
         case "codec": return Int(v.codec)
         case "hdr": return v.hdr
         case "shape": return MCPictureShape.current
-        case "pacing": return v.pacing
+        case "pacing": return MCPacing.current
         case "fsr": return d.string(forKey: "mc_super_resolution") == "fsr1" ? "fsr1" : "off"
         case "fsrSharp": return d.object(forKey: "mc_fsr_sharpness") as? Int ?? 60
         case "range": return d.bool(forKey: "mc_full_range")
@@ -175,7 +177,7 @@ enum MCPcStyles {
             s.save { $0.bitrate = k > 0 ? k : MCRoot.defaultBitrate($0.width, $0.height, $0.framerate) }
         case "codec": s.save { $0.codec = UInt32((value as? NSNumber)?.intValue ?? 0) }
         case "hdr": s.save { $0.hdr = (value as? NSNumber)?.boolValue ?? false }
-        case "pacing": s.save { $0.pacing = (value as? NSNumber)?.boolValue ?? false }
+        case "pacing": MCPacing.current = MCPacing.norm(value)
         case "shape": d.set(value as? String ?? "fit", forKey: "mc_picture_shape")
         case "fsr": d.set(value as? String ?? "off", forKey: "mc_super_resolution")
         case "fsrSharp": d.set((value as? NSNumber)?.intValue ?? 60, forKey: "mc_fsr_sharpness")

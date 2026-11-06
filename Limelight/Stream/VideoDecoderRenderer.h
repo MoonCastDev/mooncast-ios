@@ -14,7 +14,7 @@
 
 @interface VideoDecoderRenderer : NSObject
 
-- (id)initWithView:(UIView*)view callbacks:(id<ConnectionCallbacks>)callbacks streamAspectRatio:(float)aspectRatio useFramePacing:(BOOL)useFramePacing;
+- (id)initWithView:(UIView*)view callbacks:(id<ConnectionCallbacks>)callbacks streamAspectRatio:(float)aspectRatio pacingMode:(int)pacingMode;
 
 /// 0 when the decoder is ready (MoonCast: non-zero when PyroWave's didn't start)
 - (int)setupWithVideoFormat:(int)videoFormat width:(int)videoWidth height:(int)videoHeight frameRate:(int)frameRate;

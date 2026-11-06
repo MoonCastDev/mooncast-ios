@@ -981,9 +981,9 @@ extension MCRoot {
             }))
             return rows
         }
-        let pacing = v.b("pacing")
-        rows.append(AnyView(vrow("pacing", "Frame pacing", pacing ? "Smoothest" : "Lowest delay", m, p) {
-            pick("Frame pacing", "Smoother motion costs a little delay.", ["Lowest delay", "Smoothest"], pacing ? 1 : 0) { v.put("pacing", $0 == 1) }
+        let pacing = MCPacing.ids.firstIndex(of: MCPacing.norm(v.get("pacing"))) ?? 0
+        rows.append(AnyView(vrow("pacing", "Frame pacing", MCPacing.names[pacing], m, p) {
+            pick("Frame pacing", "Smoother motion costs a little delay.", MCPacing.names, pacing) { v.put("pacing", MCPacing.ids[$0]) }
         }))
         guard style != nil else { return rows }
         let atNative = v.s("res", "native") == "native"
