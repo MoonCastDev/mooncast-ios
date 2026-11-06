@@ -46,7 +46,7 @@ Not here yet: DirectPad, PS4, a MoonCast receiver for Apple TV, using a pad as a
 
 **Beta. Not on the App Store or TestFlight yet.** For now, build it from source with Xcode and your own Apple ID. A free Apple ID works, but the app then has to be re-signed every 7 days.
 
-1. Install Xcode (iOS 17 or later on the device).
+1. Install Xcode. The app targets iOS 15 or later; PyroWave and Xbox streaming work best on a recent iOS.
 2. `git clone https://github.com/MoonCastDev/mooncast-ios.git`
 3. `cd mooncast-ios && git submodule update --init --recursive`
 4. Open `Moonlight.xcodeproj` in Xcode and pick the scheme **Moonlight**.
