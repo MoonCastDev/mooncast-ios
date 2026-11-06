@@ -21,14 +21,33 @@ enum MCXbox {
     struct HttpError: Error { let code: Int; let body: String }
     /// The Microsoft account signed in but Xbox network turned it away (no Xbox profile, a child account…).
     struct NotAllowed: LocalizedError { let errorDescription: String? }
+    /// The device code ran out before it was entered.
+    struct CodeExpired: LocalizedError { var errorDescription: String? { "The code expired. Try again." } }
+
+    /// Xbox's XErr in plain words, nil for one we don't know.
+    private static func profileMessage(_ xerr: Int64) -> String? {
+        switch xerr {
+        case 2148916233: return "This Microsoft account has no Xbox profile. Sign in with the account you use on your Xbox."
+        case 2148916238: return "This is a child account. An adult needs to add it to a Microsoft family before it can use Xbox network."
+        case 2148916235: return "Xbox network isn't available in this account's country or region."
+        case 2148916236, 2148916237: return "This account needs adult verification on xbox.com before it can use Xbox network."
+        case 2148916227: return "This account is banned from Xbox network."
+        case 2148916229: return "Parental settings on this account don't allow Xbox network sign-in here."
+        default: return nil
+        }
+    }
 
     private static let d = UserDefaults.standard
     static var signedIn: Bool { MCKeychain.get("xbox_refresh") != nil }
     static var gamertag: String? { d.string(forKey: "xbox_gamertag") }
+    /// Signed in, but Xbox network couldn't be reached to check the profile (kept; checked again on the next use).
+    static var unverified: Bool { d.bool(forKey: "xbox_unverified") }
+    /// Signed in to Microsoft, but the account has no working Xbox profile (no gamertag came back).
+    static var noProfile: Bool { signedIn && gamertag == nil && !unverified }
 
     static func signOut() {
         ["xbox_refresh", "xbox_access", "xbox_xbl", "xbox_web"].forEach(MCKeychain.delete)
-        ["xbox_access_until", "xbox_xbl_until", "xbox_web_until", "xbox_gamertag", "xbox_consoles"].forEach { d.removeObject(forKey: $0) }
+        ["xbox_access_until", "xbox_xbl_until", "xbox_web_until", "xbox_gamertag", "xbox_consoles", "xbox_unverified"].forEach { d.removeObject(forKey: $0) }
     }
 
     // MARK: HTTP
@@ -71,24 +90,29 @@ enum MCXbox {
                                                              ("client_id", clientId), ("device_code", dc.deviceCode)]), formHeaders)
             saveUserToken(j)
             // Xbox network must take the account (it fetches the gamertag too). An account it turns away isn't kept,
-            // so signing in again can pick another one; a network hiccup keeps it.
-            do { _ = try await webAuth() } catch let e as HttpError where e.code == 401 || e.code == 403 {
+            // so signing in again can pick another one; a network hiccup keeps it, as "unverified".
+            do {
+                _ = try await webAuth()
+                d.removeObject(forKey: "xbox_unverified")
+            } catch let e as HttpError {
                 let xerr = ((try? JSONSerialization.jsonObject(with: Data(e.body.utf8))) as? [String: Any])?["XErr"] as? NSNumber
-                signOut()
-                throw NotAllowed(errorDescription: {
-                    switch xerr?.int64Value {
-                    case 2148916233: return "This Microsoft account has no Xbox profile. Sign in with the account you use on your Xbox."
-                    case 2148916235: return "Xbox network isn't available in this account's country."
-                    case 2148916236, 2148916237: return "This account needs age verification on xbox.com first."
-                    case 2148916238: return "This is a child account. An adult in its family has to add it to a family group on xbox.com first."
-                    default: return "Xbox network didn't accept this account. Sign in with the account you use on your Xbox."
-                    }
-                }())
-            } catch { }
+                let x = xerr?.int64Value ?? 0
+                // any XErr turns the account away; without one only a 401 / 403 does
+                if let msg = profileMessage(x) ?? (x != 0 || e.code == 401 || e.code == 403
+                    ? "This Microsoft account can't sign in to Xbox network (error \(x != 0 ? String(x) : String(e.code)))." : nil) {
+                    signOut()
+                    throw NotAllowed(errorDescription: msg)
+                }
+                d.set(true, forKey: "xbox_unverified")
+            } catch {
+                d.set(true, forKey: "xbox_unverified")   // network: kept, checked again later
+            }
             return true
         } catch let e as HttpError {
             let err = ((try? JSONSerialization.jsonObject(with: Data(e.body.utf8))) as? [String: Any])?["error"] as? String ?? ""
             if err == "authorization_pending" || err == "slow_down" { return false }
+            if err == "expired_token" { throw CodeExpired() }
+            if err == "authorization_declined" || err == "access_denied" { throw NotAllowed(errorDescription: "Sign-in was cancelled on the Microsoft page.") }
             throw e
         }
     }
@@ -142,6 +166,7 @@ enum MCXbox {
         let auth = "XBL3.0 x=\(xui["uhs"] as? String ?? "");\(j["Token"] as? String ?? "")"
         MCKeychain.set("xbox_web", auth); d.set(expiry(j), forKey: "xbox_web_until")
         if let g = xui["gtg"] as? String, !g.isEmpty { d.set(g, forKey: "xbox_gamertag") }
+        d.removeObject(forKey: "xbox_unverified")
         return auth
     }
 
@@ -224,6 +249,9 @@ enum MCXbox {
 /// session every time: Safari stayed signed in to the last Microsoft account, so signing in again couldn't pick another.
 final class MCXboxLinkController: UIViewController {
     var code = ""
+    private static weak var open: MCXboxLinkController?
+    /// Signed in (or given up): close the page if it's open.
+    static func close() { DispatchQueue.main.async { if let v = open, v.presentingViewController != nil { v.dismiss(animated: true) } } }
     private let web = WKWebView(frame: .zero, configuration: {
         let c = WKWebViewConfiguration()
         c.websiteDataStore = .nonPersistent()
@@ -233,6 +261,7 @@ final class MCXboxLinkController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         title = "Xbox sign-in"
+        Self.open = self
         view.backgroundColor = .systemBackground
         web.frame = view.bounds
         web.autoresizingMask = [.flexibleWidth, .flexibleHeight]
