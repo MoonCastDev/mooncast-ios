@@ -70,6 +70,10 @@ FOUNDATION_EXPORT BOOL McVideoRunning(void);
 /// Quits the game running on the PC. Nil when it worked, else the error to show.
 + (nullable NSString*) quitAppOnHost:(TemporaryHost*)host discovery:(DiscoveryManager*)disc;
 
+/// Tells the PC to forget this device (Moonlight's unpair request) and forgets the PC's certificate here. YES when it
+/// worked, NO when the PC didn't answer. Blocks; not on the main thread.
++ (BOOL) unpairHost:(TemporaryHost*)host discovery:(DiscoveryManager*)disc;
+
 /// The PC's app list, merged into what's saved (names updated, removed apps dropped). Nil when it worked.
 + (nullable NSString*) refreshAppList:(TemporaryHost*)host discovery:(DiscoveryManager*)disc;
 

@@ -21,6 +21,8 @@
 @interface StreamFrameViewController : UIViewController <ConnectionCallbacks, ControllerSupportDelegate, UserInteractionDelegate, UIScrollViewDelegate, MCQuickActions>
 #endif
 @property (nonatomic) StreamConfiguration* streamConfig;
+/// MoonCast: this is the start watchdog's second attempt (it doesn't retry again)
+@property (nonatomic) BOOL mcStartRetry;
 
 -(void)updatePreferredDisplayMode:(BOOL)streamActive;
 
