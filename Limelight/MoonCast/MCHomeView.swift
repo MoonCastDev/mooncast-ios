@@ -711,12 +711,19 @@ struct MCRoot: View {
         }
         if store.online(h) && store.paired(h) {
             if let cur = store.apps(h).first(where: { $0.id == h.currentGame }), h.currentGame != "0" {
+                opts.append(.init(title: "Resume \(cur.name ?? "the game")", picked: true) {
+                    store.play(MCGame(key: "pc:\(h.uuid):\(cur.id ?? "")", title: cur.name ?? "", src: "PC", seed: cur.name ?? "", running: true, host: h, app: cur))
+                })
                 opts.append(.init(title: "Quit \(cur.name ?? "the game")", danger: true) {
                     confirm("Quit \(cur.name ?? "the game")?", "Anything not saved in it is lost.", yes: "Quit") { store.quit(h) }
                 })
             }
             opts.append(.init(title: "Show its games", picked: !opts.contains { $0.picked }) { DispatchQueue.main.async { openPc(h) } })
             opts.append(.init(title: "Refresh the games") { store.fetchApps(h, force: true) })
+            opts.append(.init(title: "Test the network") { store.networkTest() })
+            opts.append(.init(title: "Unpair", sub: "You'll pair it again with a PIN to play") {
+                confirm("Unpair \(h.name)?", "It stays here, but you'll pair it again with a PIN before you can play its games.", yes: "Unpair") { store.unpair(h) }
+            })
         }
         opts.append(.init(title: "Away address", sub: h.externalAddress.map { "Now \($0)" } ?? "To reach it from another network or a VPN") {
             askText("Away address for \(h.name)", "IP address or name, empty to clear") { store.setAwayAddress(h, $0) }
@@ -725,8 +732,8 @@ struct MCRoot: View {
         if !hidden.isEmpty {
             opts.append(.init(title: "Hidden games", sub: "\(hidden.count) hidden") { hiddenGames(h) })
         }
-        opts.append(.init(title: "Remove this PC", sub: "Pair again to bring it back", danger: true) {
-            confirm("Remove \(h.name)?", "Its games leave this \(MCDevice.name) until you pair again.", yes: "Remove") { store.remove(h) }
+        opts.append(.init(title: "Remove this PC", sub: "It's unpaired too. Pair again to bring it back", danger: true) {
+            confirm("Remove \(h.name)?", "It disappears from this \(MCDevice.name) and is unpaired. To add it back, pair it again with a PIN.", yes: "Remove") { store.remove(h) }
         })
         opts.insert(.init(title: "Cancel", picked: !opts.contains { $0.picked }) {}, at: 0)
         var lines = [h.activeAddress.map { "Address: \($0)" }, h.externalAddress.map { "Away: \($0)" }].compactMap { $0 }
@@ -1186,8 +1193,8 @@ struct MCRoot: View {
             let shapes = ["fit", "zoom", "fill", "stretch"]
             choice("s:shape", "Picture shape", "Fit shows all of it. Zoom halves the bars, trimming the sides only slightly. Fill crops the edges to fill the screen. Stretch fills it and changes the shape",
                    ["Fit", "Zoom", "Fill", "Stretch"], shapes.firstIndex(of: MCPictureShape.current) ?? 0, m, p) { i in ud.set(shapes[i], forKey: "mc_picture_shape") }
-            choice("s:pacing", "Frame pacing", "Trade a little delay for smoother motion", ["Lowest delay", "Smoothest"],
-                   v.pacing ? 1 : 0, m, p) { i in settings.save { $0.pacing = i == 1 } }
+            choice("s:pacing", "Frame pacing", "Trade a little delay for smoother motion", MCPacing.names,
+                   MCPacing.mode, m, p) { i in MCPacing.current = MCPacing.ids[i] }
             toggle("s:ull", "Ultra low latency", "Shows each PC frame the moment it's decoded and keeps sound close behind on PS5 and Xbox. A rough Wi-Fi can stutter more",
                    UserDefaults.standard.bool(forKey: "mc_ultra_low_latency"), m, p) {
                 UserDefaults.standard.set(!UserDefaults.standard.bool(forKey: "mc_ultra_low_latency"), forKey: "mc_ultra_low_latency")

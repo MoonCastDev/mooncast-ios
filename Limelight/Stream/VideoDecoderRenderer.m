@@ -44,7 +44,7 @@ extern int ff_isom_write_av1c(AVIOContext *pb, const uint8_t *buf, int size,
     MCPyroWaveRenderer* mcPyro;
     
     CADisplayLink* _displayLink;
-    BOOL framePacing;
+    int pacingMode; // MoonCast: 0 Lowest delay, 1 Balanced, 2 Smoothest (MCPacing)
 }
 
 - (void)reinitializeDisplayLayer
@@ -84,14 +84,14 @@ extern int ff_isom_write_av1c(AVIOContext *pb, const uint8_t *buf, int size,
     }
 }
 
-- (id)initWithView:(StreamView*)view callbacks:(id<ConnectionCallbacks>)callbacks streamAspectRatio:(float)aspectRatio useFramePacing:(BOOL)useFramePacing
+- (id)initWithView:(StreamView*)view callbacks:(id<ConnectionCallbacks>)callbacks streamAspectRatio:(float)aspectRatio pacingMode:(int)mode
 {
     self = [super init];
     
     _view = view;
     _callbacks = callbacks;
     _streamAspectRatio = aspectRatio;
-    framePacing = useFramePacing;
+    pacingMode = mode;
     
     parameterSetBuffers = [[NSMutableArray alloc] init];
     
@@ -174,22 +174,24 @@ int DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
     VIDEO_FRAME_HANDLE handle;
     PDECODE_UNIT du;
     
+    // Only pace frames if the display refresh rate is >= 90% of our stream frame rate.
+    // Battery saver, accessibility settings, or device thermals can cause the actual
+    // refresh rate of the display to drop below the physical maximum.
+    BOOL paced = pacingMode != 0 && 1 / (_displayLink.targetTimestamp - _displayLink.timestamp) >= frameRate * 0.9f;
+    
     while (LiPollNextVideoFrame(&handle, &du)) {
         LiCompleteVideoFrame(handle, DrSubmitDecodeUnit(du));
         
-        if (framePacing) {
-            // Calculate the actual display refresh rate
-            double displayRefreshRate = 1 / (_displayLink.targetTimestamp - _displayLink.timestamp);
-            
-            // Only pace frames if the display refresh rate is >= 90% of our stream frame rate.
-            // Battery saver, accessibility settings, or device thermals can cause the actual
-            // refresh rate of the display to drop below the physical maximum.
-            if (displayRefreshRate >= frameRate * 0.9f) {
-                // Keep one pending frame to smooth out gaps due to
-                // network jitter at the cost of 1 frame of latency
-                if (LiGetPendingVideoFrames() == 1) {
-                    break;
-                }
+        if (paced) {
+            // MoonCast, Smoothest (Android's max smoothness): one frame per refresh, none dropped,
+            // so a backlog is shown late rather than skipped
+            if (pacingMode == 2) {
+                break;
+            }
+            // Balanced: keep one pending frame to smooth out gaps due to
+            // network jitter at the cost of 1 frame of latency
+            if (LiGetPendingVideoFrames() == 1) {
+                break;
             }
         }
     }

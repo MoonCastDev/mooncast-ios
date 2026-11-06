@@ -26,6 +26,7 @@
     id<ConnectionCallbacks> _callbacks;
     Connection* _connection;
     VideoDecoderRenderer* _mcRenderer;
+    BOOL _mcStopped;   // MoonCast: stopped before the connection existed (the start watchdog): don't connect afterwards
 }
 
 - (id) initWithConfig:(StreamConfiguration*)config renderView:(UIView*)view connectionCallbacks:(id<ConnectionCallbacks>)callbacks {
@@ -100,7 +101,8 @@
     
     // Initializing the renderer must be done on the main thread
     dispatch_async(dispatch_get_main_queue(), ^{
-        VideoDecoderRenderer* renderer = [[VideoDecoderRenderer alloc] initWithView:self->_renderView callbacks:self->_callbacks streamAspectRatio:(float)self->_config.width / (float)self->_config.height useFramePacing:self->_config.useFramePacing];
+        if (self->_mcStopped) return;
+        VideoDecoderRenderer* renderer = [[VideoDecoderRenderer alloc] initWithView:self->_renderView callbacks:self->_callbacks streamAspectRatio:(float)self->_config.width / (float)self->_config.height pacingMode:self->_config.pacingMode];
         self->_mcRenderer = renderer;
         self->_connection = [[Connection alloc] initWithConfig:self->_config renderer:renderer connectionCallbacks:self->_callbacks];
         NSOperationQueue* opQueue = [[NSOperationQueue alloc] init];
@@ -110,6 +112,7 @@
 
 - (void) stopStream
 {
+    _mcStopped = YES;
     [_connection terminate];
 }
 

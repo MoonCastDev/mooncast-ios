@@ -998,9 +998,9 @@ extension MCRoot {
             }))
             return rows
         }
-        let pacing = v.b("pacing")
-        rows.append(AnyView(vrow("pacing", "Frame pacing", pacing ? "Smoothest" : "Lowest delay", m, p) {
-            pick("Frame pacing", "Smoother motion costs a little delay.", ["Lowest delay", "Smoothest"], pacing ? 1 : 0) { v.put("pacing", $0 == 1) }
+        let pacing = MCPacing.ids.firstIndex(of: MCPacing.norm(v.get("pacing"))) ?? 0
+        rows.append(AnyView(vrow("pacing", "Frame pacing", MCPacing.names[pacing], m, p) {
+            pick("Frame pacing", "Smoother motion costs a little delay.", MCPacing.names, pacing) { v.put("pacing", MCPacing.ids[$0]) }
         }))
         guard style != nil else { return rows }
         let atNative = v.s("res", "native") == "native"
@@ -1169,8 +1169,13 @@ extension MCRoot {
             if !on, h.mac != nil, h.mac != "00:00:00:00:00:00" {
                 row("pc:wake", icon: "power", color: MCPalette.green, title: "Wake it", sub: "Needs Wake-on-LAN on the PC", right: nil, m, p) { store.wake(h) }
             }
-            row("pc:remove", icon: "trash", color: MCPalette.red, title: "Remove", sub: "It disappears from this \(MCDevice.name); pair it again to bring it back", right: nil, m, p) {
-                confirm("Remove \(h.name)?", "Its games leave this \(MCDevice.name) until you pair again.", yes: "Remove") {
+            if on && store.paired(h) {
+                row("pc:unpair", icon: "link.badge.plus", color: p.sub, title: "Unpair", sub: "You'll pair it again with a PIN to play", right: nil, m, p) {
+                    confirm("Unpair \(h.name)?", "It stays here, but you'll pair it again with a PIN before you can play its games.", yes: "Unpair") { store.unpair(h); settingsRev += 1 }
+                }
+            }
+            row("pc:remove", icon: "trash", color: MCPalette.red, title: "Remove", sub: "It disappears from this \(MCDevice.name) and is unpaired; pair it again to bring it back", right: nil, m, p) {
+                confirm("Remove \(h.name)?", "It disappears from this \(MCDevice.name) and is unpaired. To add it back, pair it again with a PIN.", yes: "Remove") {
                     store.remove(h); cards.screen = "home"; settingsRev += 1
                 }
             }

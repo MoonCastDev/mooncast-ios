@@ -17,6 +17,7 @@
 #import "CryptoManager.h"
 #import "Utils.h"
 #import "MCPyroWave.h"
+#import "Moonlight-Swift.h"
 
 #include <openssl/pem.h>
 #include <openssl/x509.h>
@@ -121,6 +122,7 @@
     config.optimizeGameSettings = settings.optimizeGames;
     config.playAudioOnPC = settings.playAudioOnPC;
     config.useFramePacing = settings.useFramePacing;
+    config.pacingMode = (int)MCPacing.mode;
     config.swapABXYButtons = settings.swapABXYButtons;
 
     // multiController must be set before calling getConnectedGamepadMask
@@ -229,6 +231,20 @@
     }
     [serverInfoResp populateHost:host];
     return nil;
+}
+
++ (BOOL) unpairHost:(TemporaryHost*)host discovery:(DiscoveryManager*)disc {
+    HttpManager* hMan = [[HttpManager alloc] initWithHost:host];
+    HttpResponse* resp = [[HttpResponse alloc] init];
+    [disc pauseDiscoveryForHost:host];
+    [hMan executeRequestSynchronously:[HttpRequest requestForResponse:resp withUrlRequest:[hMan newUnpairRequest]]];
+    [disc resumeDiscoveryForHost:host];
+    if (resp.statusCode != 200) return NO;
+    // the PC forgot this device: forget its certificate too, so the next pairing starts clean
+    host.pairState = PairStateUnpaired;
+    host.serverCert = nil;
+    [[[DataManager alloc] init] updateHost:host];
+    return YES;
 }
 
 + (nullable NSString*) quitAppOnHost:(TemporaryHost*)host discovery:(DiscoveryManager*)disc {
