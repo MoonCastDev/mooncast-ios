@@ -1,6 +1,6 @@
 //
 //  MCLink.swift
-//  MoonCast: Settings → PC → Automatic bitrate (on by default, per profile), as docs/auto-bitrate-design.md
+//  MoonCast: Settings → PC → Automatic bitrate (off until the user turns it on; per profile), as docs/auto-bitrate-design.md
 //  (MoonCastDev/moonlight-android#139) has it, with the same values as Android's AutoBitrate.kt where the design
 //  doesn't give one. For every host, network and PC codec.
 //
@@ -19,7 +19,8 @@
 //  open: it asks again shortly), D a one-button suggestion when the budget is used (at most every 2 minutes).
 //
 //  Memory stays on the device, per PC + network (a hash of the Wi-Fi's subnet, Ethernet, Mobile; a stream away from
-//  home is its own entry per place), at most 64 entries, 24 h each. Off: nothing changes from before.
+//  home is its own entry per place), at most 64 entries, 24 h each. Off (the default): no controller runs, nothing is
+//  learnt or capped at a start, no messages: the bitrate is exactly as set.
 //
 
 import Network
@@ -213,8 +214,9 @@ final class MCLink: NSObject {
     private static var d: UserDefaults { .standard }
     private static let store = "mc_link_v3"
 
-    /// Settings → PC → Automatic bitrate.
-    @objc static var enabled: Bool { d.object(forKey: "mc_auto_bitrate") as? Bool ?? true }
+    /// Settings → PC → Automatic bitrate. Off unless the user turned it on: an unset key is off. (The key is only ever
+    /// written by that choice, never by a default, so a stored true is an explicit one and stays.)
+    @objc static var enabled: Bool { d.object(forKey: "mc_auto_bitrate") as? Bool ?? false }
 
     /// To the unified log and stderr (devicectl --console shows only stderr).
     static func log(_ line: String) {
@@ -572,6 +574,15 @@ final class MCLink: NSObject {
         }
 
         timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { t in
+            // turned off while streaming: the bitrate stays where it is, nothing more is changed
+            guard enabled else {
+                log("MoonCast: auto bitrate: run \(run) stops (turned off)")
+                t.invalidate()
+                if timer === t { timer = nil }
+                liveKbps = 0
+                liveCapable = false
+                return
+            }
             guard McVideoRunning() else {
                 if firstPacketAt != nil || -startedAt.timeIntervalSinceNow > 30 {
                     log("MoonCast: auto bitrate: run \(run) ends (video stopped)")
