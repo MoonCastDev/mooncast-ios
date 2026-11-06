@@ -118,6 +118,7 @@ struct MCRoot: View {
         let env = ProcessInfo.processInfo.environment
         if let t = env["MC_THEME"] { theme = t }
         if let g = env["MC_GROUP"] { group = g }
+        if let t = env["MC_GTAB"] { gamesTab = t }   // an All games tab: all, pc:<uuid>, ps, xb
         // MC_ACTION opens one thing: network, padtest, playwhere
         switch env["MC_ACTION"] ?? "" {
         case "network": DispatchQueue.main.asyncAfter(deadline: .now() + 3) { store.networkTest() }
@@ -208,6 +209,7 @@ struct MCRoot: View {
                 if page == .settings && !cards.classic { return cardsKey(.x) }
                 return false
             case .y:
+                if page == .home || page == .games { toggleTarget(); return true }
                 if page == .settings && !cards.classic { return cardsKey(.y) }
                 return false
             default:
@@ -272,8 +274,8 @@ struct MCRoot: View {
     func hints() -> [(String, String)] {
         if store.dialog != nil { return [("B", "Cancel"), ("A", "OK")] }
         switch page {
-        case .home: return [("X", "Options"), ("A", "Start")]
-        case .games: return [("L R", "Tabs"), ("X", sortAz ? "Recent first" : "A to Z"), ("B", "Back"), ("A", "Start")]
+        case .home: return [("X", "Options"), ("Y", MCTvFinder.target != nil ? "Play here" : "Play on TV"), ("A", "Start")]
+        case .games: return [("L R", "Tabs"), ("X", sortAz ? "Recent first" : "A to Z"), ("Y", MCTvFinder.target != nil ? "Play here" : "Play on TV"), ("B", "Back"), ("A", "Start")]
         case .consoles: return [("B", "Back"), ("A", "Open")]
         case .settings: return cards.classic ? [("L R", "Groups"), ("B", "Back"), ("A", "OK")] : cardsHints()
         }
@@ -329,39 +331,68 @@ struct MCRoot: View {
         // with a pad the name follows the ring; on touch it's the first tile's (what you'd start)
         let name = focus.padActive ? focus.id.flatMap { titles[$0] } : titles[firstId]
         focus.preferred["page"] = firstId
+        // the height left for tiles after the bars, the name line and the round buttons; a grid when two rows fit
+        // (tiles no smaller than 300): the fewest columns that leave two rows
+        let roundsH: CGFloat = m.designWidth < 5 * 112 + 4 * 60 + 2 * m.edge ? 364 : 162
+        let freeH = m.designHeight - 120 - 110 - 128 - ((m.portrait ? 64 : 50) + roundsH) - 80
+        var cols = 0, rows = 1, gts = ts
+        for c in 2...5 {
+            let t = (usableW - gap * CGFloat(c - 1)) / CGFloat(c)
+            let r = Int((freeH + gap) / (t + gap))
+            if t >= 300 && r >= 2 && cols == 0 { cols = c; rows = r; gts = t }
+        }
+        let grid = cols > 0
+        let size = grid ? gts : ts
+        var cells: [AnyView] = []
+        for h in unpaired {
+            cells.append(AnyView(tile(nil, kind: "pair:\(h.uuid)", label: "Pair \(h.name)", size: size, m, p) { store.pair(h) }))
+        }
+        if games.isEmpty && unpaired.isEmpty {
+            cells.append(AnyView(tile(nil, kind: "add", label: "Add a PC", size: size, m, p) { go(.consoles) }))
+        }
+        for g in games {
+            if g.key.hasPrefix("pchost:"), let h = g.host {
+                cells.append(AnyView(tile(g, kind: "pchost", label: g.title, size: size, m, p) { openPc(h) }))
+            } else {
+                cells.append(AnyView(tile(g, kind: "game", label: g.title, size: size, m, p) { store.play(g) }))
+            }
+        }
+        if grid { cells = Array(cells.prefix(cols * rows - 1)) }   // the last cell is All games
+        cells.append(AnyView(tile(nil, kind: "all", label: "All games", size: size, m, p) { gamesTab = "all"; go(.games) }))
         return VStack(alignment: .leading, spacing: 0) {
             Spacer(minLength: 0).frame(maxHeight: m.px(80))
             Text(name ?? " ").mcFont(34, m).foregroundColor(p.ring).lineLimit(1)
                 .padding(.leading, m.px(m.edge)).frame(height: m.px(48))
                 .animation(nil, value: name)
                 .modifier(MCRise(order: 0, tick: enterTick))
-            ScrollViewReader { proxy in
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: m.px(gap)) {
-                        ForEach(unpaired, id: \.uuid) { h in
-                            tile(nil, kind: "pair:\(h.uuid)", label: "Pair \(h.name)", size: ts, m, p) { store.pair(h) }
+            if grid {
+                // two rows fit (an iPad upright): a grid, the last cell All games, as on the handheld
+                VStack(alignment: .leading, spacing: m.px(gap)) {
+                    ForEach(0..<rows, id: \.self) { r in
+                        HStack(spacing: m.px(gap)) {
+                            ForEach(Array(cells.enumerated()).filter { $0.offset / cols == r }, id: \.offset) { $0.element }
                         }
-                        if games.isEmpty && unpaired.isEmpty {
-                            tile(nil, kind: "add", label: "Add a PC", size: ts, m, p) { go(.consoles) }
-                        }
-                        ForEach(games) { g in
-                            if g.key.hasPrefix("pchost:"), let h = g.host {
-                                tile(g, kind: "pchost", label: g.title, size: ts, m, p) { openPc(h) }
-                            } else {
-                                tile(g, kind: "game", label: g.title, size: ts, m, p) { store.play(g) }
-                            }
-                        }
-                        tile(nil, kind: "all", label: "All games", size: ts, m, p) { gamesTab = "all"; go(.games) }
                     }
-                    .padding(.horizontal, m.px(m.edge))
-                    .padding(.vertical, m.px(20))
                 }
-                .onChange(of: focus.id) { _, id in
-                    if let id = id, id.hasPrefix("g:"), focus.padActive { withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo(id, anchor: .center) } }
+                .padding(.vertical, m.px(20))
+                .frame(maxWidth: .infinity)
+                .modifier(MCRise(order: 1, tick: enterTick))
+            } else {
+                ScrollViewReader { proxy in
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: m.px(gap)) {
+                            ForEach(Array(cells.enumerated()), id: \.offset) { $0.element }
+                        }
+                        .padding(.horizontal, m.px(m.edge))
+                        .padding(.vertical, m.px(20))
+                    }
+                    .onChange(of: focus.id) { _, id in
+                        if let id = id, id.hasPrefix("g:"), focus.padActive { withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo(id, anchor: .center) } }
+                    }
                 }
+                .frame(height: m.px(ts + 40))
+                .modifier(MCRise(order: 1, tick: enterTick))
             }
-            .frame(height: m.px(ts + 40))
-            .modifier(MCRise(order: 1, tick: enterTick))
             if games.isEmpty {
                 Text(unpaired.isEmpty ? "Looking for PCs running Sunshine on this network. Or add one by its address in Consoles."
                                       : "Press a PC to pair it: a PIN shows here, and you type it into Sunshine on the PC.")
@@ -467,6 +498,11 @@ struct MCRoot: View {
                         }
                         .padding(.horizontal, m.px(14)).frame(height: m.px(bs * 2))
                         .background(Capsule().fill(Color.white))
+                    } else if kind == "pchost", let h = g.host, !store.online(h) {
+                        // a PC's tile: say when it's off or asleep
+                        Text(h.state == State.unknown ? "Checking…" : "Offline").font(.system(size: m.px(bs), weight: .heavy)).foregroundColor(.white)
+                            .padding(.horizontal, m.px(14)).frame(height: m.px(bs * 2))
+                            .background(Capsule().fill(Color.black.opacity(0.45)))
                     }
                 }
                 .padding(m.px(mm))
@@ -508,6 +544,9 @@ struct MCRoot: View {
                 confirm("Quit \(g.title)?", "Anything not saved in it is lost.", yes: "Quit") { store.quit(h) }
             })
         }
+        if g.host != nil {
+            opts.append(.init(title: "Play on a TV") { DispatchQueue.main.async { playOnTv(g) } })
+        }
         opts.append(.init(title: "Change picture", sub: "Use a photo for this tile") { pickingArt = g.key })
         if MCArt.image(g.key) != nil {
             opts.append(.init(title: "Use the original picture") { MCArt.remove(g.key); artRev += 1 })
@@ -522,20 +561,26 @@ struct MCRoot: View {
     // MARK: All games
 
     func gameTabs() -> [(String, String)] {
-        [("all", "All")] + store.hosts.filter { store.paired($0) }.map { ("pc:\($0.uuid)", $0.name) }
+        [("all", "All")] + store.hosts.filter { store.paired($0) }.map { ("pc:\($0.uuid)", $0.name) } + [("ps", "PlayStation"), ("xb", "Xbox")]
     }
 
     func gamesPage(_ m: MCMetrics, _ p: MCPalette) -> some View {
         var games = store.allGames()
         if gamesTab.hasPrefix("pc:") { games = games.filter { $0.key.hasPrefix(gamesTab + ":") } }
+        else if gamesTab == "ps" { games = games.filter { $0.ps != nil } }
+        else if gamesTab == "xb" { games = games.filter { $0.xb != nil } }
         if sortAz {
             games.sort { $0.title.lowercased() < $1.title.lowercased() }
         } else {
+            // running first, then the recents, then consoles before PC games, then by title (as on the handheld)
             let r = MCRecents.list()
             let rank = Dictionary(r.enumerated().map { ($1, $0) }, uniquingKeysWith: { a, _ in a })
             games.sort {
+                if $0.running != $1.running { return $0.running }
                 let a = rank[$0.key] ?? Int.max, b = rank[$1.key] ?? Int.max
-                return a != b ? a < b : $0.title.lowercased() < $1.title.lowercased()
+                if a != b { return a < b }
+                let ca = $0.host != nil, cb = $1.host != nil
+                return ca != cb ? cb : $0.title.lowercased() < $1.title.lowercased()
             }
         }
         let gap: CGFloat = 28
@@ -546,22 +591,29 @@ struct MCRoot: View {
         focus.preferred["page"] = games.first.map { "g:\($0.key)" }
         return VStack(alignment: .leading, spacing: m.px(24)) {
             HStack(spacing: m.px(16)) {
-                ForEach(gameTabs(), id: \.0) { key, label in
-                    Text(label).mcFont(28, m, weight: .heavy)
-                        .foregroundColor(gamesTab == key ? p.bg : p.ink)
-                        .padding(.horizontal, m.px(30)).frame(height: m.px(64))
-                        .background(Capsule().fill(gamesTab == key ? p.ink : p.panel))
-                        .onTapGesture { gamesTab = key }
+                // more tabs than a phone's width: they scroll, the labels keep their full names
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: m.px(16)) {
+                        ForEach(gameTabs(), id: \.0) { key, label in
+                            Text(label).mcFont(28, m, weight: .heavy).lineLimit(1).fixedSize()
+                                .foregroundColor(gamesTab == key ? p.bg : p.ink)
+                                .padding(.horizontal, m.px(30)).frame(height: m.px(64))
+                                .background(Capsule().fill(gamesTab == key ? p.ink : p.panel))
+                                .onTapGesture { gamesTab = key }
+                        }
+                    }
                 }
-                Spacer()
-                Text(sortAz ? "A to Z" : "Recent first").mcFont(26, m).foregroundColor(p.sub)
+                Spacer(minLength: 0)
+                Text(sortAz ? "A to Z" : "Recent first").mcFont(26, m).foregroundColor(p.sub).lineLimit(1).fixedSize()
                     .onTapGesture { sortAz.toggle() }
             }
             .padding(.horizontal, m.px(m.edge))
             .padding(.top, m.px(24))
             if games.isEmpty {
-                Text(store.hosts.contains { store.paired($0) } ? "No games yet. They show up once the PC sends its list."
-                                                               : "No PC paired yet. Add one in Consoles.")
+                Text(gamesTab == "ps" ? "No PlayStation yet. Register a PS5 in Consoles."
+                     : gamesTab == "xb" ? "No Xbox yet. Sign in to Xbox in Consoles."
+                     : store.hosts.contains { store.paired($0) } ? "No games yet. They show up once the PC sends its list."
+                                                                 : "No PC paired yet. Add one in Consoles.")
                     .mcFont(30, m).foregroundColor(p.sub).padding(.horizontal, m.px(m.edge))
                 Spacer()
             } else {
@@ -683,6 +735,41 @@ struct MCRoot: View {
     }
 
     // MARK: Play on TV: where games go (this iPad or a MoonCast TV)
+
+    /// Y: switch between this device and the last TV. With no TV yet, the "Where to play" list opens.
+    func toggleTarget() {
+        if MCTvFinder.target != nil {
+            MCTvFinder.target = nil
+            MCToast.show("Games play on this \(MCDevice.name)")
+        } else if let last = MCTvFinder.known.first {
+            MCTvFinder.target = last
+            MCToast.show("Games play on \(last.name)" + (MCTvFinder.isHere(last) ? "" : ". It isn't on this network right now"))
+        } else {
+            playWhere()
+            return
+        }
+        settingsRev += 1
+    }
+
+    /// A game's menu, Play on a TV: pick a TV (looked for again first) and this game goes there, once; where games
+    /// play stays as it is.
+    func playOnTv(_ g: MCGame) {
+        store.busy = "Looking for MoonCast TVs on this Wi-Fi…"
+        Task { @MainActor in
+            let tvs = await MCTvFinder.sweep()
+            store.busy = nil
+            let last = MCTvFinder.lastTv
+            var opts: [MCDialog.Opt] = tvs.map { tv in
+                .init(title: tv.name, sub: "On this Wi-Fi · this \(MCDevice.name) becomes its controller", picked: tv.id == last?.id) {
+                    store.tvSession = MCTvSession(tv: tv, game: g)
+                }
+            }
+            if !opts.contains(where: { $0.picked }), !opts.isEmpty { opts[0].picked = true }
+            store.dialog = MCDialog(title: "Play \(g.title) on",
+                                    message: tvs.isEmpty ? "No MoonCast TV answered. Open MoonCast on the TV, on the same Wi-Fi as this \(MCDevice.name)." : nil,
+                                    opts: opts + [.init(title: "Cancel") {}])
+        }
+    }
 
     func playWhere() {
         store.busy = "Looking for MoonCast TVs on this Wi-Fi…"
