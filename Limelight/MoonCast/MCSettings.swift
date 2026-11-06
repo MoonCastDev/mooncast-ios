@@ -104,6 +104,8 @@ final class MCSettings {
             save { $0.width = 1280; $0.height = 720; $0.framerate = 60; $0.bitrate = k ?? MCRoot.defaultBitrate(1280, 720, 60) }
             // PyroWave's hundreds of Mbps are for home
             d.set(false, forKey: "mc_pyrowave")
+            // PS5: Away's frame rate and codec start at the defaults (60 fps, HEVC), as Android's away_fps / away_codec
+            d.removeObject(forKey: "ps5_fps"); d.removeObject(forKey: "ps5_h265")
         }
         d.set(want, forKey: "mc_profile")
         // Native follows the profile's size: its own screen's size is Native
