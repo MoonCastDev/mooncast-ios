@@ -39,6 +39,9 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, copy, nullable) NSString* psnDuid;
 @property (nonatomic, copy, nullable) NSData* psnAccountId;
 
+/// The last quit was the console saying another device holds Remote Play.
+@property (atomic, readonly) BOOL quitInUse;
+
 /// Nil when it started, else what went wrong. Over PSN this blocks: call it off the main thread.
 - (nullable NSString*) start;
 /// Stops a PSN connect in flight (the screen closed).

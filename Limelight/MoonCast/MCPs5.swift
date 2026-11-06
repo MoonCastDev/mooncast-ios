@@ -99,6 +99,15 @@ final class MCPs5StreamController: UIViewController, MCPs5SessionDelegate, MCQui
     private var remote: (String, String, Data)?
     private var fsr: MCFsrView?
     private var remoteDecided = false
+    /// Set when the console answers on the home network while a PSN attempt runs (Android's homeNow).
+    private var homeNow = false
+    /// When the console first said another device holds Remote Play.
+    private var inUseSince: Date?
+    /// The picture height this stream asked for (the stats show it).
+    private var streamHeight = MCPs5Store.height
+    /// Android's attempt counts: the home network 20 (a console waking from rest mode refuses at once, so about a
+    /// minute), PSN 4 (a missed start request is only fixed by a fresh attempt).
+    private var maxTries: Int { remote == nil ? 20 : 4 }
 
     init(console: MCPs5Console) {
         self.console = console
@@ -148,8 +157,8 @@ final class MCPs5StreamController: UIViewController, MCPs5SessionDelegate, MCQui
 
     // MARK: connecting
 
-    /// Wakes the console, then connects; while it comes out of rest mode the first tries fail, so up to 8 tries
-    /// 3 s apart, as on Android.
+    /// Wakes the console, then connects; while it comes out of rest mode the first tries fail, so up to 20 tries over
+    /// the home network or 4 over PSN, 3 s apart, as on Android.
     private func connect() {
         // the route is decided first (a console that is waking up stops answering the probe for a few seconds), then
         // the wake-up goes out
@@ -181,12 +190,17 @@ final class MCPs5StreamController: UIViewController, MCPs5SessionDelegate, MCQui
             return
         }
         tries += 1
-        let away = remote != nil
+        // Home or Away settings come from the profile in use, not from the route (Android's Profile.isAway)
+        let away = MCSettings.profile == "away"
         MCPs5StreamController.streamingAway = away
-        setStatus(away ? "Connecting to \(console.name) over PlayStation Network… (up to a minute)"
-                       : tries == 1 ? "Connecting to \(console.name)…" : "Connecting to \(console.name)… (try \(tries))")
+        // the first try says where it goes; a retry keeps the note retryAfter() put up
+        if tries == 1 {
+            setStatus(remote != nil ? "Connecting to \(console.name) over PlayStation Network… (up to a minute)" : "Connecting to \(console.name)…")
+        }
         session?.stop()
-        let h = away ? MCPs5Store.awayHeight : MCPs5Store.height
+        // Away: its own resolution; Home: Settings, 720p on a weak link
+        let h = away ? MCPs5Store.awayHeight : (Self.weakLinkNow ? 720 : MCPs5Store.height)
+        streamHeight = h
         let rate = away ? (MCPs5Store.awayBitrate > 0 ? MCPs5Store.awayBitrate * 1000 : 10000)
                         : (MCPs5Store.bitrate > 0 ? MCPs5Store.bitrate * 1000 : (h >= 1080 ? 30000 : 15000))
         let s = MCPs5Session(host: console.host, registKey: console.registKey, morning: console.morning,
@@ -213,18 +227,58 @@ final class MCPs5StreamController: UIViewController, MCPs5SessionDelegate, MCQui
         s.videoLayer.frame = MCPictureShape.frame(in: view.bounds, aspect: 16.0 / 9.0, kind: "ps5")
         view.clipsToBounds = true
         view.layer.insertSublayer(s.videoLayer, at: 0)
-        // over PSN start blocks while the hole is punched: keep the screen live
+        // over PSN start blocks while the hole is punched: keep the screen live, and while it does ask the home
+        // network every few seconds, so a console that wakes there (or was switched on) is played at home instead
+        let watch = remote != nil ? homeWatch() : nil
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             let err = s.start()
             DispatchQueue.main.async {
+                watch?.cancel()
                 guard let self = self, !self.closed, let err = err, !err.isEmpty else { return }
-                if away && self.tries < 2 {
+                if self.remote != nil && self.homeNow {
+                    self.homeNow = false
+                    self.remote = nil
+                    self.tries = 0
+                    self.setStatus("Connecting to \(self.console.name)…")
                     self.attempt()
+                } else if self.tries < self.maxTries {
+                    self.retryAfter(self.remote != nil ? "PlayStation Network didn't answer in time." : nil)
                 } else {
                     self.failed(err)
                 }
             }
         }
+    }
+
+    /// The same rule as Android's Wi-Fi link below 60 Mbps; iOS has no public link-speed call, so it is mobile data
+    /// only, or Low Data Mode (MCNetworkId.weakLink). Swap this one line if the rule changes.
+    private static var weakLinkNow: Bool { MCNetworkId.weakLink }
+
+    /// While a PSN attempt runs, asks the home network every 4 s; when the console answers, cancels the PSN attempt.
+    private func homeWatch() -> Task<Void, Never> {
+        let host = console.host
+        return Task.detached { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 4_000_000_000)
+                if Task.isCancelled { return }
+                if MCPs5Probe.probe(host).power != .notFound {
+                    await MainActor.run { self?.homeNow = true }
+                    MCPs5Session.cancelPsn()
+                    return
+                }
+            }
+        }
+    }
+
+    /// A failed try that will be repeated in 3 s: say why, and from rest mode wake the console again every 4th try.
+    private func retryAfter(_ psnNote: String?) {
+        if remote != nil {
+            setStatus("\(psnNote ?? "Your PS5 dropped the connection.")\nRetrying (attempt \(tries + 1) of \(maxTries))…")
+        } else {
+            setStatus("Waking \(console.name)…\nThis takes up to a minute from rest mode.")
+            if tries % 4 == 0 { MCPs5Session.wakeHost(console.host, registKey: console.registKey) }
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in self?.attempt() }
     }
 
     func ps5Connected() {
@@ -249,11 +303,25 @@ final class MCPs5StreamController: UIViewController, MCPs5SessionDelegate, MCQui
     func ps5Quit(_ reason: String) {
         guard !closed else { return }
         session?.videoLayer.removeFromSuperlayer()
-        if !connected && tries < (remote == nil ? 8 : 2) && !reason.isEmpty {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in self?.attempt() }
+        if reason.isEmpty { leave(); return }
+        if !connected, session?.quitInUse == true {
+            // another device (a handheld that just moved the game here) is still letting go: retry every 3 s for up
+            // to 30 s without counting a try
+            let since = inUseSince ?? Date()
+            inUseSince = since
+            if Date().timeIntervalSince(since) < 30 {
+                setStatus("Waiting for the PS5 to finish with the other device…")
+                tries -= 1
+                DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in self?.attempt() }
+            } else {
+                failed("Your PS5 is already streaming to another device.\nClose it there, then try again.")
+            }
             return
         }
-        if reason.isEmpty { leave(); return }
+        if !connected && tries < maxTries {
+            retryAfter(nil)
+            return
+        }
         failed(connected ? "The PS5 ended the session: \(reason)"
                : !MCPsn.signedIn ? "Couldn't reach \(console.name) on this network (\(reason)). Away from home, sign in to PlayStation Network in Settings → PlayStation."
                : "Couldn't connect to \(console.name): \(reason)")
@@ -394,7 +462,7 @@ final class MCPs5StreamController: UIViewController, MCPs5SessionDelegate, MCQui
         guard statsOn, connected, session != nil else { corner?.isHidden = true; return }
         corner?.level = MCStatsLevel.current
         var d = mcStats()
-        d["size"] = "\(MCPs5Store.height >= 1080 ? 1920 : MCPs5Store.height >= 720 ? 1280 : 960)x\(MCPs5Store.height)"
+        d["size"] = "\(streamHeight >= 1080 ? 1920 : streamHeight >= 720 ? 1280 : 960)x\(streamHeight)"
         d["targetFps"] = MCPs5Store.fps
         corner?.show(stats: d)
         if let c = corner, !MCQuickMenu.isOpen { view.bringSubviewToFront(c) }
