@@ -940,7 +940,24 @@ extension MCRoot {
         // the PyroWave style: its Auto is its recommended bitrate, which follows the resolution and frame rate
         let pyro = style?.pyro == true
         rows.append(AnyView(bitrateRow(v, recommended: pyro ? MCPcStyles.pyroRecommended(MCPcStyles.values("pyro")) : nil, m, p)))
-        // (Automatic bitrate is a tile in Fine-tune's grid, pcTiles)
+        // Automatic bitrate is a setting of the profile, not of a play style: the live setting. Fine-tune has it as a tile
+        // (pcTiles); a style's own page, which has no tiles, keeps this row (as Android's)
+        if style != nil {
+            let on = MCLink.enabled, pc = pcOf()
+            let limit = MCLink.displayCapKbps(pc)
+            let here = MCNetworkId.label(MCNetworkId.current())
+            let line = on ? "\(MCHostCaps.modeLabel(pc)) · " + (limit.map { "\(here): limit \($0 / 1000) Mbps" } ?? "no limit on \(here)")
+                          : "Off: the bitrate set is used as it is."
+            rows.append(AnyView(vrow("autorate", "Automatic bitrate", onOff(on),
+                                     sub: "Steps down when the network drops packets, back up when it's clean.\n" + line, m, p) {
+                UserDefaults.standard.set(!on, forKey: "mc_auto_bitrate"); settingsRev += 1
+            }))
+            if on, let limit = limit {
+                rows.append(AnyView(vrow("autoforget", "Forget this network's limit", "\(limit / 1000) Mbps", m, p) {
+                    MCLink.forgetThisNetwork(); MCToast.show("Forgot this network's limit"); settingsRev += 1
+                }))
+            }
+        }
         // a play style: PyroWave is its codec; the other styles pick theirs
         if !pyro {
             let codec = v.i("codec", 0)

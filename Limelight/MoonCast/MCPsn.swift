@@ -22,7 +22,8 @@ enum MCPsn {
     static var onlineId: String? { UserDefaults.standard.string(forKey: "psn_online_id") }
 
     static func signOut() {
-        ["psn_account_id", "psn_online_id", "psn_token_at"].forEach { UserDefaults.standard.removeObject(forKey: $0) }
+        // the duid goes too (Android clears all of Psn's prefs): the next sign-in mints a new client id
+        ["psn_account_id", "psn_online_id", "psn_token_at", "psn_duid"].forEach { UserDefaults.standard.removeObject(forKey: $0) }
         MCKeychain.delete("psn_token"); MCKeychain.delete("psn_refresh")
     }
 
@@ -158,7 +159,7 @@ final class MCPsnSignInController: UIViewController, WKNavigationDelegate {
     var done: (Bool) -> Void = { _ in }
     private let web = WKWebView(frame: .zero, configuration: {
         let c = WKWebViewConfiguration()
-        c.websiteDataStore = .nonPersistent()   // a fresh sign-in every time, nothing kept in the web view
+        c.websiteDataStore = .nonPersistent()   // a fresh sign-in every time; the page's cookies (Sony's bot check sets one) live as long as the page, and nothing here clears them
         return c
     }())
     private var finished = false

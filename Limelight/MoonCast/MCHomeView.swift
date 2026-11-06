@@ -1162,6 +1162,12 @@ struct MCRoot: View {
             toggle("s:autorate", "Automatic bitrate", "Steps down when the network drops packets, back up when it's clean. The bitrate is then the most it uses", MCLink.enabled, m, p) {
                 UserDefaults.standard.set(!MCLink.enabled, forKey: "mc_auto_bitrate")
             }
+            // what was learnt on this network (for the PC streamed last), as Android's Settings has it
+            if let limit = MCLink.displayCapKbps() {
+                row("s:autoforget", icon: "arrow.counterclockwise", color: p.sub, title: "Forget this network's limit", sub: nil, right: "\(limit / 1000) Mbps", m, p) {
+                    MCLink.forgetThisNetwork(); MCToast.show("Forgot this network's limit"); settingsRev += 1
+                }
+            }
             choice("s:codec", "Video codec", "HEVC and AV1 look better at the same bitrate", ["Auto", "H.264", "HEVC", "AV1"],
                    Int(v.codec), m, p) { i in settings.save { $0.codec = UInt32(i) } }
             let fsrOn = UserDefaults.standard.string(forKey: "mc_super_resolution") == "fsr1"
