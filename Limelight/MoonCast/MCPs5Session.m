@@ -174,6 +174,7 @@ static void MCChiakiLog(ChiakiLogLevel level, const char* msg, void* user) {
 }
 @property (nonatomic) AVSampleBufferDisplayLayer* videoLayer;
 @property (atomic) MCPs5Audio* audio;
+@property (atomic) BOOL quitInUse;
 @end
 
 static void MCEvent(ChiakiEvent* e, void* user);
@@ -416,6 +417,9 @@ static void MCRegistCb(ChiakiRegistEvent* e, void* user) {
             NSString* reason = [NSString stringWithUTF8String:chiaki_quit_reason_string(e->quit.reason)] ?: @"";
             if (e->quit.reason_str) reason = [reason stringByAppendingFormat:@": %s", e->quit.reason_str];
             if (e->quit.reason == CHIAKI_QUIT_REASON_STOPPED) reason = @"";
+            // the PS5 allows one Remote Play session (Android: reason 4, or "in use" in the text)
+            self.quitInUse = e->quit.reason == CHIAKI_QUIT_REASON_SESSION_REQUEST_RP_IN_USE
+                || [reason rangeOfString:@"in use" options:NSCaseInsensitiveSearch].location != NSNotFound;
             dispatch_async(dispatch_get_main_queue(), ^{ [d ps5Quit:reason]; });
             break;
         }
