@@ -25,5 +25,28 @@ Since that review, on `feat/pyrowave`:
 - The Auto bitrate base has no 150 Mbps cap any more (as Android).
 - The TV controller screen keeps the iPad awake from the start, and the pad socket sends without Nagle delay.
 
-Not done yet: the rest of the review's list 3a (Balanced frame pacing, Xbox and PS5 robustness items, Unpair, the
-Automatic bitrate row on style pages, DirectPad, PS4 and others).
+Since that review, in the 1.0 beta 1 batch (pull requests #32 to #37): Xbox sign-in and stream robustness, PS5
+robustness (retry counts, in-use wait, PSN to LAN switch, profile-based Away, weak-link 720p), frame pacing Balanced
+with Android's style defaults, the PC menu (Resume, Test the network, Unpair, Remove unpairs) and the 15 s start
+watchdog, All games parity (PlayStation and Xbox tabs, running-first sort, Offline badge, grid on iPad, Y toggles TV,
+per-game Play on a TV), the Automatic bitrate row on style pages with Forget in Classic, and the PSN console ID
+cleared on sign-out.
+
+Not done yet, against the 2026-11-03 review (list 3a):
+
+- DirectPad and the "Controller on a TV" setting (item 19).
+- Pad as a mouse, a "Rumble on this device" toggle, a multi-pad test and per-pad rumble routing for PS5 (item 20).
+- PS5 pacing and decoder-latency settings, and a Fastest style that uses them (item 14).
+- Away key per network (one global "away" key remains) and the 64-entry cap on the link memory, to the extent the
+  review's wording still applies (item 21); not re-checked line by line for this batch.
+- PSN sign-in cookies: only the code comment and the DUID clearing are done; Android's bot-check cookie fix is
+  not confirmed ported (item 22).
+- PS4 support (item 23).
+- A MoonCast receiver for Apple TV (item 25): the "Moonlight TV" target is still stock Moonlight tvOS.
+- Siri Shortcuts (after beta 1, from the 2026-11-07 plan).
+
+Not applicable on iOS: the "This device" tab and device apps, home-screen pinning, Exit, Obtainium, front buffer,
+SSID/BSSID network keys, 144 and 240 fps, and picture in picture for Metal (PyroWave and Super resolution) streams.
+
+Still to do before a public beta: a release build with the MoonCast bundle ID and the usage check-in ID built in,
+and a way to distribute it (TestFlight needs a paid Apple Developer account).
