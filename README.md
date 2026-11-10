@@ -65,6 +65,10 @@ MoonCast has no ads and no accounts of its own. Your PlayStation Network and Xbo
 
 Official builds ask once whether you'll send an **anonymous usage check-in** (Settings, About). If you say yes, once a day it sends [TelemetryDeck](https://telemetrydeck.com) the app version, iPhone or iPad, the iOS version, the device model, and whether you played PC, PS5 or Xbox. The install is a random ID made on the device, sent hashed. It never sends names, addresses, games, accounts or anything you type. Say no, or turn it off later, and nothing is sent. Only official builds contain the ID needed to send; a build you make yourself never asks and never sends. The code is in [`Limelight/MoonCast/MCAbout.swift`](Limelight/MoonCast/MCAbout.swift).
 
+## How this was made
+
+MoonCast is AI-assisted. Most of the code is written with AI coding tools (Claude Code), directed by the maintainer, who tests it on real devices (an iPhone and an iPad, and on the Android side an AYN Odin 2 Portal, Retroid handhelds and Android and Google TVs). The whole source is public under GPL-3.0, so you can read exactly what it does. If you find something wrong, please open an issue.
+
 ## Licence
 
 MoonCast is free software under the [GNU General Public License v3](LICENSE.txt). The app lists the open-source projects it includes under Settings, About.
