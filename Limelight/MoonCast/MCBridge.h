@@ -40,7 +40,23 @@ NS_ASSUME_NONNULL_BEGIN
 FOUNDATION_EXPORT int McActiveVideoFormat(void);
 FOUNDATION_EXPORT BOOL McVideoRunning(void);
 
+/// A controller-only session to the PC for DirectPad: joins the game already running (never launches one), drops the
+/// picture and the sound, and sends this device's pad as controller 0. [events] runs on any thread with "up" (the
+/// session started), "ended" (it ended after starting) or "failed" (it didn't start; [why] says why).
+@interface MCDirectLink : NSObject
+- (instancetype) initWithHost:(TemporaryHost*)host appID:(NSString*)appID appName:(NSString*)appName
+                       events:(void (^)(NSString* event, NSString* _Nullable why))events;
+- (void) start;
+/// Lets go of every button and ends the session. Safe to call more than once.
+- (void) stop;
+/// The W3C Standard Gamepad state (17 buttons, 4 axes, Y down-positive) as controller 0.
+- (void) sendButtons:(NSArray<NSNumber*>*)b axes:(NSArray<NSNumber*>*)a;
+@end
+
 @interface MCBridge : NSObject
+
+/// The id of the game running on the PC ("0" when none), or nil when the PC didn't answer. Blocks; not on the main thread.
++ (nullable NSString*) currentGame:(TemporaryHost*)host;
 
 /// Polaris's paired JSON API (/polaris/v1/...): the answer parsed, or nil when it failed or isn't JSON. Blocks; not on
 /// the main thread. [body] nil: GET, else POST.

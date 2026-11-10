@@ -184,7 +184,7 @@ enum MCTvSender {
     }
 
     /// Nil when the TV took the game, else what went wrong (the TV's own words when it said).
-    static func send(_ tv: MCTvBox, _ g: MCGame, padKey: String) async -> String? {
+    static func send(_ tv: MCTvBox, _ g: MCGame, padKey: String, direct: Bool = false) async -> String? {
         if tv.ip.isEmpty { return "\(tv.name) isn't on this network. Open MoonCast on it, on the same Wi-Fi as this \(MCDevice.name)." }
         if g.xb != nil && !tv.canXbox { return "Update MoonCast on \(tv.name) to send it an Xbox game." }
         var j: [String: Any] = ["deviceName": UIDevice.current.name, "padKey": padKey]
@@ -192,6 +192,9 @@ enum MCTvSender {
         if let a = g.app {
             j["appId"] = a.id ?? ""
             j["appName"] = a.name ?? g.title
+            // "pad":"direct": this iPad opens its own controller-only session on the PC (MCDirectPad), so the TV must not
+            // relay the pad too. padKey still goes along: it authorizes /stop and /pad (the relay, if direct fails).
+            if direct { j["pad"] = "direct" }
             // which PC: a TV that knows several plays it on this one, not on whichever it lists first
             if let h = g.host { j["pcUuid"] = h.uuid; j["pcName"] = h.name }
             // A TV with no pairing gets this iPad's identity, sealed to the TV's key, for this session only. Ask the
@@ -230,6 +233,14 @@ enum MCTvSender {
         return await post(tv, "/stop", ["padKey": padKey, "quit": quit], timeout: 3)?.0 == 200
     }
 
+    /// The direct controller session failed: ask the TV to relay the pad after all (POST /pad, version 4+).
+    static func useRelay(_ tv: MCTvBox, padKey: String) async -> Bool {
+        guard !tv.ip.isEmpty, tv.version >= 4 else { return false }
+        var body: [String: Any] = ["padKey": padKey]
+        if let ip = MCTvFinder.myIp { body["phoneIp"] = ip }
+        return await post(tv, "/pad", body, timeout: 3)?.0 == 200
+    }
+
     /// How the TV's stream is going: (state, error), or nil (older TV, no answer).
     static func status(_ tv: MCTvBox) async -> (String, String)? {
         guard !tv.ip.isEmpty, tv.version >= 6, let url = URL(string: "http://\(tv.ip):\(MCTvFinder.port)/status"),
@@ -237,6 +248,150 @@ enum MCTvSender {
               (resp as? HTTPURLResponse)?.statusCode == 200,
               let j = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
         return (j["state"] as? String ?? "", j["error"] as? String ?? "")
+    }
+}
+
+/// The controller straight to the PC (DirectPad.kt): while a PC game plays on a TV, this iPad opens its own,
+/// controller-only Sunshine session to the same game and sends its pad as controller 0. That skips the TV's Wi-Fi hop.
+/// A PC that refuses a second session makes this fail, and the controller screen falls back to the TV's relay.
+/// The session (MCDirectLink): 640x360, 15 fps, 500 kbps, H.264, resume only (never launches or quits); the picture is
+/// never decoded and the sound never played.
+final class MCDirectPad {
+    enum State { case waiting, connecting, connected, failed, stopped }
+
+    /// Settings, Controllers, "Controller on a TV": "direct" (to the PC, fastest, the default) or "tv" (through the TV).
+    static let prefKey = "hh_tv_pad"
+    static var wanted: Bool { (UserDefaults.standard.string(forKey: prefKey) ?? "direct") == "direct" }
+
+    let pcName: String
+    private let host: TemporaryHost
+    private let appId: String
+    private let appName: String
+    private let lock = NSLock()
+    private var _state = State.waiting
+    private var _why: String?
+    private var _stopped = false
+    private var _everConnected = false
+    private var link: MCDirectLink?
+    private var b = [Float](repeating: 0, count: 17)
+    private var a = [Float](repeating: 0, count: 4)
+    /// Called on the main thread whenever [state] changes.
+    var onState: ((State) -> Void)?
+
+    init(host: TemporaryHost, appId: String, appName: String) {
+        self.host = host; self.appId = appId; self.appName = appName
+        pcName = host.name
+    }
+
+    var state: State { lock.lock(); defer { lock.unlock() }; return _state }
+    var everConnected: Bool { lock.lock(); defer { lock.unlock() }; return _everConnected }
+    /// What went wrong last (for the status line).
+    var why: String? { lock.lock(); defer { lock.unlock() }; return _why }
+    private var stopped: Bool { lock.lock(); defer { lock.unlock() }; return _stopped }
+
+    func start() { Thread.detachNewThread { [self] in run() } }
+
+    func stop() {
+        lock.lock()
+        if _stopped { lock.unlock(); return }
+        _stopped = true
+        let l = link; link = nil
+        lock.unlock()
+        set(.stopped, nil)
+        l?.stop()
+    }
+
+    private func set(_ s: State, _ reason: String?) {
+        lock.lock()
+        if _stopped && s != .stopped { lock.unlock(); return }
+        _state = s
+        if let r = reason { _why = r }
+        if s == .connected { _everConnected = true }
+        lock.unlock()
+        DispatchQueue.main.async { self.onState?(s) }
+    }
+
+    /// Wait for the TV's game to be running on the PC, then join it. Reconnects if the session drops.
+    private func run() {
+        var tries = 0
+        while !stopped {
+            // 1. the game is running on the PC (the TV started it): never launch it ourselves
+            let running = waitForGame(everConnected ? 20 : 45)
+            if stopped { return }
+            if !running { set(.failed, "\(appName) isn't running on \(pcName)"); return }
+            // 2. join it, controller only
+            set(.connecting, nil)
+            let ended = DispatchSemaphore(value: 0)
+            if !connect(ended) {
+                tries += 1
+                if tries >= 3 { set(.failed, why ?? "Couldn't reach \(pcName)"); return }
+            } else { tries = 0 }
+            ended.wait()   // until the session ends
+            lock.lock(); link = nil; lock.unlock()
+            if stopped { return }
+            Thread.sleep(forTimeInterval: 1.5)
+        }
+    }
+
+    private func waitForGame(_ seconds: Double) -> Bool {
+        let end = Date().addingTimeInterval(seconds)
+        var seenAt: Date?
+        while !stopped && Date() < end {
+            if MCBridge.currentGame(host) == appId {
+                // give the TV's own session a moment to set up before we join next to it
+                if seenAt == nil { seenAt = Date() }
+                if everConnected || -seenAt!.timeIntervalSinceNow >= 2 { return true }
+            } else { seenAt = nil }
+            Thread.sleep(forTimeInterval: 1)
+        }
+        return false
+    }
+
+    /// One session. True once it started; [ended] is signalled when it ends (or failed to start).
+    private func connect(_ ended: DispatchSemaphore) -> Bool {
+        let started = DispatchSemaphore(value: 0)
+        let once = NSLock()
+        var up = false, done = false
+        func end() { once.lock(); let first = !done; done = true; once.unlock(); if first { started.signal(); ended.signal() } }
+        let l = MCDirectLink(host: host, appID: appId, appName: appName) { [self] event, reason in
+            switch event {
+            case "up":
+                once.lock(); up = true; once.unlock()
+                set(.connected, nil)
+                started.signal()
+                push()
+            case "ended":
+                if !stopped { set(.connecting, nil) }
+                end()
+            default:
+                lock.lock(); if _why == nil { _why = reason }; lock.unlock()
+                end()
+            }
+        }
+        lock.lock()
+        if _stopped { lock.unlock(); return false }
+        link = l
+        lock.unlock()
+        l.start()
+        _ = started.wait(timeout: .now() + 20)
+        once.lock(); let ok = up, over = done; once.unlock()
+        if !ok && !over {
+            lock.lock(); _why = "\(pcName) didn't answer"; lock.unlock()
+            l.stop()
+            end()
+        }
+        return ok
+    }
+
+    /// The pad: W3C Standard Gamepad state -> the PC's controller 0.
+    func update(_ buttons: [Float], _ axes: [Float]) {
+        lock.lock(); b = buttons; a = axes; lock.unlock()
+        push()
+    }
+
+    private func push() {
+        lock.lock(); let l = link, bt = b, ax = a; lock.unlock()
+        l?.sendButtons(bt.map { NSNumber(value: $0) }, axes: ax.map { NSNumber(value: $0) })
     }
 }
 

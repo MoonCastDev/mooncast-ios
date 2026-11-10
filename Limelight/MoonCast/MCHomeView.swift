@@ -1006,7 +1006,7 @@ struct MCRoot: View {
         "s:hdr": "sun.max", "s:ull": "bolt", "s:fsr": "sparkles", "s:fsrsharp": "wand.and.rays", "s:pacing": "metronome", "s:stats": "chart.bar", "s:opt": "wand.and.stars",
         "s:spk": "speaker.wave.2", "s:pcaudio": "hifispeaker", "s:feel": "music.note",
         "s:size": "textformat.size", "s:rotate": "rotate.right", "s:touch": "hand.point.up.left", "s:osc": "gamecontroller",
-        "s:multi": "person.2", "s:swap": "arrow.left.arrow.right", "s:mouse": "computermouse",
+        "s:multi": "person.2", "s:tvpad": "tv", "s:swap": "arrow.left.arrow.right", "s:mouse": "computermouse",
         "s:ps:res": "rectangle.expand.vertical", "s:ps:fps": "speedometer", "s:ps:rate": "gauge.with.dots.needle.67percent",
         "s:ps:codec": "film", "s:ps:disc": "moon.zzz", "s:ps:swap": "arrow.left.arrow.right", "s:theme": "paintpalette",
         "s:profile": "house", "s:autoaway": "location", "s:pip": "pip", "s:profname": "pencil", "s:ps:fsr": "sparkles", "s:xb:fsr": "sparkles", "s:ps:sharp": "wand.and.rays", "s:xb:sharp": "wand.and.rays",
@@ -1253,6 +1253,9 @@ struct MCRoot: View {
                 sub: "Put the pad in pairing mode, then pick it in the \(MCDevice.name)'s Settings → Bluetooth", right: nil, m, p) {
                 if let u = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(u) }
             }
+            choice("s:tvpad", "Controller on a TV", "For PC games sent to a TV. Direct is fastest: it skips the TV's Wi-Fi",
+                   ["Direct to the PC", "Through the TV"], MCDirectPad.wanted ? 0 : 1, m, p) { i in
+                UserDefaults.standard.set(i == 0 ? "direct" : "tv", forKey: MCDirectPad.prefKey) }
             toggle("s:multi", "More than one player", "On a PC each pad is its own player", v.multi, m, p) { settings.save { $0.multi.toggle() } }
             toggle("s:swap", "Swap A and B", "For Nintendo-style layouts", v.swapAB, m, p) { settings.save { $0.swapAB.toggle() } }
             let dzs = [0, 3, 5, 7, 10, 15]
