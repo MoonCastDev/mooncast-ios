@@ -333,13 +333,13 @@ struct MCConsoleStyle {
             // the PS5 streams up to 1080p, 30 or 60 fps, and its own bitrate steps
             return [
                 MCConsoleStyle(id: "battery", name: "Battery", l1: "720p · 60 fps", l2: "15 Mbps · H.264", note: "Longest play time", icon: "leaf", color: 0x2DBE5A,
-                               keys: ["ps5_resolution": 720, "ps5_fps": 60, "ps5_bitrate": 15, "ps5_h265": false]),
+                               keys: ["ps5_resolution": 720, "ps5_fps": 60, "ps5_bitrate": 15, "ps5_h265": false, "ps5_pacing": "same", "ps5_decoder_latency": "low"]),
                 MCConsoleStyle(id: "balanced", name: "Balanced", l1: "1080p · 60 fps", l2: "Auto bitrate · HEVC", note: "Good everywhere at home", icon: "half", color: nil,
-                               keys: ["ps5_resolution": 1080, "ps5_fps": 60, "ps5_bitrate": 0, "ps5_h265": true]),
+                               keys: ["ps5_resolution": 1080, "ps5_fps": 60, "ps5_bitrate": 0, "ps5_h265": true, "ps5_pacing": "same", "ps5_decoder_latency": "low"]),
                 MCConsoleStyle(id: "sharpest", name: "Sharpest", l1: "1080p · 60 fps", l2: "50 Mbps · HEVC", note: "Best picture, good Wi-Fi", icon: "star", color: MCPcStyles.purple,
-                               keys: ["ps5_resolution": 1080, "ps5_fps": 60, "ps5_bitrate": 50, "ps5_h265": true]),
-                MCConsoleStyle(id: "fastest", name: "Fastest", l1: "1080p · 60 fps", l2: "30 Mbps · HEVC", note: "Lighter to send, steadier on a busy Wi-Fi", icon: "bolt", color: MCPcStyles.orange,
-                               keys: ["ps5_resolution": 1080, "ps5_fps": 60, "ps5_bitrate": 30, "ps5_h265": true]),
+                               keys: ["ps5_resolution": 1080, "ps5_fps": 60, "ps5_bitrate": 50, "ps5_h265": true, "ps5_pacing": "same", "ps5_decoder_latency": "low"]),
+                MCConsoleStyle(id: "fastest", name: "Fastest", l1: "1080p · 60 fps", l2: "30 Mbps · lowest delay", note: "Lowest delay pacing, ultra low latency decoder", icon: "bolt", color: MCPcStyles.orange,
+                               keys: ["ps5_resolution": 1080, "ps5_fps": 60, "ps5_bitrate": 30, "ps5_h265": true, "ps5_pacing": "latency", "ps5_decoder_latency": "ultra"]),
             ]
         }
         // the Xbox sets its own quality from the picture and a bitrate cap
@@ -361,6 +361,8 @@ struct MCConsoleStyle {
         case "ps5_fps": return MCPs5Store.fps
         case "ps5_bitrate": return MCPs5Store.bitrate
         case "ps5_h265": return MCPs5Store.h265
+        case "ps5_pacing": return MCPs5Store.pacingChoice
+        case "ps5_decoder_latency": return MCPs5Store.decoderLatency
         default: return d.object(forKey: key) ?? 0
         }
     }
@@ -369,6 +371,7 @@ struct MCConsoleStyle {
         keys.allSatisfy { k, v in
             let now = MCConsoleStyle.read(k)
             if let b = v as? Bool, k.hasSuffix("h265") { return (now as? NSNumber)?.boolValue == b }
+            if let t = v as? String { return now as? String == t }
             return (now as? NSNumber)?.intValue == (v as? NSNumber)?.intValue
         }
     }
@@ -389,7 +392,10 @@ struct MCConsoleStyle {
     }
 
     private func score() -> Int {
-        keys.filter { k, v in (MCConsoleStyle.read(k) as? NSNumber)?.intValue == (v as? NSNumber)?.intValue }.count
+        keys.filter { k, v in
+            if let t = v as? String { return MCConsoleStyle.read(k) as? String == t }
+            return (MCConsoleStyle.read(k) as? NSNumber)?.intValue == (v as? NSNumber)?.intValue
+        }.count
     }
 
     static func nowLabel(_ k: String) -> String { detect(k)?.name ?? "\(nearest(k).name) (changed)" }

@@ -70,6 +70,23 @@ enum MCPs5Store {
     /// 0 = Auto (30 Mbps at 1080p, 15 at 720p, as on Android)
     static var bitrate: Int { UserDefaults.standard.object(forKey: "ps5_bitrate") as? Int ?? 0 }
     static var h265: Bool { UserDefaults.standard.object(forKey: "ps5_h265") as? Bool ?? true }
+    /// Settings → PlayStation → Frame pacing: "same" (as Picture) or one of MCPacing's ids. Anything else saved reads "same".
+    static var pacingChoice: String {
+        let v = UserDefaults.standard.string(forKey: "ps5_pacing") ?? "same"
+        return v == "cap-fps" ? "balanced" : (MCPacing.ids.contains(v) ? v : "same")
+    }
+    /// What the stream uses: 0 Lowest delay, 1 Balanced, 2 Smoothest.
+    static var pacing: Int { pacingChoice == "same" ? MCPacing.mode : (MCPacing.ids.firstIndex(of: pacingChoice) ?? 0) }
+    /// Settings → PlayStation → Decoder: "low", "ultra" or "standard". Not set yet: Picture's Ultra low latency decides,
+    /// as it did before this setting; anything unknown reads "low".
+    static var decoderLatency: String {
+        guard let v = UserDefaults.standard.string(forKey: "ps5_decoder_latency") else {
+            return MCUltraLowLatency.enabled ? "ultra" : "low"
+        }
+        return ["low", "ultra", "standard"].contains(v) ? v : "low"
+    }
+    /// For the stream: 0 Standard, 1 Low latency, 2 Ultra low latency.
+    static var decoderMode: Int { ["standard": 0, "ultra": 2][decoderLatency] ?? 1 }
     static var onDisconnect: String { UserDefaults.standard.string(forKey: "ps5_on_disconnect") ?? "ask" }
     static var swapCrossCircle: Bool { UserDefaults.standard.bool(forKey: "ps5_swap_cross_circle") }
     static var loginPin: String { UserDefaults.standard.string(forKey: "ps5_login_pin") ?? "" }
@@ -209,6 +226,8 @@ final class MCPs5StreamController: UIViewController, MCPs5SessionDelegate, MCQui
         // Settings → PlayStation → HDR (HEVC 10-bit); FSR works on 8-bit frames only
         let hdr = MCPs5Store.h265 && UserDefaults.standard.bool(forKey: "ps5_hdr")
         s.hdr = hdr
+        s.pacing = Int32(MCPs5Store.pacing)
+        s.decoderLatency = Int32(MCPs5Store.decoderMode)
         // Settings → Picture → Super resolution: 720p / 1080p up to the iPad's screen through FSR
         fsr?.removeFromSuperview(); fsr = nil
         if !hdr && MCFsr.wanted(videoHeight: h, kind: "ps5") {
@@ -218,7 +237,9 @@ final class MCPs5StreamController: UIViewController, MCPs5SessionDelegate, MCQui
                 v.autoresizingMask = [.flexibleWidth, .flexibleHeight]
                 view.insertSubview(v, at: 0)
                 fsr = v
-                s.fsrDecoder = MCFsrDecoder(view: v)
+                let dec = MCFsrDecoder(view: v)
+                dec.realTime = MCPs5Store.decoderMode > 0
+                s.fsrDecoder = dec
                 s.videoLayer.isHidden = true
             }
         }

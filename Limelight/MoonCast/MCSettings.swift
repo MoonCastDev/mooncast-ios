@@ -72,7 +72,7 @@ final class MCSettings {
     private static let profileKeys = ["mc_full_range", "mc_picture_shape", "mc_ultra_low_latency", "mc_super_resolution",
                                       "mc_fsr_sharpness", "mc_native_fps", "xbox_resolution", "xbox_bitrate",
                                       "ps5_resolution", "ps5_fps", "ps5_bitrate", "ps5_h265", "ps5_hdr",
-                                      "ps5_super_resolution", "ps5_fsr_sharpness", "ps5_picture_shape",
+                                      "ps5_super_resolution", "ps5_fsr_sharpness", "ps5_picture_shape", "ps5_pacing", "ps5_decoder_latency",
                                       "xbox_super_resolution", "xbox_fsr_sharpness", "xbox_picture_shape", "mc_pyrowave", "mc_auto_bitrate", "mc_pacing"]
 
     /// Saves the picture and sound settings for the profile being left and brings back the other one's. The first

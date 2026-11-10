@@ -34,6 +34,11 @@ NS_ASSUME_NONNULL_BEGIN
 /// Away from home: the PSN token, the console's PSN device id (hex) and the account id (8 bytes). When set, start
 /// first punches a hole through PSN to the console (up to a minute).
 @property (nonatomic, copy, nullable) NSString* psnToken;
+/// Settings → PlayStation → Frame pacing: 0 Lowest delay (shown the moment it's decoded), 1 Balanced, 2 Smoothest.
+/// Set before start.
+@property (nonatomic) int pacing;
+/// Settings → PlayStation → Decoder: 0 Standard, 1 Low latency, 2 Ultra low latency. Set before start.
+@property (nonatomic) int decoderLatency;
 /// HDR (HEVC Main 10) from the PS5, when the session is HEVC
 @property (nonatomic) BOOL hdr;
 @property (nonatomic, copy, nullable) NSString* psnDuid;

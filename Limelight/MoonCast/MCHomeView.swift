@@ -1309,7 +1309,11 @@ struct MCRoot: View {
             let hdrOn = d.bool(forKey: "ps5_hdr")
             toggle("s:ps:hdr", "HDR", MCPs5Store.h265 ? "HDR from the PS5 (HEVC 10-bit) on this HDR screen. Super resolution stays off with it" : "Needs Video codec HEVC",
                    hdrOn, m, p) { d.set(!hdrOn, forKey: "ps5_hdr") }
-            info("s:ps:pace", "Frame pacing", "The PS5 picture is shown the moment it's decoded on this \(MCDevice.name)", m, p)
+            let pacings = ["same"] + MCPacing.ids
+            choice("s:ps:pace", "Frame pacing", Self.ps5PacingNote, ["Same as Picture"] + MCPacing.names,
+                   pacings.firstIndex(of: MCPs5Store.pacingChoice) ?? 0, m, p) { i in d.set(pacings[i], forKey: "ps5_pacing") }
+            choice("s:ps:decoder", "Decoder", Self.ps5DecoderNote, Self.ps5DecoderNames,
+                   Self.ps5Decoders.firstIndex(of: MCPs5Store.decoderLatency) ?? 0, m, p) { i in d.set(Self.ps5Decoders[i], forKey: "ps5_decoder_latency") }
             header("Away from home", m, p)
             choice("s:ps:awayres", "Resolution", "Over PlayStation Network. Lower keeps a weak link smooth", ["540p", "720p", "1080p"],
                    [540, 720, 1080].firstIndex(of: MCPs5Store.awayHeight) ?? 1, m, p) { i in d.set([540, 720, 1080][i], forKey: "ps5_away_resolution") }

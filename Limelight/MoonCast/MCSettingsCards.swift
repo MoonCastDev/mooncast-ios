@@ -1092,8 +1092,25 @@ extension MCRoot {
         let hdr = d.bool(forKey: "ps5_hdr")
         rows.append(AnyView(vrow("ps5_hdr", "HDR", onOff(hdr), sub: MCPs5Store.h265 ? nil : "Needs Video codec HEVC", m, p) { d.set(!hdr, forKey: "ps5_hdr"); settingsRev += 1 }))
         rows.append(AnyView(consoleShapeRow("ps5", m, p)))
+        let pacings = ["same"] + MCPacing.ids
+        let pacingNames = ["Same as PC"] + MCPacing.names
+        let pc = pacings.firstIndex(of: MCPs5Store.pacingChoice) ?? 0
+        rows.append(AnyView(vrow("ps5_pacing", "Frame pacing", pacingNames[pc], m, p) {
+            pick("Frame pacing", Self.ps5PacingNote, pacingNames, pc) { d.set(pacings[$0], forKey: "ps5_pacing") }
+        }))
+        let dec = Self.ps5Decoders.firstIndex(of: MCPs5Store.decoderLatency) ?? 0
+        rows.append(AnyView(vrow("ps5_decoder_latency", "Decoder", Self.ps5DecoderNames[dec], m, p) {
+            pick("Decoder", Self.ps5DecoderNote, Self.ps5DecoderNames, dec) { d.set(Self.ps5Decoders[$0], forKey: "ps5_decoder_latency") }
+        }))
         return rows
     }
+
+    static let ps5PacingNote = "Lowest delay shows each frame at once; Balanced and Smoothest even out the motion, a little later"
+    static let ps5Decoders = ["low", "ultra", "standard"]
+    static let ps5DecoderNames = ["Low latency", "Ultra low latency", "Standard"]
+    /// Android tunes the chip's MediaCodec; here VideoToolbox decodes either way, so the setting is the sound cushion
+    /// (20 / 40 / 80 ms kept) and, with Super resolution, VideoToolbox's real-time decoding (off for Standard).
+    static let ps5DecoderNote = "Low latency keeps the sound and picture close together. Ultra keeps them closer, and a rough Wi-Fi can crackle. Standard keeps more sound queued (and, with Super resolution, lets the chip decode without its real-time mode): steadier, a little later"
 
     private func consoleShapeRow(_ kind: String, _ m: MCMetrics, _ p: MCPalette) -> some View {
         let shapes = ["same", "fit", "zoom", "fill", "stretch"]
