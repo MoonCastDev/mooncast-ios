@@ -378,9 +378,16 @@ final class MCFsrDecoder: NSObject {
     private var format: CMFormatDescription?
     private weak var view: MCFsrView?
 
+    /// VideoToolbox's real-time hint: on for the low-latency decoders, off for the PS5's "Standard" decoder.
+    @objc var realTime = true
+    private let paceQueue = DispatchQueue(label: "MoonCast fsr pace", qos: .userInteractive)
+
     @objc init(view: MCFsrView) { self.view = view }
 
-    @objc func decode(_ sb: CMSampleBuffer) {
+    @objc func decode(_ sb: CMSampleBuffer) { decode(sb, delay: 0) }
+
+    /// delay: seconds to hold the decoded frame before it is drawn (the PS5's Frame pacing).
+    @objc func decode(_ sb: CMSampleBuffer, delay: Double) {
         guard let fd = CMSampleBufferGetFormatDescription(sb) else { return }
         if session == nil || format.map({ !CMFormatDescriptionEqual($0, otherFormatDescription: fd) }) ?? true {
             invalidate()
@@ -391,12 +398,16 @@ final class MCFsrDecoder: NSObject {
             VTDecompressionSessionCreate(allocator: nil, formatDescription: fd, decoderSpecification: nil,
                                          imageBufferAttributes: attrs as CFDictionary, outputCallback: nil, decompressionSessionOut: &s)
             session = s
-            if let s = s { VTSessionSetProperty(s, key: kVTDecompressionPropertyKey_RealTime, value: kCFBooleanTrue) }
+            if let s = s { VTSessionSetProperty(s, key: kVTDecompressionPropertyKey_RealTime, value: realTime ? kCFBooleanTrue : kCFBooleanFalse) }
         }
         guard let s = session else { return }
         VTDecompressionSessionDecodeFrame(s, sampleBuffer: sb, flags: [._EnableAsynchronousDecompression], infoFlagsOut: nil) { [weak self] status, _, image, _, _ in
             guard status == noErr, let pb = image else { return }
-            self?.view?.display(pb)
+            if delay > 0 {
+                self?.paceQueue.asyncAfter(deadline: .now() + delay) { self?.view?.display(pb) }
+            } else {
+                self?.view?.display(pb)
+            }
         }
     }
 

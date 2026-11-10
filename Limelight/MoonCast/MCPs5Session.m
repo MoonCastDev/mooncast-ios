@@ -86,6 +86,8 @@ static void MCChiakiLog(ChiakiLogLevel level, const char* msg, void* user) {
     uint32_t channels, rate;
     size_t capSamples, keepSamples;
 }
+/// Settings → PlayStation → Decoder (0 Standard, 1 Low latency, 2 Ultra low latency): how much sound may queue
+@property (nonatomic) int latency;
 @property (nonatomic) AVAudioEngine* engine;
 @end
 
@@ -94,9 +96,10 @@ static void MCChiakiLog(ChiakiLogLevel level, const char* msg, void* user) {
 - (void) startWithChannels:(uint32_t)ch rate:(uint32_t)r {
     channels = ch ? ch : 2;
     rate = r ? r : 48000;
-    BOOL ull = MCUltraLowLatency.enabled;
-    capSamples = (size_t)rate * channels * (ull ? 60 : 120) / 1000;
-    keepSamples = (size_t)rate * channels * (ull ? 20 : 40) / 1000;
+    // Ultra keeps 20 ms of sound, Low latency 40 ms (as before), Standard 80 ms: a steadier sound on a rough Wi-Fi
+    int capMs = _latency >= 2 ? 60 : _latency == 1 ? 120 : 240;
+    capSamples = (size_t)rate * channels * capMs / 1000;
+    keepSamples = (size_t)rate * channels * (capMs / 3) / 1000;
     NSError* err = nil;
     if (![[AVAudioSession sharedInstance] setCategory:AVAudioSessionCategoryPlayback mode:AVAudioSessionModeDefault options:AVAudioSessionCategoryOptionMixWithOthers error:&err]) NSLog(@"MCAUDIO category: %@", err);
     [[AVAudioSession sharedInstance] setPreferredIOBufferDuration:0.005 error:nil];
@@ -171,6 +174,7 @@ static void MCChiakiLog(ChiakiLogLevel level, const char* msg, void* user) {
     CFTimeInterval _statsStart;
     ChiakiControllerState _pad;   // buttons and sticks from the controller, touches from the screen
     double _fps, _mbps;
+    double _interval, _paceLast;   // frame pacing: seconds per frame, and when the last frame was due
 }
 @property (nonatomic) AVSampleBufferDisplayLayer* videoLayer;
 @property (atomic) MCPs5Audio* audio;
@@ -240,8 +244,36 @@ static void MCRegistCb(ChiakiRegistEvent* e, void* user) {
         _videoLayer.videoGravity = AVLayerVideoGravityResize;   // the player sizes it for Settings → Picture → Picture shape
         _videoLayer.masksToBounds = YES;
         _videoLayer.backgroundColor = UIColor.blackColor.CGColor;
+        _interval = 1.0 / (fps >= 60 ? 60 : 30);
+        _decoderLatency = 1;
     }
     return self;
+}
+
+/// Frame pacing needs the layer on the host clock, so a frame's presentation time (set in handleVideo) is when it shows.
+- (void) setPacing:(int)pacing {
+    _pacing = pacing;
+    if (pacing == 0) return;
+    CMTimebaseRef tb = NULL;
+    CMClockRef clock = CMClockGetHostTimeClock();
+    if (CMTimebaseCreateWithSourceClock(kCFAllocatorDefault, clock, &tb) == noErr) {
+        CMTimebaseSetTime(tb, CMClockGetTime(clock));
+        CMTimebaseSetRate(tb, 1.0);
+        _videoLayer.controlTimebase = tb;
+        CFRelease(tb);
+    }
+}
+
+/// When a frame that arrived at `now` is shown, in host-clock seconds. Balanced holds it one frame and lets a backlog
+/// of at most one more frame build (extra frames are shown late together, the older ones skipped); Smoothest holds
+/// it two frames, one frame per refresh, and lets up to four build, so motion stays even.
+- (double) paceTimeFor:(double)now {
+    if (_pacing == 0) return now;
+    double hold = _pacing == 1 ? _interval : 2 * _interval;
+    double cap = now + hold + (_pacing == 1 ? _interval : 4 * _interval);
+    double t = MIN(MAX(now + hold, _paceLast + _interval), cap);
+    _paceLast = t;
+    return t;
 }
 
 + (void) cancelPsn {
@@ -502,13 +534,17 @@ static void MCRegistCb(ChiakiRegistEvent* e, void* user) {
     }
     CMSampleBufferRef sb = NULL;
     size_t sampleSize = sample.length;
-    if (CMSampleBufferCreateReady(kCFAllocatorDefault, block, _format, 1, 0, NULL, 1, &sampleSize, &sb) == noErr) {
+    double now = CMTimeGetSeconds(CMClockGetTime(CMClockGetHostTimeClock()));
+    double due = [self paceTimeFor:now];
+    CMTime pts = CMTimeMakeWithSeconds(due, 1000000);
+    CMSampleTimingInfo timing = { kCMTimeInvalid, pts, pts };
+    if (CMSampleBufferCreateReady(kCFAllocatorDefault, block, _format, 1, _pacing ? 1 : 0, _pacing ? &timing : NULL, 1, &sampleSize, &sb) == noErr) {
         CFArrayRef att = CMSampleBufferGetSampleAttachmentsArray(sb, YES);
         CFMutableDictionaryRef dict = (CFMutableDictionaryRef)CFArrayGetValueAtIndex(att, 0);
-        CFDictionarySetValue(dict, kCMSampleAttachmentKey_DisplayImmediately, kCFBooleanTrue);
+        if (_pacing == 0) CFDictionarySetValue(dict, kCMSampleAttachmentKey_DisplayImmediately, kCFBooleanTrue);
         MCFsrDecoder* fsr = self.fsrDecoder;
         if (fsr != nil) {
-            [fsr decode:sb];
+            [fsr decode:sb delay:MAX(0, due - now)];
         } else {
             AVSampleBufferDisplayLayer* layer = self.videoLayer;
             if (layer.status == AVQueuedSampleBufferRenderingStatusFailed || layer.requiresFlushToResumeDecoding) {
@@ -537,6 +573,7 @@ static void MCAudioSettings(uint32_t channels, uint32_t rate, void* user) {
     dispatch_async(dispatch_get_main_queue(), ^{
         [s.audio stop];
         MCPs5Audio* a = [[MCPs5Audio alloc] init];
+        a.latency = s.decoderLatency;
         [a startWithChannels:channels rate:rate];
         s.audio = a;
     });
