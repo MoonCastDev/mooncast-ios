@@ -1118,6 +1118,46 @@ struct MCRoot: View {
         let v = settings.load()
         switch g ?? group {
         case "picture":
+            pictureRows(m, p)
+        case "sound":
+            soundRows(m, p)
+        case "ipad":
+            deviceRows(m, p)
+        case "pads":
+            padsRows(m, p)
+        case "ps":
+            psRows(m, p)
+        case "xbox":
+            xboxRows(m, p)
+        case "theme":
+            let themes = ["dark", "light", "oled"]
+            choice("s:theme", "Theme", "Dark is charcoal with white type, Light the reverse. OLED is true black: deeper, and easier on an OLED screen's battery",
+                   ["Dark", "Light", "OLED"], themes.firstIndex(of: theme) ?? 0, m, p) { i in theme = themes[i] }
+            let bgs = ["game", "static"]
+            choice("s:bg", "Background", "Follows the game tints it with the selected game's colour. Static keeps the theme's own colour",
+                   ["Follows the game", "Static"], bgs.firstIndex(of: UserDefaults.standard.string(forKey: "hh_background") ?? "game") ?? 0, m, p) { i in
+                UserDefaults.standard.set(bgs[i], forKey: "hh_background") }
+        default:
+            let ver = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ""
+            let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? ""
+            info("s:ver", "MoonCast for \(MCDevice.name)", "Version \(ver) (\(build))", m, p)
+            row("s:lic", icon: "doc.text", color: p.sub, title: "Open-source licences",
+                sub: "The \(MCLicences.parts.count) projects MoonCast is built on, and their licences", right: nil, m, p) { licences() }
+            row("s:src", icon: "chevron.left.forwardslash.chevron.right", color: p.sub, title: "Source code",
+                sub: "github.com/MoonCastDev · \(MCLicences.sourceLicence)", right: nil, m, p) {
+                if let u = URL(string: MCLicences.source) { UIApplication.shared.open(u) }
+            }
+            if MCUsage.available {
+                toggle("s:usage", "Anonymous usage check-in", "Once a day: version, device model, and whether PC, PS5 or Xbox was played",
+                       MCUsage.enabled, m, p) { MCUsage.answer(!MCUsage.enabled) }
+            }
+        }
+    }
+
+    /// A console's own Super resolution, Sharpening and Picture shape; "Same as Picture" until set.
+    @ViewBuilder
+    func pictureRows(_ m: MCMetrics, _ p: MCPalette) -> some View {
+        let v = settings.load()
             profileRows(m, p)
             let native = MCSettings.native
             let res: [(String, (Int, Int))] = [("720p", (1280, 720)), ("1080p", (1920, 1080)), ("1440p", (2560, 1440)), ("4K", (3840, 2160)),
@@ -1205,7 +1245,11 @@ struct MCRoot: View {
             toggle("s:opt", "Let the PC set game settings", "Sunshine and GeForce change the game's resolution to match", v.optimize, m, p) {
                 settings.save { $0.optimize.toggle() }
             }
-        case "sound":
+    }
+
+    @ViewBuilder
+    func soundRows(_ m: MCMetrics, _ p: MCPalette) -> some View {
+        let v = settings.load()
             let ch = [2, 6, 8]
             choice("s:spk", "Speakers", "Stereo for the built-in speakers and headphones", ["Stereo", "5.1", "7.1"],
                    ch.firstIndex(of: v.audio) ?? 0, m, p) { i in settings.save { $0.audio = ch[i] } }
@@ -1215,7 +1259,11 @@ struct MCRoot: View {
             toggle("s:feel", "Menu sounds", "Soft sounds as you move around the menus. Games aren't affected", MCFeel.enabled, m, p) {
                 UserDefaults.standard.set(!MCFeel.enabled, forKey: "hh_feel_sounds")
             }
-        case "ipad":
+    }
+
+    @ViewBuilder
+    func deviceRows(_ m: MCMetrics, _ p: MCPalette) -> some View {
+        let v = settings.load()
             let sizes = ["auto", "compact", "normal", "large"]
             choice("s:size", "Screen size", "Auto fits this screen. Compact and Large make everything bigger", ["Auto", "Compact", "Normal", "Large"],
                    sizes.firstIndex(of: screenSize) ?? 0, m, p) { i in screenSize = sizes[i] }
@@ -1246,7 +1294,13 @@ struct MCRoot: View {
                        see.map { "\($0)%" }, see.firstIndex(of: UserDefaults.standard.integer(forKey: "mc_osc_transparency")) ?? 0, m, p) { i in
                     UserDefaults.standard.set(see[i], forKey: "mc_osc_transparency") }
             }
-        case "pads":
+    }
+
+    /// One settings group, split out of settingRows: a debug build gives that function one stack frame for every row, and
+    /// with all the groups inline the Picture page ran out of stack.
+    @ViewBuilder
+    func padsRows(_ m: MCMetrics, _ p: MCPalette) -> some View {
+        let v = settings.load()
             row("s:padtest", icon: "gamecontroller", color: MCPalette.blue, title: "Test a controller",
                 sub: "See every button, stick and trigger live, and try the rumble", right: nil, m, p) { padTest = true }
             row("s:padpair", icon: "plus.circle", color: MCPalette.green, title: "Pair a controller",
@@ -1254,7 +1308,7 @@ struct MCRoot: View {
                 if let u = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(u) }
             }
             choice("s:tvpad", "Controller on a TV", "For PC games sent to a TV. Direct is fastest: it skips the TV's Wi-Fi",
-                   ["Direct to the PC", "Through the TV"], MCDirectPad.wanted ? 0 : 1, m, p) { i in
+                   ["Direct", "Via TV"], MCDirectPad.wanted ? 0 : 1, m, p) { i in
                 UserDefaults.standard.set(i == 0 ? "direct" : "tv", forKey: MCDirectPad.prefKey) }
             toggle("s:multi", "More than one player", "On a PC each pad is its own player", v.multi, m, p) { settings.save { $0.multi.toggle() } }
             toggle("s:swap", "Swap A and B", "For Nintendo-style layouts", v.swapAB, m, p) { settings.save { $0.swapAB.toggle() } }
@@ -1275,7 +1329,12 @@ struct MCRoot: View {
                 settings.save { $0.btMouse.toggle() }
             }
             info("s:combo", "Quick menu", "Select + Start + LB + RB, or swipe from the left edge", m, p)
-        case "ps":
+    }
+
+    /// One settings group, split out of settingRows: a debug build gives that function one stack frame for every row, and
+    /// with all the groups inline the Picture page ran out of stack.
+    @ViewBuilder
+    func psRows(_ m: MCMetrics, _ p: MCPalette) -> some View {
             let d = UserDefaults.standard
             if MCPsn.signedIn {
                 row("s:ps:psn", icon: "person.crop.circle", color: MCPalette.blue, title: "PlayStation Network",
@@ -1332,7 +1391,12 @@ struct MCRoot: View {
                 if i == awayRates.count { customPs5Rate("ps5_away_bitrate") } else { d.set(awayRates[i], forKey: "ps5_away_bitrate") } }
             info("s:ps:btn", "PS button", "L2 + Start on pads without one", m, p)
             info("s:ps:touch", "Touchpad", "Select + Start, or touch the screen while playing", m, p)
-        case "xbox":
+    }
+
+    /// One settings group, split out of settingRows: a debug build gives that function one stack frame for every row, and
+    /// with all the groups inline the Picture page ran out of stack.
+    @ViewBuilder
+    func xboxRows(_ m: MCMetrics, _ p: MCPalette) -> some View {
             let d = UserDefaults.standard
             if MCXbox.signedIn {
                 row("s:xb:acct", icon: "person.crop.circle", color: MCPalette.green, title: "Xbox network",
@@ -1364,32 +1428,8 @@ struct MCRoot: View {
             let xdz = [0, 3, 5, 8, 10, 15]
             choice("s:xb:dz", "Stick deadzone", "Raise it if a worn stick drifts", xdz.map { $0 == 0 ? "Off" : "\($0)%" },
                    xdz.firstIndex(of: d.object(forKey: "xbox_deadzone") as? Int ?? 8) ?? 3, m, p) { i in d.set(xdz[i], forKey: "xbox_deadzone") }
-        case "theme":
-            let themes = ["dark", "light", "oled"]
-            choice("s:theme", "Theme", "Dark is charcoal with white type, Light the reverse. OLED is true black: deeper, and easier on an OLED screen's battery",
-                   ["Dark", "Light", "OLED"], themes.firstIndex(of: theme) ?? 0, m, p) { i in theme = themes[i] }
-            let bgs = ["game", "static"]
-            choice("s:bg", "Background", "Follows the game tints it with the selected game's colour. Static keeps the theme's own colour",
-                   ["Follows the game", "Static"], bgs.firstIndex(of: UserDefaults.standard.string(forKey: "hh_background") ?? "game") ?? 0, m, p) { i in
-                UserDefaults.standard.set(bgs[i], forKey: "hh_background") }
-        default:
-            let ver = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ""
-            let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? ""
-            info("s:ver", "MoonCast for \(MCDevice.name)", "Version \(ver) (\(build))", m, p)
-            row("s:lic", icon: "doc.text", color: p.sub, title: "Open-source licences",
-                sub: "The \(MCLicences.parts.count) projects MoonCast is built on, and their licences", right: nil, m, p) { licences() }
-            row("s:src", icon: "chevron.left.forwardslash.chevron.right", color: p.sub, title: "Source code",
-                sub: "github.com/MoonCastDev · \(MCLicences.sourceLicence)", right: nil, m, p) {
-                if let u = URL(string: MCLicences.source) { UIApplication.shared.open(u) }
-            }
-            if MCUsage.available {
-                toggle("s:usage", "Anonymous usage check-in", "Once a day: version, device model, and whether PC, PS5 or Xbox was played",
-                       MCUsage.enabled, m, p) { MCUsage.answer(!MCUsage.enabled) }
-            }
-        }
     }
 
-    /// A console's own Super resolution, Sharpening and Picture shape; "Same as Picture" until set.
     @ViewBuilder
     func consolePicture(_ id: String, _ kind: String, _ m: MCMetrics, _ p: MCPalette) -> some View {
         let d = UserDefaults.standard

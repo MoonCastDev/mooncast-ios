@@ -1271,7 +1271,7 @@ extension MCRoot {
             sub: "This \(MCDevice.name) or a MoonCast TV on your Wi-Fi. On a TV, this \(MCDevice.name) is the controller",
             right: MCTvFinder.target?.name ?? "This \(MCDevice.name)", m, p) { playWhere() }
         choice("s:tvpad", "Controller on a TV", "For PC games sent to a TV. Direct is fastest: it skips the TV's Wi-Fi",
-               ["Direct to the PC", "Through the TV"], MCDirectPad.wanted ? 0 : 1, m, p) { i in
+               ["Direct", "Via TV"], MCDirectPad.wanted ? 0 : 1, m, p) { i in
             UserDefaults.standard.set(i == 0 ? "direct" : "tv", forKey: MCDirectPad.prefKey) }
         let dim = UserDefaults.standard.object(forKey: "hh_dim_on_tv") as? Bool ?? true
         toggle("s:dim", "Dim the screen on a TV", "While this \(MCDevice.name) is the controller for a TV", dim, m, p) {
