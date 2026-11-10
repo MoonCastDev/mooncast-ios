@@ -33,5 +33,7 @@
 // MoonCast: 0 Lowest delay, 1 Balanced, 2 Smoothest (MCPacing); useFramePacing is the old on/off of it
 @property int pacingMode;
 @property NSData* serverCert;
+// MoonCast: a controller-only session (DirectPad): joins the running game, never launches, drops the picture and sound
+@property BOOL mcHeadless;
 
 @end

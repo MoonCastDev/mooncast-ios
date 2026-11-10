@@ -16,6 +16,13 @@ final class MCTvSession: ObservableObject {
     @Published var error: String?
     @Published var links = 0
     @Published var menuMode = false
+    /// While the direct controller session (MCDirectPad) is the controller: how it is doing (nil: the TV relays the pad).
+    @Published var directLine: String?
+    /// Set when the direct session couldn't connect and the TV relays the pad instead.
+    @Published var fellBack: String?
+    private var direct: MCDirectPad?
+    private var directEverUp = false
+    private var directTimeout: Task<Void, Never>?
     private var closed = false
     private var comboFired = false
 
@@ -29,7 +36,15 @@ final class MCTvSession: ObservableObject {
         MCPadServer.shared.onClients = { [weak self] n in DispatchQueue.main.async { self?.links = n } }
         hookPads()
         Task { @MainActor in
-            if let err = await MCTvSender.send(tv, game, padKey: padKey) { error = err; state = "Didn't start"; return }
+            // Settings, Controllers, "Controller on a TV": direct to the PC. Needs MoonCast TV version 5, which skips its relay
+            // AND registers no pad of its own; an older TV would hold pad 0 and leave this iPad on pad 1.
+            var useDirect = false
+            if game.app != nil, game.host != nil, MCDirectPad.wanted {
+                let live = await MCTvFinder.ask(tv.ip) ?? tv
+                useDirect = live.version >= 5
+            }
+            if let err = await MCTvSender.send(tv, game, padKey: padKey, direct: useDirect) { error = err; state = "Didn't start"; return }
+            if useDirect && !closed { startDirect() }
             MCRecents.touch(game.key)
             state = "Starting on \(tv.name)…"
             let sentAt = Date()
@@ -55,8 +70,62 @@ final class MCTvSession: ObservableObject {
         }
     }
 
+    private func startDirect() {
+        stopDirect()
+        guard let h = game.host, let a = game.app, let id = a.id else { return }
+        let d = MCDirectPad(host: h, appId: id, appName: a.name ?? game.title)
+        direct = d
+        directEverUp = false
+        directLine = "Connecting the controller to \(d.pcName)…"
+        var connectingSeen = false
+        d.onState = { [weak self, weak d] st in
+            guard let self = self, let d = d, self.direct === d else { return }
+            switch st {
+            case .connected:
+                self.directEverUp = true; self.directTimeout?.cancel()
+                self.directLine = "Controller connected (direct to \(d.pcName))"
+            case .connecting:
+                self.directLine = self.directEverUp ? "Reconnecting to \(d.pcName)…" : "Connecting the controller to \(d.pcName)…"
+                // the 8 s count starts when the game runs and we try to join it (a cold game start takes longer)
+                if !connectingSeen && !self.directEverUp {
+                    connectingSeen = true
+                    self.directTimeout = Task { [weak self, weak d] in
+                        try? await Task.sleep(nanoseconds: 8_000_000_000)
+                        if !Task.isCancelled, let self = self, let d = d, self.direct === d, d.state != .connected { self.fallBack("didn't connect in time") }
+                    }
+                }
+            case .failed: self.fallBack(d.why ?? "failed")
+            default: break
+            }
+        }
+        d.start()
+    }
+
+    private func stopDirect() {
+        directTimeout?.cancel(); directTimeout = nil
+        direct?.onState = nil
+        direct?.stop()
+        direct = nil
+        directLine = nil
+    }
+
+    /// The direct session can't connect: ask the TV to relay the controller after all, and say so.
+    private func fallBack(_ reason: String) {
+        guard let d = direct else { return }
+        let pc = d.pcName, tv = tv, key = padKey
+        NSLog("MoonCast direct controller to %@: %@; using the TV's relay", pc, reason)
+        stopDirect()
+        fellBack = "The direct link to \(pc) didn't connect, so the controller goes through \(tv.name)."
+        Task { @MainActor in
+            if !(await MCTvSender.useRelay(tv, padKey: key)) && !closed {
+                fellBack = "The direct link to \(pc) didn't connect, and \(tv.name) couldn't take the controller over."
+            }
+        }
+    }
+
     func end(quit: Bool) {
         closed = true
+        stopDirect()   // our own session on the PC ends first (a local game needs Moonlight's one connection)
         GCController.controllers().forEach { $0.extendedGamepad?.valueChangedHandler = nil }
         let tv = tv, key = padKey
         Task { await MCTvSender.stop(tv, padKey: key, quit: quit); MCPadServer.shared.stop() }
@@ -74,6 +143,7 @@ final class MCTvSession: ObservableObject {
         } else if !select && !g.buttonMenu.isPressed { comboFired = false }
         if menuMode || comboFired {
             MCPadServer.shared.update(.init(repeating: 0, count: 17), .init(repeating: 0, count: 4))
+            direct?.update(.init(repeating: 0, count: 17), .init(repeating: 0, count: 4))
             return
         }
         func p(_ x: GCControllerButtonInput?) -> Float { (x?.isPressed ?? false) ? 1 : 0 }
@@ -83,6 +153,7 @@ final class MCTvSession: ObservableObject {
                           p(g.dpad.up), p(g.dpad.down), p(g.dpad.left), p(g.dpad.right), p(g.buttonHome)]
         let a: [Float] = [g.leftThumbstick.xAxis.value, -g.leftThumbstick.yAxis.value, g.rightThumbstick.xAxis.value, -g.rightThumbstick.yAxis.value]
         MCPadServer.shared.update(b, a)
+        direct?.update(b, a)
     }
 }
 
@@ -102,8 +173,9 @@ struct MCTvControllerView: View {
                 Text(s.game.title).mcFont(52, m, weight: .heavy).foregroundColor(p.ink).lineLimit(2)
                 Text(s.state).mcFont(30, m).foregroundColor(s.error == nil ? p.ring : MCPalette.red)
                 if let e = s.error { Text(e).mcFont(26, m, weight: .medium).foregroundColor(p.sub).fixedSize(horizontal: false, vertical: true) }
-                Text(s.links > 0 ? "This \(MCDevice.name) is \(s.tv.name)'s controller" : "Waiting for \(s.tv.name) to connect to this \(MCDevice.name)'s controller…")
+                Text(s.directLine ?? (s.links > 0 ? "This \(MCDevice.name) is \(s.tv.name)'s controller" : "Waiting for \(s.tv.name) to connect to this \(MCDevice.name)'s controller…"))
                     .mcFont(26, m, weight: .medium).foregroundColor(p.sub)
+                if let f = s.fellBack { Text(f).mcFont(26, m, weight: .medium).foregroundColor(p.sub).fixedSize(horizontal: false, vertical: true) }
                 HStack(spacing: m.px(20)) {
                     button("tvc:here", "Play here instead", main: true) { playHere() }
                     button("tvc:stop", "Stop", main: false) { s.end(quit: false); close() }
