@@ -346,7 +346,7 @@ final class MCPs5StreamController: UIViewController, MCPs5SessionDelegate, MCQui
     }
 
     func ps5Rumble(_ left: UInt8, right: UInt8) {
-        MCRumble.shared.rumble(low: Float(left) / 255, high: Float(right) / 255)
+        MCRumble.shared.rumble(low: Float(left) / 255, high: Float(right) / 255, pad: -1)   // the pad being played
     }
 
     // the screen is the DualSense touchpad (1920 x 942), as the handheld's touch does for a PS5
@@ -405,6 +405,7 @@ final class MCPs5StreamController: UIViewController, MCPs5SessionDelegate, MCQui
 
     private func padChanged(_ g: GCExtendedGamepad) {
         guard let s = session, connected else { return }
+        MCRumble.shared.playing(g.device as? GCController)
         if menuOpen { s.setButtons(0, l2: 0, r2: 0, leftX: 0, leftY: 0, rightX: 0, rightY: 0); return }
         let select = g.buttonOptions?.isPressed ?? false
         let start = g.buttonMenu.isPressed

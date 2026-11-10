@@ -10,6 +10,7 @@
 #import "Controller.h"
 
 #import "OnScreenControls.h"
+#import "Moonlight-Swift.h"
 
 #import "DataManager.h"
 #include "Limelight.h"
@@ -46,6 +47,7 @@ static const double MOUSE_SPEED_DIVISOR = 1.25;
     char _controllerNumbers;
     bool _multiController;
     bool _swapABXYButtons;
+    dispatch_source_t _mcMouseTimer;
 }
 
 // UPDATE_BUTTON_FLAG(controller, flag, pressed)
@@ -62,6 +64,12 @@ static const double MOUSE_SPEED_DIVISOR = 1.25;
     }
     if (controller == nil) {
         // No connected controller for this player
+        return;
+    }
+    
+    // MoonCast: Settings → Controllers → Rumble on this device, for a pad that can't rumble (as on Android, player 1 only)
+    if (controller.lowFreqMotor == nil && controller.highFreqMotor == nil && controllerNumber == 0) {
+        [MCDeviceRumble rumbleLow:lowFreqMotor / 65535.0f high:highFreqMotor / 65535.0f];
         return;
     }
     
@@ -370,6 +378,84 @@ static BOOL mcPaused = NO;
     [_controllerStreamLock unlock];
 }
 
+// MoonCast: "Use the pad as a mouse" (Settings → Controllers, off by default; the same switch as on Android): hold Start for
+// 3/4 s to turn a pad into the PC's mouse and again to turn it back. Sticks move the pointer, A / B click left / right, the
+// d-pad scrolls. Returns whether this pad is in mouse mode now. Called with the controller locked.
+static const double MC_MOUSE_HOLD_SECONDS = 0.75;
+
+-(BOOL) mcPadMouseStep:(Controller*)controller
+{
+    if (![[NSUserDefaults standardUserDefaults] boolForKey:@"mc_pad_mouse"]) {
+        controller.mcMouse = NO;
+        controller.mcStartDownAt = 0;
+        return NO;
+    }
+    int flags = controller.lastButtonFlags;
+    double now = CACurrentMediaTime();
+    if (flags & PLAY_FLAG) {
+        if (controller.mcStartDownAt == 0) controller.mcStartDownAt = now;
+    }
+    else if (controller.mcStartDownAt != 0) {
+        BOOL held = now - controller.mcStartDownAt > MC_MOUSE_HOLD_SECONDS;
+        controller.mcStartDownAt = 0;
+        if (held) {
+            controller.mcMouse = !controller.mcMouse;
+            if (!controller.mcMouse) [self mcReleaseMouseButtons:controller];
+            BOOL on = controller.mcMouse;
+            dispatch_async(dispatch_get_main_queue(), ^{ [MCToastObjC show:on ? @"Mouse emulation is: ON" : @"Mouse emulation is: OFF"]; });
+        }
+    }
+    if (!controller.mcMouse) return NO;
+    int changed = flags ^ controller.mcMouseLastFlags;
+    controller.mcMouseLastFlags = flags;
+    if (changed & A_FLAG) LiSendMouseButtonEvent((flags & A_FLAG) ? BUTTON_ACTION_PRESS : BUTTON_ACTION_RELEASE, BUTTON_LEFT);
+    if (changed & B_FLAG) LiSendMouseButtonEvent((flags & B_FLAG) ? BUTTON_ACTION_PRESS : BUTTON_ACTION_RELEASE, BUTTON_RIGHT);
+    if ((changed & UP_FLAG) && (flags & UP_FLAG)) LiSendScrollEvent(1);
+    if ((changed & DOWN_FLAG) && (flags & DOWN_FLAG)) LiSendScrollEvent(-1);
+    if ((changed & RIGHT_FLAG) && (flags & RIGHT_FLAG)) LiSendHScrollEvent(1);
+    if ((changed & LEFT_FLAG) && (flags & LEFT_FLAG)) LiSendHScrollEvent(-1);
+    return YES;
+}
+
+-(void) mcReleaseMouseButtons:(Controller*)controller
+{
+    if (controller.mcMouseLastFlags & A_FLAG) LiSendMouseButtonEvent(BUTTON_ACTION_RELEASE, BUTTON_LEFT);
+    if (controller.mcMouseLastFlags & B_FLAG) LiSendMouseButtonEvent(BUTTON_ACTION_RELEASE, BUTTON_RIGHT);
+    controller.mcMouseLastFlags = 0;
+}
+
+// the pointer follows the sticks every 50 ms; the further a stick is pushed the faster it goes (as on Android)
+static void mcStickToPixels(short sx, short sy, float* dx, float* dy)
+{
+    float x = sx / 32766.0f * 4, y = sy / 32766.0f * 4;
+    float mag = sqrtf(x * x + y * y);
+    if (mag > 0) { x *= mag * mag; y *= mag * mag; }
+    *dx = x; *dy = y;
+}
+
+-(void) mcStartMouseTimer
+{
+    _mcMouseTimer = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0, dispatch_get_global_queue(QOS_CLASS_USER_INTERACTIVE, 0));
+    dispatch_source_set_timer(_mcMouseTimer, dispatch_time(DISPATCH_TIME_NOW, 50 * NSEC_PER_MSEC), 50 * NSEC_PER_MSEC, 5 * NSEC_PER_MSEC);
+    __weak typeof(self) weakSelf = self;
+    dispatch_source_set_event_handler(_mcMouseTimer, ^{
+        ControllerSupport* me = weakSelf;
+        if (me == nil || mcPaused || ![[NSUserDefaults standardUserDefaults] boolForKey:@"mc_pad_mouse"]) return;
+        [me->_controllerStreamLock lock];
+        for (Controller* c in [me->_controllers allValues]) {
+            if (!c.mcMouse) continue;
+            float dx = 0, dy = 0, ax, ay;
+            @synchronized(c) {
+                mcStickToPixels(c.lastLeftStickX, c.lastLeftStickY, &ax, &ay); dx += ax; dy += ay;
+                mcStickToPixels(c.lastRightStickX, c.lastRightStickY, &ax, &ay); dx += ax; dy += ay;
+            }
+            if (sqrtf(dx * dx + dy * dy) >= 1) LiSendMouseMoveEvent((short)dx, (short)-dy);
+        }
+        [me->_controllerStreamLock unlock];
+    });
+    dispatch_resume(_mcMouseTimer);
+}
+
 -(void) updateFinished:(Controller*)controller
 {
     if (mcPaused) {
@@ -385,8 +471,16 @@ static BOOL mcPaused = NO;
             exitRequested = YES;
         }
         
+        // MoonCast: a pad in mouse mode sends the mouse, and the game sees a neutral pad
+        BOOL padMouse = [self mcPadMouseStep:controller];
+        
         // Only send controller events if we successfully reported controller arrival
-        if ([self reportControllerArrival:controller]) {
+        if (padMouse) {
+            if ([self reportControllerArrival:controller]) {
+                LiSendMultiControllerEvent(_multiController ? controller.playerIndex : 0, [self getActiveGamepadMask], 0, 0, 0, 0, 0, 0, 0);
+            }
+        }
+        else if ([self reportControllerArrival:controller]) {
             uint32_t buttonFlags = controller.lastButtonFlags;
             uint8_t leftTrigger = controller.lastLeftTrigger;
             uint8_t rightTrigger = controller.lastRightTrigger;
@@ -1272,6 +1366,8 @@ static BOOL mcPaused = NO;
         }];
     }
     
+    [self mcStartMouseTimer];
+    
     return self;
 }
 
@@ -1301,7 +1397,14 @@ static BOOL mcPaused = NO;
     
     _controllerNumbers = 0;
     
+    [MCDeviceRumble stop];
+    if (_mcMouseTimer != nil) {
+        dispatch_source_cancel(_mcMouseTimer);
+        _mcMouseTimer = nil;
+    }
+    
     for (Controller* controller in [_controllers allValues]) {
+        [self mcReleaseMouseButtons:controller];
         [self cleanupControllerHaptics:controller];
         [self cleanupControllerMotion:controller];
         [self cleanupControllerBattery:controller];

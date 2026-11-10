@@ -47,6 +47,11 @@ typedef struct {
 @property (nonatomic)                   GCDeviceBatteryState lastBatteryState;
 @property (nonatomic)                   float lastBatteryLevel;
 
+// MoonCast "Use the pad as a mouse": this pad drives the PC's mouse instead of a game pad (hold Start to switch)
+@property (nonatomic)                   BOOL mcMouse;
+@property (nonatomic)                   double mcStartDownAt;
+@property (nonatomic)                   int mcMouseLastFlags;
+
 @property (nonatomic)                   BOOL reportedArrival;
 @property (nonatomic)                   Controller* _Nullable mergedWithController;
 
