@@ -1262,6 +1262,12 @@ struct MCRoot: View {
             let motion = UserDefaults.standard.object(forKey: "mc_motion") as? Bool ?? true
             toggle("s:motion", "Motion", "Lets PC games use the controller's gyro, as on a DualSense or DualShock", motion, m, p) {
                 UserDefaults.standard.set(!motion, forKey: "mc_motion") }
+            let padMouse = UserDefaults.standard.bool(forKey: "mc_pad_mouse")
+            toggle("s:padmouse", "Use the pad as a mouse", "Hold Start to switch, in PC streams", padMouse, m, p) {
+                UserDefaults.standard.set(!padMouse, forKey: "mc_pad_mouse") }
+            let rumbleDev = UserDefaults.standard.bool(forKey: "mc_rumble_device")
+            toggle("s:rumbledev", "Rumble on this device", "When a pad can't rumble", rumbleDev, m, p) {
+                UserDefaults.standard.set(!rumbleDev, forKey: "mc_rumble_device") }
             toggle("s:mouse", "Mouse and trackpad", "Use a connected mouse or the Magic Keyboard's trackpad in PC games", v.btMouse, m, p) {
                 settings.save { $0.btMouse.toggle() }
             }

@@ -13,6 +13,8 @@ final class MCRumble {
     private struct Motor { let engine: CHHapticEngine; let player: CHHapticAdvancedPatternPlayer }
     private var motors: [ObjectIdentifier: (left: Motor?, right: Motor?)] = [:]
     private var stopAt: DispatchWorkItem?
+    /// The pad that sent input last: the PS5's rumble goes to the pad being played (set from the PS5 player's pad handler).
+    private weak var activePad: GCController?
     private let q = DispatchQueue(label: "MCRumble")
 
     private func motor(_ h: GCDeviceHaptics, _ where: GCHapticsLocality) -> Motor? {
@@ -47,12 +49,20 @@ final class MCRumble {
         try? m.player.start(atTime: CHHapticTimeImmediate)
     }
 
-    /// low / high motor strength 0...1 on the first pad (or the given player's); stops by itself after `seconds`.
+    /// Remember the pad that is being played, so the console's rumble reaches it and not always the first one.
+    func playing(_ pad: GCController?) { q.async { [self] in activePad = pad } }
+
+    /// low / high motor strength 0...1 on the first pad (or the given player's, or with `pad: -1` the pad being played);
+    /// stops by itself after `seconds`. A pad that can't rumble buzzes the device when "Rumble on this device" is on.
     func rumble(low: Float, high: Float, seconds: Double? = nil, pad index: Int = 0) {
         q.async { [self] in
             let pads = GCController.controllers().filter { $0.extendedGamepad != nil }
-            guard index < pads.count else { return }
-            let m = ensure(pads[index])
+            let target = index < 0 ? (activePad.flatMap { a in pads.first { $0 === a } } ?? pads.first) : (index < pads.count ? pads[index] : nil)
+            let m = target.map { ensure($0) } ?? (left: nil, right: nil)
+            if m.left == nil && m.right == nil {
+                if MCDeviceRumble.enabled { MCDeviceRumble.shared.buzz(max(low, high)) }
+                return
+            }
             if m.right == nil { set(m.left, max(low, high)) } else { set(m.left, low); set(m.right, high) }
             stopAt?.cancel()
             if let s = seconds {
@@ -68,6 +78,51 @@ final class MCRumble {
         q.async { [self] in
             for (_, m) in motors { [m.left, m.right].forEach { try? $0?.player.stop(atTime: 0); $0?.engine.stop() } }
             motors.removeAll()
+            activePad = nil
+        }
+        MCDeviceRumble.stop()
+    }
+}
+
+/// "Rumble on this device" (Settings → Controllers, off by default; the Android switch of the same name): the phone's or
+/// tablet's own haptics stand in for a pad that can't rumble (or when no pad is connected for the PS5 and Xbox players).
+@objc(MCDeviceRumble)
+final class MCDeviceRumble: NSObject {
+    static let shared = MCDeviceRumble()
+    static var enabled: Bool { UserDefaults.standard.bool(forKey: "mc_rumble_device") }
+    private var engine: CHHapticEngine?
+    private var player: CHHapticAdvancedPatternPlayer?
+    private let q = DispatchQueue(label: "MCDeviceRumble")
+
+    /// PC streams: the game's low / high motor strengths 0...1 (called from ControllerSupport when the pad has no motors)
+    @objc(rumbleLow:high:) static func rumble(low: Float, high: Float) {
+        guard enabled else { return }
+        shared.buzz(max(low, high))
+    }
+
+    /// The buzz off and the engine let go (the stream closed).
+    @objc static func stop() {
+        shared.q.async { [s = shared] in
+            try? s.player?.stop(atTime: 0); s.engine?.stop(); s.player = nil; s.engine = nil
+        }
+    }
+
+    func buzz(_ v: Float) {
+        q.async { [self] in
+            if v <= 0.01 { try? player?.stop(atTime: CHHapticTimeImmediate); return }
+            if player == nil {
+                guard CHHapticEngine.capabilitiesForHardware().supportsHaptics, let e = try? CHHapticEngine() else { return }
+                e.isAutoShutdownEnabled = false
+                e.resetHandler = { [weak self] in self?.q.async { try? self?.engine?.start() } }
+                let ev = CHHapticEvent(eventType: .hapticContinuous,
+                                       parameters: [CHHapticEventParameter(parameterID: .hapticIntensity, value: 1),
+                                                    CHHapticEventParameter(parameterID: .hapticSharpness, value: 0.5)],
+                                       relativeTime: 0, duration: 3600)
+                guard (try? e.start()) != nil, let p = try? e.makeAdvancedPlayer(with: CHHapticPattern(events: [ev], parameters: [])) else { return }
+                engine = e; player = p
+            }
+            try? player?.sendParameters([CHHapticDynamicParameter(parameterID: .hapticIntensityControl, value: v, relativeTime: 0)], atTime: CHHapticTimeImmediate)
+            try? player?.start(atTime: CHHapticTimeImmediate)
         }
     }
 }
