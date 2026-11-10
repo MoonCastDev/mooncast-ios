@@ -84,6 +84,11 @@
     
     // resumeApp and launchApp handle calling launchFailed
     NSString* sessionUrl;
+    if (_config.mcHeadless && ![serverState hasSuffix:@"_SERVER_BUSY"]) {
+        // a controller-only session only joins a game that is running: it never starts one
+        [_callbacks launchFailed:@"No game is running"];
+        return;
+    }
     if ([serverState hasSuffix:@"_SERVER_BUSY"]) {
         // App already running, resume it
         if (![self resumeApp:hMan receiveSessionUrl:&sessionUrl]) {
@@ -102,7 +107,8 @@
     // Initializing the renderer must be done on the main thread
     dispatch_async(dispatch_get_main_queue(), ^{
         if (self->_mcStopped) return;
-        VideoDecoderRenderer* renderer = [[VideoDecoderRenderer alloc] initWithView:self->_renderView callbacks:self->_callbacks streamAspectRatio:(float)self->_config.width / (float)self->_config.height pacingMode:self->_config.pacingMode];
+        // controller-only: no picture is drawn, so no renderer
+        VideoDecoderRenderer* renderer = self->_config.mcHeadless ? nil : [[VideoDecoderRenderer alloc] initWithView:self->_renderView callbacks:self->_callbacks streamAspectRatio:(float)self->_config.width / (float)self->_config.height pacingMode:self->_config.pacingMode];
         self->_mcRenderer = renderer;
         self->_connection = [[Connection alloc] initWithConfig:self->_config renderer:renderer connectionCallbacks:self->_callbacks];
         NSOperationQueue* opQueue = [[NSOperationQueue alloc] init];

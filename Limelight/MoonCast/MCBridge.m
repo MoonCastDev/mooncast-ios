@@ -14,6 +14,7 @@
 #import "ConnectionHelper.h"
 #import "ControllerSupport.h"
 #import "StreamFrameViewController.h"
+#import "StreamManager.h"
 #import "CryptoManager.h"
 #import "Utils.h"
 #import "MCPyroWave.h"
@@ -36,6 +37,21 @@
 @end
 
 @implementation MCBridge
+
++ (nullable NSString*) currentGame:(TemporaryHost*)host {
+    HttpManager* hMan = [[HttpManager alloc] initWithHost:host];
+    ServerInfoResponse* serverInfoResp = [[ServerInfoResponse alloc] init];
+    [hMan executeRequestSynchronously:[HttpRequest requestForResponse:serverInfoResp withUrlRequest:[hMan newServerInfoRequest:false]
+                                                        fallbackError:401 fallbackRequest:[hMan newHttpServerInfoRequest]]];
+    if (![serverInfoResp isStatusOk]) {
+        return nil;
+    }
+    // as ServerInfoResponse's populateHost: the PC keeps the last game's id while idle
+    if (![[serverInfoResp getStringTag:@"state"] hasSuffix:@"_SERVER_BUSY"]) {
+        return @"0";
+    }
+    return [[serverInfoResp getStringTag:@"currentgame"] trim] ?: @"0";
+}
 
 + (NSDictionary<NSString*, NSNumber*>*) linkSignals {
     uint64_t packets = 0, bytes = 0, missing = 0;
@@ -356,5 +372,125 @@
 + (void) removeHost:(TemporaryHost*)host {
     [[[DataManager alloc] init] removeHost:host];
 }
+
+@end
+
+@implementation MCDirectLink {
+    TemporaryHost* _host;
+    NSString* _appID;
+    NSString* _appName;
+    void (^_events)(NSString*, NSString*);
+    StreamManager* _man;
+    NSLock* _lock;
+    BOOL _stopped;
+    BOOL _up;
+    BOOL _ended;   // "failed" or "ended" already said
+}
+
+- (instancetype) initWithHost:(TemporaryHost*)host appID:(NSString*)appID appName:(NSString*)appName
+                       events:(void (^)(NSString*, NSString*))events {
+    self = [super init];
+    _host = host; _appID = appID; _appName = appName; _events = events;
+    _lock = [[NSLock alloc] init];
+    return self;
+}
+
+- (void) start {
+    // 640x360, 15 fps, 500 kbps, H.264, stereo, resume only: small enough that a host script that matches the display to
+    // each client can tell it from the real player; pad 0 (resume asks remoteControllersBitmap=1, gcmap=1)
+    StreamConfiguration* c = [[StreamConfiguration alloc] init];
+    c.host = _host.activeAddress;
+    c.httpsPort = _host.httpsPort;
+    c.serverCert = _host.serverCert;
+    c.appID = _appID;
+    c.appName = _appName;
+    c.width = 640; c.height = 360; c.frameRate = 15; c.bitRate = 500;
+    c.optimizeGameSettings = NO;
+    c.playAudioOnPC = NO;
+    c.useFramePacing = NO;
+    c.swapABXYButtons = NO;
+    c.multiController = YES;
+    c.gamepadMask = 0x1;
+    c.audioConfiguration = AUDIO_CONFIGURATION_STEREO;
+    c.supportedVideoFormats = VIDEO_FORMAT_H264;
+    c.serverCodecModeSupport = _host.serverCodecModeSupport;
+    c.mcHeadless = YES;
+    _man = [[StreamManager alloc] initWithConfig:c renderView:nil connectionCallbacks:self];
+    NSOperationQueue* q = [[NSOperationQueue alloc] init];
+    [q addOperation:_man];
+}
+
+- (void) say:(NSString*)event why:(NSString*)why {
+    [_lock lock];
+    BOOL skip = _stopped || (_ended && ![event isEqualToString:@"up"]);
+    if (!skip && ![event isEqualToString:@"up"]) _ended = YES;
+    [_lock unlock];
+    if (!skip) _events(event, why);
+}
+
+- (void) stop {
+    [_lock lock];
+    if (_stopped) { [_lock unlock]; return; }
+    _stopped = YES;
+    BOOL up = _up; _up = NO;
+    [_lock unlock];
+    if (up) LiSendMultiControllerEvent(0, 0x1, 0, 0, 0, 0, 0, 0, 0);   // let go of everything
+    [_man stopStream];
+}
+
+- (void) endAndStop:(NSString*)event why:(NSString*)why {
+    [self say:event why:why];
+    [self stop];
+}
+
+- (void) sendButtons:(NSArray<NSNumber*>*)b axes:(NSArray<NSNumber*>*)a {
+    [_lock lock]; BOOL up = _up && !_stopped; [_lock unlock];
+    if (!up || b.count < 17 || a.count < 4) return;
+    int f = 0;
+    static const int map[17] = { A_FLAG, B_FLAG, X_FLAG, Y_FLAG, LB_FLAG, RB_FLAG, 0, 0, BACK_FLAG, PLAY_FLAG, LS_CLK_FLAG,
+                                 RS_CLK_FLAG, UP_FLAG, DOWN_FLAG, LEFT_FLAG, RIGHT_FLAG, SPECIAL_FLAG };
+    for (int i = 0; i < 17; i++) if (map[i] && b[i].floatValue > .5f) f |= map[i];
+    #define TRIG(v) (uint8_t)(MIN(MAX((v).floatValue, 0.f), 1.f) * 255)
+    #define AXIS(v) (short)MIN(MAX(roundf((v).floatValue * 32767), -32767.f), 32767.f)
+    // W3C Y is down-positive, Moonlight's is up-positive
+    LiSendMultiControllerEvent(0, 0x1, f, TRIG(b[6]), TRIG(b[7]), AXIS(a[0]), -AXIS(a[1]), AXIS(a[2]), -AXIS(a[3]));
+    #undef TRIG
+    #undef AXIS
+}
+
+#pragma mark ConnectionCallbacks
+
+- (void) connectionStarted {
+    [_lock lock];
+    if (_stopped) { [_lock unlock]; return; }
+    _up = YES;
+    [_lock unlock];
+    // claim pad 0 now: Sunshine creates it at once, before the first press, as an Xbox-style pad with analog triggers
+    int all = A_FLAG | B_FLAG | X_FLAG | Y_FLAG | LB_FLAG | RB_FLAG | BACK_FLAG | PLAY_FLAG | LS_CLK_FLAG | RS_CLK_FLAG |
+              UP_FLAG | DOWN_FLAG | LEFT_FLAG | RIGHT_FLAG | SPECIAL_FLAG;
+    LiSendControllerArrivalEvent(0, 0x1, LI_CTYPE_XBOX, all, LI_CCAP_ANALOG_TRIGGERS);
+    [self say:@"up" why:nil];
+}
+- (void) connectionTerminated:(int)errorCode {
+    Log(LOG_I, @"Direct controller session ended: %d", errorCode);
+    [self endAndStop:@"ended" why:nil];
+}
+- (void) stageStarting:(const char*)stageName {}
+- (void) stageComplete:(const char*)stageName {}
+- (void) stageFailed:(const char*)stageName withError:(int)errorCode portTestFlags:(int)portTestFlags {
+    Log(LOG_W, @"Direct controller session: stage %s failed: %d", stageName, errorCode);
+    [self endAndStop:@"failed" why:@"Couldn't join the game"];
+}
+- (void) launchFailed:(NSString*)message {
+    Log(LOG_W, @"Direct controller session: %@", message);
+    [self endAndStop:@"failed" why:message];
+}
+- (void) rumble:(unsigned short)controllerNumber lowFreqMotor:(unsigned short)lowFreqMotor highFreqMotor:(unsigned short)highFreqMotor {}
+- (void) connectionStatusUpdate:(int)status {}
+- (void) setHdrMode:(bool)enabled {}
+- (void) rumbleTriggers:(uint16_t)controllerNumber leftTrigger:(uint16_t)leftTrigger rightTrigger:(uint16_t)rightTrigger {}
+- (void) setMotionEventState:(uint16_t)controllerNumber motionType:(uint8_t)motionType reportRateHz:(uint16_t)reportRateHz {}
+- (void) setControllerLed:(uint16_t)controllerNumber r:(uint8_t)r g:(uint8_t)g b:(uint8_t)b {}
+- (void) videoContentShown {}
 
 @end

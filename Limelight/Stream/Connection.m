@@ -52,6 +52,8 @@ static VideoDecoderRenderer* renderer;
 
 // MoonCast: the stream offered PyroWave (MCBridge offerPyroWave)
 static BOOL offeredPyroWave;
+// MoonCast: a controller-only session (DirectPad): the picture and the sound are dropped, nothing is decoded or played
+static BOOL headless;
 #if DEBUG
 // MoonCast: the frame numbers of the stats window (logged for PyroWave streams)
 static uint32_t windowFirstFrame;
@@ -64,6 +66,10 @@ int DrDecoderSetup(int videoFormat, int width, int height, int redrawRate, void*
     if (offeredPyroWave && !(videoFormat & VIDEO_FORMAT_MASK_PYROWAVE)) {
         Log(LOG_W, @"PyroWave offered, but the PC streams format 0x%x", videoFormat);
         [MCToastObjC show:@"The PC didn't start PyroWave, so the stream uses your usual codec"];
+    }
+    if (headless) {
+        activeVideoFormat = videoFormat;
+        return 0;
     }
     int err = [renderer setupWithVideoFormat:videoFormat width:width height:height frameRate:redrawRate];
     if (err != 0) {
@@ -84,12 +90,14 @@ BOOL McVideoRunning(void) { return videoRunning; }
 
 void DrStart(void)
 {
+    if (headless) return;
     [renderer start];
     videoRunning = YES;
 }
 
 void DrStop(void)
 {
+    if (headless) return;
     videoRunning = NO;
     [renderer stop];
 }
@@ -171,6 +179,7 @@ void DrStop(void)
 
 int DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit)
 {
+    if (headless) return DR_OK;
     int offset = 0;
     int ret;
     unsigned char* data = (unsigned char*) malloc(decodeUnit->fullLength);
@@ -322,6 +331,7 @@ int ArInit(int audioConfiguration, POPUS_MULTISTREAM_CONFIGURATION opusConfig, v
 {
     int err;
     SDL_AudioSpec want, have;
+    if (headless) return 0;
     
     // MoonCast: SDL's audio brings in its events, which by default catch SIGINT and SIGTERM (to turn them into an
     // SDL_QUIT nobody reads here): the app then ignored a terminate for the whole stream
@@ -398,6 +408,7 @@ void ArCleanup(void)
 
 void ArDecodeAndPlaySample(char* sampleData, int sampleLength)
 {
+    if (headless) return;
     int decodeLen;
     
     // Don't queue if there's already more than 30 ms of audio data waiting
@@ -562,6 +573,7 @@ void ClSetControllerLED(uint16_t controllerNumber, uint8_t r, uint8_t g, uint8_t
 
     renderer = myRenderer;
     _callbacks = callbacks;
+    headless = config.mcHeadless;
 
     LiInitializeStreamConfiguration(&_streamConfig);
     _streamConfig.width = config.width;
@@ -609,7 +621,8 @@ void ClSetControllerLED(uint16_t controllerNumber, uint8_t r, uint8_t g, uint8_t
     _drCallbacks.setup = DrDecoderSetup;
     _drCallbacks.start = DrStart;
     _drCallbacks.stop = DrStop;
-    _drCallbacks.capabilities = CAPABILITY_PULL_RENDERER |
+    // a controller-only session has no renderer thread to pull frames: they are handed to DrSubmitDecodeUnit, which drops them
+    _drCallbacks.capabilities = (headless ? 0 : CAPABILITY_PULL_RENDERER) |
                                 CAPABILITY_REFERENCE_FRAME_INVALIDATION_HEVC |
                                 CAPABILITY_REFERENCE_FRAME_INVALIDATION_AV1;
 
