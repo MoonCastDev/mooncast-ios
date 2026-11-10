@@ -259,9 +259,10 @@ enum MCTvSender {
 final class MCDirectPad {
     enum State { case waiting, connecting, connected, failed, stopped }
 
-    /// Settings, Controllers, "Controller on a TV": "direct" (to the PC, fastest, the default) or "tv" (through the TV).
+    /// Settings, Controllers, "Controller on a TV": "direct" (to the PC, fastest) or "tv" (through the TV). Android defaults to
+    /// direct; here it stays "tv" (the relay iOS always used) until direct has been tried on a real TV.
     static let prefKey = "hh_tv_pad"
-    static var wanted: Bool { (UserDefaults.standard.string(forKey: prefKey) ?? "direct") == "direct" }
+    static var wanted: Bool { (UserDefaults.standard.string(forKey: prefKey) ?? "tv") == "direct" }
 
     let pcName: String
     private let host: TemporaryHost
