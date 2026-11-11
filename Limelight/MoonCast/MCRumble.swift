@@ -60,7 +60,16 @@ final class MCRumble {
             let target = index < 0 ? (activePad.flatMap { a in pads.first { $0 === a } } ?? pads.first) : (index < pads.count ? pads[index] : nil)
             let m = target.map { ensure($0) } ?? (left: nil, right: nil)
             if m.left == nil && m.right == nil {
-                if MCDeviceRumble.enabled { MCDeviceRumble.shared.buzz(max(low, high)) }
+                // only player 1's rumble falls back to the device, never a missing player 2
+                if index <= 0 && MCDeviceRumble.enabled {
+                    MCDeviceRumble.shared.buzz(max(low, high))
+                    stopAt?.cancel()
+                    if let s = seconds, max(low, high) > 0.01 {
+                        let w = DispatchWorkItem { [weak self] in self?.rumble(low: 0, high: 0, pad: index) }
+                        stopAt = w
+                        q.asyncAfter(deadline: .now() + s, execute: w)
+                    }
+                }
                 return
             }
             if m.right == nil { set(m.left, max(low, high)) } else { set(m.left, low); set(m.right, high) }
