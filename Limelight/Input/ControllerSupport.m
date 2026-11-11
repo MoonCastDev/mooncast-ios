@@ -1151,7 +1151,9 @@ static void mcStickToPixels(short sx, short sy, float* dx, float* dy)
             // Prepare controller haptics for use
             [self initializeControllerHaptics:limeController];
 
+            [_controllerStreamLock lock];
             [_controllers setObject:limeController forKey:[NSNumber numberWithInteger:controller.playerIndex]];
+            [_controllerStreamLock unlock];
             
             Log(LOG_I, @"Assigning controller index: %d", i);
             return limeController;
@@ -1318,7 +1320,10 @@ static void mcStickToPixels(short sx, short sy, float* dx, float* dy)
             
             // Inform the server of the updated active gamepads before removing this controller
             [self updateFinished:limeController];
+            // MoonCast: the mouse timer walks this dictionary on another queue (same lock as updateFinished; never held across a wait on main)
+            [self->_controllerStreamLock lock];
             [self->_controllers removeObjectForKey:[NSNumber numberWithInteger:controller.playerIndex]];
+            [self->_controllerStreamLock unlock];
             
             // Re-evaluate the on-screen control mode
             [self updateAutoOnScreenControlMode];
