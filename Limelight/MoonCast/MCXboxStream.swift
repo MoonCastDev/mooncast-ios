@@ -154,14 +154,17 @@ final class MCXboxStreamController: UIViewController, MCXboxRtc.Listener, MCQuic
     /// while the console is in standby and hasn't registered with Xbox network's streaming service yet.
     private func notReady(_ reason: String) -> Bool {
         let r = reason.lowercased()
-        return ["waitingforservertoregister", "errorcallingwns", "xccs", "connectedstandby", "not registered",
-                "offline", "unavailable", "notready", "not ready"].contains { r.contains($0) }
+        if ["waitingforservertoregister", "errorcallingwns", "xccs", "connectedstandby", "not registered", "notready", "not ready"].contains(where: { r.contains($0) }) { return true }
+        // "offline" / "unavailable" also appear in this phone's own network errors ("The Internet connection appears to be offline."):
+        // those fail fast with their text instead of 60 s of "Waking your Xbox"
+        if ["internet connection", "network connection", "timed out", "could not connect", "cannot find host"].contains(where: { r.contains($0) }) { return false }
+        return ["offline", "unavailable"].contains { r.contains($0) }
     }
 
     /// The session failed: before the first picture, retry a console that isn't ready (wake every 5 s, about 60 s).
     func xboxFailed(_ reason: String) {
         DispatchQueue.main.async { [self] in
-            guard !closed else { return }
+            guard !closed, !ending else { return }
             NSLog("MoonCast: xbox failed: \(reason)")
             let first = firstFailAt ?? Date()
             firstFailAt = first
@@ -170,7 +173,7 @@ final class MCXboxStreamController: UIViewController, MCXboxRtc.Listener, MCQuic
                 retrying = true
                 rtc?.stop(); rtc = nil
                 setStatus("Waking your Xbox…")
-                DispatchQueue.main.asyncAfter(deadline: .now() + 5) { if !self.closed { self.begin() } }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 5) { if !self.closed && !self.ending { self.begin() } }
                 return
             }
             endSession(notReady(reason) ? "Your Xbox didn't answer. Turn it on, or check Settings > Devices & connections > Remote features on the Xbox."
