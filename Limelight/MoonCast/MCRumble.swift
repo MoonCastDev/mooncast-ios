@@ -131,6 +131,7 @@ final class MCDeviceRumble: NSObject {
                 engine = e; player = p
             }
             try? player?.sendParameters([CHHapticDynamicParameter(parameterID: .hapticIntensityControl, value: v, relativeTime: 0)], atTime: CHHapticTimeImmediate)
+            try? engine?.start()   // no-op when running; revives it after a background / interruption
             try? player?.start(atTime: CHHapticTimeImmediate)
         }
     }
