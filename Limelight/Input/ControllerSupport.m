@@ -1311,6 +1311,11 @@ static void mcStickToPixels(short sx, short sy, float* dx, float* dy)
                 limeController.mergedWithController.mergedWithController = nil;
             }
             
+            // MoonCast: a pad in mouse mode that goes away with A / B held must not leave the PC's mouse button down
+            @synchronized(limeController) {
+                [self mcReleaseMouseButtons:limeController];
+            }
+            
             // Inform the server of the updated active gamepads before removing this controller
             [self updateFinished:limeController];
             [self->_controllers removeObjectForKey:[NSNumber numberWithInteger:controller.playerIndex]];
