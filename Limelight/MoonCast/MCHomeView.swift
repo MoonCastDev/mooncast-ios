@@ -826,7 +826,10 @@ struct MCRoot: View {
                 while Date() < end {
                     try await Task.sleep(nanoseconds: UInt64(max(2, dc.interval)) * 1_000_000_000)
                     if !waiting { MCXboxLinkController.close(); return }
-                    if try await MCXbox.pollSignIn(dc) {
+                    // a dropped connection mid-login is not the end: the code is still valid until `end`
+                    let signedIn: Bool
+                    do { signedIn = try await MCXbox.pollSignIn(dc) } catch is URLError { continue }
+                    if signedIn {
                         waiting = false
                         store.dialog = nil
                         MCXboxLinkController.close()
