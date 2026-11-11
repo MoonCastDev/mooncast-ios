@@ -23,7 +23,7 @@ enum MCPsn {
 
     static func signOut() {
         // the duid goes too (Android clears all of Psn's prefs): the next sign-in mints a new client id
-        ["psn_account_id", "psn_online_id", "psn_token_at", "psn_duid"].forEach { UserDefaults.standard.removeObject(forKey: $0) }
+        ["psn_account_id", "psn_online_id", "psn_token_at", "psn_duid", "psn_devices"].forEach { UserDefaults.standard.removeObject(forKey: $0) }
         MCKeychain.delete("psn_token"); MCKeychain.delete("psn_refresh")
     }
 
