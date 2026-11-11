@@ -232,6 +232,10 @@
 - (void)willMoveToParentViewController:(UIViewController *)parent {
     // Only cleanup when we're being destroyed
     if (parent == nil) {
+        // MoonCast: popped (swipe back): the start watchdog must not fire over whatever comes next
+        _mcRetired = YES;
+        [_mcStartTimer invalidate];
+        _mcStartTimer = nil;
         [_controllerSupport cleanup];
         [UIApplication sharedApplication].idleTimerDisabled = NO;
         [_streamMan stopStream];
@@ -328,6 +332,14 @@
     else {
         [_overlayView setHidden:YES];
     }
+}
+
+// the start watchdog is only ever touched on the main thread (the callbacks come in on the common-c / stream threads)
+- (void) mcCancelStartTimer {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [self->_mcStartTimer invalidate];
+        self->_mcStartTimer = nil;
+    });
 }
 
 - (void) mcStartTimeout {
@@ -436,9 +448,9 @@
 - (void) connectionStarted {
     if (_mcRetired) return;
     _mcConnected = YES;
-    [_mcStartTimer invalidate];
-    _mcStartTimer = nil;
     dispatch_async(dispatch_get_main_queue(), ^{
+        [self->_mcStartTimer invalidate];
+        self->_mcStartTimer = nil;
         // MoonCast: Settings → Picture in picture (in every build; only the test steps are debug-only)
         if (MCPip.enabled && self->_mcPip == nil && [self->_streamMan mcPyroWave]) {
             // PyroWave's picture is a Metal layer, which picture in picture can't show
@@ -479,6 +491,8 @@
 
 - (void)connectionTerminated:(int)errorCode {
     if (_mcRetired) return;
+    _mcRetired = YES;   // a failure ends this attempt: the start watchdog must not start a second one under the alert
+    [self mcCancelStartTimer];
     Log(LOG_I, @"Connection terminated: %d", errorCode);
     
     unsigned int portFlags = LiGetPortFlagsFromTerminationErrorCode(errorCode);
@@ -581,6 +595,8 @@
 
 - (void) stageFailed:(const char*)stageName withError:(int)errorCode portTestFlags:(int)portTestFlags {
     if (_mcRetired) return;
+    _mcRetired = YES;   // a failure ends this attempt: the start watchdog must not start a second one under the alert
+    [self mcCancelStartTimer];
     Log(LOG_I, @"Stage %s failed: %d", stageName, errorCode);
     
     unsigned int portTestResults = LiTestClientConnectivity(CONN_TEST_SERVER, 443, portTestFlags);
@@ -614,6 +630,8 @@
 
 - (void) launchFailed:(NSString*)message {
     if (_mcRetired) return;
+    _mcRetired = YES;   // a failure ends this attempt: the start watchdog must not start a second one under the alert
+    [self mcCancelStartTimer];
     Log(LOG_I, @"Launch failed: %@", message);
     
     dispatch_async(dispatch_get_main_queue(), ^{
