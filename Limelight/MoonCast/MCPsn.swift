@@ -70,13 +70,15 @@ enum MCPsn {
     static func finishSignIn(code: String) async throws {
         let tok = try await post("grant_type=authorization_code&code=\(form(code))&redirect_uri=\(form(redirect))")
         guard let token = tok["access_token"] as? String else { throw URLError(.userAuthenticationRequired) }
-        saveToken(tok)
+        // the new tokens are written only once the account id has parsed: a failed user-info call leaves the previous sign-in as it was
         var r = URLRequest(url: URL(string: tokenUrl + "/" + form(token))!)
         r.setValue(basic, forHTTPHeaderField: "Authorization")
         let (d, _) = try await URLSession.shared.data(for: r)
         let info = (try JSONSerialization.jsonObject(with: d) as? [String: Any]) ?? [:]
         guard let uidStr = info["user_id"] as? String, let uid = UInt64(uidStr) else { throw URLError(.cannotParseResponse) }
         let le = (0..<8).map { UInt8((uid >> (8 * UInt64($0))) & 0xff) }
+        saveToken(tok)
+        UserDefaults.standard.removeObject(forKey: "psn_devices")   // the old account's consoles
         UserDefaults.standard.set(Data(le).base64EncodedString(), forKey: "psn_account_id")
         UserDefaults.standard.set(info["online_id"] as? String ?? "", forKey: "psn_online_id")
         _ = await refreshDevices()
