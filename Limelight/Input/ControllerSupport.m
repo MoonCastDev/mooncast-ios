@@ -401,6 +401,7 @@ static const double MC_MOUSE_HOLD_SECONDS = 0.75;
         if (held) {
             controller.mcMouse = !controller.mcMouse;
             if (!controller.mcMouse) [self mcReleaseMouseButtons:controller];
+            else controller.mcMouseLastFlags = flags;   // buttons already held when it turns on are not clicks
             BOOL on = controller.mcMouse;
             dispatch_async(dispatch_get_main_queue(), ^{ [MCToastObjC show:on ? @"Mouse emulation is: ON" : @"Mouse emulation is: OFF"]; });
         }
