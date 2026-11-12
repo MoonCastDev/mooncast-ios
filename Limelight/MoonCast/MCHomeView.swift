@@ -71,8 +71,8 @@ struct MCRoot: View {
                         let g = s.game
                         s.end(quit: false)
                         store.tvSession = nil
-                        // a moment for the PC / PS5 / Xbox to let the TV's session go
-                        DispatchQueue.main.asyncAfter(deadline: .now() + (g.ps != nil ? 3 : 1)) { store.play(g, here: true) }
+                        // a moment for the PC / PS5 / Xbox to let the TV's session go (a PC needs more than 1 s too: the TV's /stop is not awaited)
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 3) { store.play(g, here: true) }
                     }, close: { store.tvSession = nil })
                 }
                 if let d = store.dialog { dialogView(d, m, p) }
