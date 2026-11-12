@@ -82,6 +82,9 @@
     _config.appVersion = appversion;
     _config.gfeVersion = gfeVersion;
     
+    // an abandoned attempt (start watchdog / stop) must not send a late launch or resume with its old key
+    if (_mcStopped) return;
+
     // resumeApp and launchApp handle calling launchFailed
     NSString* sessionUrl;
     if (_config.mcHeadless && ![serverState hasSuffix:@"_SERVER_BUSY"]) {

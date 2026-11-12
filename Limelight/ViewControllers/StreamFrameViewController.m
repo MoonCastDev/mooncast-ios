@@ -351,7 +351,7 @@
     if (!self.mcStartRetry) {
         Log(LOG_W, @"Stream didn't start in 15 s: trying once more");
         [MCToastObjC show:[pc stringByAppendingString:@" didn't answer yet. Trying again..."]];
-        StreamFrameViewController* again = (StreamFrameViewController*)[MCBridge streamControllerWithConfig:self.streamConfig];
+        StreamFrameViewController* again = (StreamFrameViewController*)[MCBridge streamControllerWithConfig:[self.streamConfig copy]];
         again.mcStartRetry = YES;
         UINavigationController* nav = self.navigationController;
         NSMutableArray* stack = [nav.viewControllers mutableCopy];

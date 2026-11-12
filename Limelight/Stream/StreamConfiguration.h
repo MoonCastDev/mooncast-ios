@@ -6,7 +6,7 @@
 //  Copyright (c) 2014 Moonlight Stream. All rights reserved.
 //
 
-@interface StreamConfiguration : NSObject
+@interface StreamConfiguration : NSObject <NSCopying>
 
 @property NSString* host;
 @property unsigned short httpsPort;
