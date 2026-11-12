@@ -367,8 +367,21 @@ struct MCConsoleStyle {
         }
     }
 
+    /// A key added after the styles existed (PS5 pacing, decoder) that the user never touched: it follows Picture, so it
+    /// satisfies whichever value a style expects (pacing "same" or "latency"; decoder "low" or "ultra") and an update doesn't flip
+    /// an existing user's style to "(changed)".
+    private static func untouchedOk(_ k: String, _ v: Any) -> Bool {
+        guard let t = v as? String, UserDefaults.standard.object(forKey: k) == nil else { return false }
+        switch k {
+        case "ps5_pacing": return t == "same" || t == "latency"
+        case "ps5_decoder_latency": return t == "low" || t == "ultra"
+        default: return false
+        }
+    }
+
     func matches() -> Bool {
         keys.allSatisfy { k, v in
+            if MCConsoleStyle.untouchedOk(k, v) { return true }
             let now = MCConsoleStyle.read(k)
             if let b = v as? Bool, k.hasSuffix("h265") { return (now as? NSNumber)?.boolValue == b }
             if let t = v as? String { return now as? String == t }
@@ -393,6 +406,7 @@ struct MCConsoleStyle {
 
     private func score() -> Int {
         keys.filter { k, v in
+            if MCConsoleStyle.untouchedOk(k, v) { return true }
             if let t = v as? String { return MCConsoleStyle.read(k) as? String == t }
             return (MCConsoleStyle.read(k) as? NSNumber)?.intValue == (v as? NSNumber)?.intValue
         }.count
