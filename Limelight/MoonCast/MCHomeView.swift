@@ -192,11 +192,10 @@ struct MCRoot: View {
             case .l, .r:
                 if page == .games {
                     let tabs = gameTabs().map { $0.0 }
-                    if let i = tabs.firstIndex(of: gamesTab) {
-                        gamesTab = tabs[(i + (b == .r ? 1 : tabs.count - 1)) % tabs.count]
-                        focus.id = nil
-                        DispatchQueue.main.async { focus.settle() }
-                    }
+                    let i = tabs.firstIndex(of: gamesTab) ?? 0   // a stale tab (its PC is gone) counts as All
+                    gamesTab = tabs[(i + (b == .r ? 1 : tabs.count - 1)) % tabs.count]
+                    focus.id = nil
+                    DispatchQueue.main.async { focus.settle() }
                 } else if page == .settings && !cards.classic {
                     cardsShoulder(b == .r ? 1 : -1)
                 } else if page == .settings {
@@ -565,10 +564,12 @@ struct MCRoot: View {
     }
 
     func gamesPage(_ m: MCMetrics, _ p: MCPalette) -> some View {
+        // a tab for a PC that was unpaired or removed is gone: show All games
+        let tab = gameTabs().contains { $0.0 == gamesTab } ? gamesTab : "all"
         var games = store.allGames()
-        if gamesTab.hasPrefix("pc:") { games = games.filter { $0.key.hasPrefix(gamesTab + ":") } }
-        else if gamesTab == "ps" { games = games.filter { $0.ps != nil } }
-        else if gamesTab == "xb" { games = games.filter { $0.xb != nil } }
+        if tab.hasPrefix("pc:") { games = games.filter { $0.key.hasPrefix(tab + ":") } }
+        else if tab == "ps" { games = games.filter { $0.ps != nil } }
+        else if tab == "xb" { games = games.filter { $0.xb != nil } }
         if sortAz {
             games.sort { $0.title.lowercased() < $1.title.lowercased() }
         } else {
@@ -596,9 +597,9 @@ struct MCRoot: View {
                     HStack(spacing: m.px(16)) {
                         ForEach(gameTabs(), id: \.0) { key, label in
                             Text(label).mcFont(28, m, weight: .heavy).lineLimit(1).fixedSize()
-                                .foregroundColor(gamesTab == key ? p.bg : p.ink)
+                                .foregroundColor(tab == key ? p.bg : p.ink)
                                 .padding(.horizontal, m.px(30)).frame(height: m.px(64))
-                                .background(Capsule().fill(gamesTab == key ? p.ink : p.panel))
+                                .background(Capsule().fill(tab == key ? p.ink : p.panel))
                                 .onTapGesture { gamesTab = key }
                         }
                     }
@@ -610,8 +611,8 @@ struct MCRoot: View {
             .padding(.horizontal, m.px(m.edge))
             .padding(.top, m.px(24))
             if games.isEmpty {
-                Text(gamesTab == "ps" ? "No PlayStation yet. Register a PS5 in Consoles."
-                     : gamesTab == "xb" ? "No Xbox yet. Sign in to Xbox in Consoles."
+                Text(tab == "ps" ? "No PlayStation yet. Register a PS5 in Consoles."
+                     : tab == "xb" ? "No Xbox yet. Sign in to Xbox in Consoles."
                      : store.hosts.contains { store.paired($0) } ? "No games yet. They show up once the PC sends its list."
                                                                  : "No PC paired yet. Add one in Consoles.")
                     .mcFont(30, m).foregroundColor(p.sub).padding(.horizontal, m.px(m.edge))
