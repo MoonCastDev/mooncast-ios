@@ -327,7 +327,8 @@ final class MCDirectPad {
                 tries += 1
                 if tries >= 3 { set(.failed, why ?? "Couldn't reach \(pcName)"); return }
             } else { tries = 0 }
-            ended.wait()   // until the session ends
+            // until the session ends; a normal stop() suppresses the link's events, so also poll [stopped]
+            while ended.wait(timeout: .now() + 1) == .timedOut { if stopped { break } }
             lock.lock(); link = nil; lock.unlock()
             if stopped { return }
             Thread.sleep(forTimeInterval: 1.5)

@@ -436,6 +436,7 @@
     [_lock unlock];
     if (up) LiSendMultiControllerEvent(0, 0x1, 0, 0, 0, 0, 0, 0, 0);   // let go of everything
     [_man stopStream];
+    _man = nil;   // breaks link -> _man -> _callbacks == link once the session is over
 }
 
 - (void) endAndStop:(NSString*)event why:(NSString*)why {
